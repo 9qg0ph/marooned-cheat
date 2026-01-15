@@ -41,22 +41,26 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     // 半透明背景
     self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
     
-    // 内容容器
-    self.contentView = [[UIView alloc] init];
+    // 计算内容高度
+    CGFloat contentHeight = 350;
+    CGFloat contentWidth = 280;
+    CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
+    CGFloat screenHeight = [UIScreen mainScreen].bounds.size.height;
+    
+    // 内容容器 - 使用 frame 直接居中
+    self.contentView = [[UIView alloc] initWithFrame:CGRectMake(
+        (screenWidth - contentWidth) / 2,
+        (screenHeight - contentHeight) / 2,
+        contentWidth,
+        contentHeight
+    )];
     self.contentView.backgroundColor = [UIColor colorWithWhite:1 alpha:0.95];
     self.contentView.layer.cornerRadius = 16;
     self.contentView.layer.shadowColor = [UIColor colorWithRed:0.86 green:0.21 blue:0.27 alpha:0.15].CGColor;
     self.contentView.layer.shadowOffset = CGSizeMake(0, 4);
     self.contentView.layer.shadowRadius = 20;
     self.contentView.layer.shadowOpacity = 1;
-    self.contentView.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:self.contentView];
-    
-    [NSLayoutConstraint activateConstraints:@[
-        [self.contentView.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-        [self.contentView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-        [self.contentView.widthAnchor constraintEqualToConstant:280]
-    ]];
     
     CGFloat y = 20;
     
@@ -117,20 +121,6 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     copyright.textColor = [UIColor lightGrayColor];
     copyright.frame = CGRectMake(20, y, 240, 20);
     [self.contentView addSubview:copyright];
-    y += 30;
-    
-    // 设置内容高度
-    CGRect contentFrame = self.contentView.frame;
-    contentFrame.size.height = y;
-    
-    // 更新约束
-    for (NSLayoutConstraint *c in self.contentView.constraints) {
-        if (c.firstAttribute == NSLayoutAttributeHeight) {
-            c.constant = y;
-            break;
-        }
-    }
-    [self.contentView.heightAnchor constraintEqualToConstant:y].active = YES;
 }
 
 - (UILabel *)createLabelWithText:(NSString *)text fontSize:(CGFloat)size bold:(BOOL)bold {
