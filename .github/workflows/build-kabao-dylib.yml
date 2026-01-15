@@ -1,0 +1,93 @@
+name: Build 卡包修仙 Dylib v2.0
+
+on:
+  push:
+    paths:
+      - '卡包修仙Dylib/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Build KabaoCheat Dylib v2.0
+      run: |
+        cd 卡包修仙Dylib
+        
+        echo "🔨 开始编译卡包修仙修改器 v2.0..."
+        
+        # 编译 dylib
+        clang -arch arm64 \
+          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+          -miphoneos-version-min=12.0 \
+          -dynamiclib \
+          -install_name @rpath/KabaoCheat.dylib \
+          -framework UIKit \
+          -framework Foundation \
+          -framework CoreGraphics \
+          -framework QuartzCore \
+          -fobjc-arc \
+          -O2 \
+          -Wno-deprecated-declarations \
+          -o KabaoCheat.dylib \
+          KabaoCheat.m
+        
+        echo "✅ 编译完成!"
+        
+        # 签名
+        ldid -S KabaoCheat.dylib || codesign -f -s - KabaoCheat.dylib
+        echo "✅ 代码签名完成"
+        
+        # 验证文件
+        file KabaoCheat.dylib
+        ls -lh KabaoCheat.dylib
+        
+        # 创建发布信息
+        echo "# 卡包修仙修改器 v2.0" > release-info.md
+        echo "" >> release-info.md
+        echo "## 📦 编译信息" >> release-info.md
+        echo "- **编译时间**: $(date)" >> release-info.md
+        echo "- **架构**: arm64" >> release-info.md
+        echo "- **最低iOS版本**: 12.0" >> release-info.md
+        echo "- **文件大小**: $(ls -lh KabaoCheat.dylib | awk '{print $5}')" >> release-info.md
+        echo "" >> release-info.md
+        echo "## 🎮 功能特性" >> release-info.md
+        echo "- ✅ 无限寿命 - 生命值不会减少" >> release-info.md
+        echo "- ✅ 冻结灵石 - 灵石数量保持不变" >> release-info.md
+        echo "- ✅ 无敌免疫 - 免疫所有伤害" >> release-info.md
+        echo "- ✅ 无限突破 - 无限制突破等级" >> release-info.md
+        echo "- ✅ 增加逃跑概率 - 大幅提高逃跑成功率" >> release-info.md
+        echo "" >> release-info.md
+        echo "## 🚀 v2.0 新特性" >> release-info.md
+        echo "- 🎨 全新UI设计，支持模糊效果和动画" >> release-info.md
+        echo "- 🔧 多方案实现，自动选择最佳方案" >> release-info.md
+        echo "- 📱 长按悬浮按钮显示快捷菜单" >> release-info.md
+        echo "- 🧠 智能内存搜索和修改" >> release-info.md
+        echo "- 🔗 自动检测并兼容 ASWJGAMEPLUS" >> release-info.md
+        echo "- 💾 状态保存和恢复" >> release-info.md
+        echo "- 🎯 触觉反馈和视觉效果" >> release-info.md
+        echo "- 📊 实时状态监控" >> release-info.md
+        echo "" >> release-info.md
+        echo "## 📖 使用方法" >> release-info.md
+        echo "1. 使用 IPAPatcher 或 Sideloadly 将 dylib 注入到游戏 IPA" >> release-info.md
+        echo "2. 用 TrollStore 安装修改后的 IPA" >> release-info.md
+        echo "3. 启动游戏，等待3秒后悬浮按钮出现" >> release-info.md
+        echo "4. 点击悬浮按钮打开功能菜单" >> release-info.md
+        echo "5. 长按悬浮按钮显示快捷操作菜单" >> release-info.md
+        echo "6. 使用开关控制各项功能的开启/关闭" >> release-info.md
+        
+    - name: Upload dylib
+      uses: actions/upload-artifact@v4
+      with:
+        name: KabaoCheat-v2.0-dylib
+        path: 卡包修仙Dylib/KabaoCheat.dylib
+        
+    - name: Upload release info
+      uses: actions/upload-artifact@v4
+      with:
+        name: KabaoCheat-v2.0-info
+        path: 卡包修仙Dylib/release-info.md
