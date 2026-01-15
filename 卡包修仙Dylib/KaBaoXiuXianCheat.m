@@ -305,10 +305,6 @@ static void addLifespan(void) {
 
 - (void)buttonTapped:(UIButton *)sender {
     switch (sender.tag) {
-        case 0:
-            [self removeFromSuperview];
-            g_menuView = nil;
-            break;
         case 1:
             // 货币不减反增 - 尝试多种方式实现灵石资源修改
             enableCurrencyPatch();
