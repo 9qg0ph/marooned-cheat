@@ -10,6 +10,13 @@ static KaBaoMenuView *g_menuView = nil;
 
 #pragma mark - 游戏数值修改
 
+// 延时关闭游戏
+static void exitGameAfterDelay(void) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        exit(0);
+    });
+}
+
 static void setGameValue(NSString *key, id value, NSString *type) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     if ([type isEqualToString:@"Number"]) {
@@ -233,7 +240,7 @@ static void addLifespan(void) {
     y += 70;
     
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
-    tip.text = @"进入游戏后点击开启功能";
+    tip.text = @"功能开启后重启游戏生效";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.86 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -411,7 +418,7 @@ static void setupFloatingButton(void) {
         g_floatButton.clipsToBounds = YES;
         g_floatButton.layer.zPosition = 9999;
         
-        [g_floatButton setTitle:@"卡" forState:UIControlStateNormal];
+        [g_floatButton setTitle:@"虎" forState:UIControlStateNormal];
         [g_floatButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
         g_floatButton.titleLabel.font = [UIFont boldSystemFontOfSize:22];
         
