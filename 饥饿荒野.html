@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>饥饿荒野</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            color: #333;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: transparent;
+            width: 100%;
+            height: 100%;
+            line-height: 1.5;
+        } 
+
+        /* 菜单 */
+        *:not(input, checkbox, textarea) {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .popup_container {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        #H5AlertView {
+            width: 280px;
+            height: auto;
+            position: relative;
+            text-align: center;
+            zoom: 0.95;
+        }
+
+        #title-text {
+            padding: 15px 0 5px;
+            font-size: 22px;
+            color: rgb(76, 175, 80);
+            font-weight: 600;
+            letter-spacing: 1px;
+            user-select: none;
+        }
+
+        #info-text {
+            padding: 10px;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        #content-view {
+            z-index: 0;
+            background: #fff;
+            position: relative;
+            top: 0px;
+            border: none;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(76, 175, 80, 0.15);
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.95);
+            animation: popIn 0.3s ease-out forwards;
+            transform-origin: center;
+        }
+
+        @keyframes popIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .button-style {
+            width: 100%;
+            height: 35px;
+            color: #fff;
+            background: linear-gradient(135deg, rgb(76, 175, 80), rgb(56, 142, 60));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            outline: none;
+            border: none;
+            border-radius: 12px;
+            padding: 0 16px;
+            margin: 8px 0;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.2);
+            position: relative;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .button-style:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3);
+        }
+
+        .button-style:active {
+            background: linear-gradient(135deg, rgb(56, 142, 60), rgb(46, 125, 50));
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+            transition: all 0.1s ease;
+        }
+
+        /* 点击涟漪效果 */
+        .button-style::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .button-style:active::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        button {
+            display: none;
+        }
+
+        .list-group-item123 {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .list-group-item123 a {
+            color: rgb(76, 175, 80);
+            text-decoration: none;
+            margin-left: 5px;
+        }
+
+        /* 免责声明样式 */
+        .disclaimer {
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(249, 249, 249, 0.9);
+            border-radius: 8px;
+            border: 1px solid #eee;
+            font-size: 12px;
+            color: #888;
+            text-align: left;
+            line-height: 1.4;
+            max-height: 60px;
+            overflow-y: auto;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 提示文字样式 */
+        .tip-text {
+            color: rgb(76, 175, 80);
+            font-size: 12px;
+            margin: 8px 0;
+            text-align: center;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="popup_container">
+        <div id="H5AlertView">
+            <div id="content-view">
+                <div id="title-text">🏝️ 饥饿荒野</div>
+                <div id="info-text">🎮 资源仅供学习使用</div>
+                <!-- 免责声明区域 -->
+                <div class="disclaimer">
+                    免责声明：本工具仅供技术研究与学习，严禁用于商业用途及非法途径。使用本工具修改游戏可能违反游戏服务条款，用户需自行承担一切风险和责任。严禁倒卖、传播或用于牟利，否则后果自负。继续使用即表示您已阅读并同意本声明。
+                </div>
+                <div class="tip-text">进入游戏后点击开启功能</div>
+                <a href="javascript:void(0);" onclick="anniu1()" class="button-style">🥕 无限金萝卜</a>
+                <a href="javascript:void(0);" onclick="anniu2()" class="button-style">📺 广告跳过</a>
+                <div>
+                    <div class="list-group-item123 text-center">©&nbsp;2025&nbsp;&nbsp;𝐈𝐎𝐒𝐃𝐊 科技虎</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 添加按钮点击效果
+        document.addEventListener('DOMContentLoaded', function() {
+            const buttons = document.querySelectorAll('.button-style');
+            
+            buttons.forEach(button => {
+                button.addEventListener('touchstart', function() {
+                    this.style.transform = 'translateY(1px) scale(0.98)';
+                });
+                
+                button.addEventListener('touchend', function() {
+                    setTimeout(() => {
+                        this.style.transform = '';
+                    }, 100);
+                });
+                
+                // 为移动端添加触摸反馈
+                button.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    this.classList.add('active');
+                });
+                
+                button.addEventListener('touchend', function() {
+                    setTimeout(() => {
+                        this.classList.remove('active');
+                    }, 150);
+                });
+            });
+        });
+
+        // 无限金萝卜
+        function anniu1() {    
+            h5gg.setValue("marooned_gold_luobo_num", 99999, "Number");
+            alert("🥕 无限金萝卜开启成功！");
+        }     
+        
+        // 广告跳过
+        function anniu2() {
+            h5gg.setValue("fanhan_AVP", 1, "bool");
+            alert("📺 广告跳过开启成功！");
+        }    
+    </script>
+</body>
+
+</html>
