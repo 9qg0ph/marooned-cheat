@@ -143,7 +143,7 @@ static void enableInfiniteHP(void) {
     [defaults synchronize];
 }
 
-// 增加240年寿命功能
+// 增加20年寿命功能
 static void addLifespan(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *roleInfoStr = [defaults objectForKey:@"roleInfo"];
@@ -157,7 +157,7 @@ static void addLifespan(void) {
     // 增加寿命
     NSNumber *currentLifeSpan = roleInfo[@"lifeSpan"];
     if (currentLifeSpan) {
-        roleInfo[@"lifeSpan"] = @([currentLifeSpan intValue] + 240);  // 增加240年寿命
+        roleInfo[@"lifeSpan"] = @([currentLifeSpan intValue] + 20);  // 增加20年寿命
     } else {
         roleInfo[@"lifeSpan"] = @500;  // 如果没有寿命数据，设置为500
     }
@@ -258,7 +258,7 @@ static void addLifespan(void) {
     [self.scrollView addSubview:btn2];
     y += 43;
     
-    UIButton *btn3 = [self createButtonWithTitle:@"⏰ 增加240年寿命" tag:3];
+    UIButton *btn3 = [self createButtonWithTitle:@"⏰ 增加20年寿命" tag:3];
     btn3.frame = CGRectMake(20, y, 240, 35);
     [self.scrollView addSubview:btn3];
     y += 43;
@@ -313,7 +313,7 @@ static void addLifespan(void) {
         case 3:
             // 增加240年寿命
             addLifespan();
-            [self showAlert:@"⏰ 增加240年寿命成功！游戏将自动重启生效"];
+            [self showAlert:@"⏰ 增加20年寿命成功！游戏将自动重启生效"];
             break;
     }
 }
