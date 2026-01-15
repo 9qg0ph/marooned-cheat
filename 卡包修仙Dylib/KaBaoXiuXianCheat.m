@@ -163,7 +163,7 @@ static void addLifespan(void) {
     self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
     
     CGFloat contentHeight = 350;
-    CGFloat contentWidth = 300;
+    CGFloat contentWidth = 280;
     // 使用自身尺寸（即父视图尺寸），自动适配横竖屏
     CGFloat viewWidth = self.bounds.size.width;
     CGFloat viewHeight = self.bounds.size.height;
@@ -180,7 +180,7 @@ static void addLifespan(void) {
     
     CGFloat y = 20;
     
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 260, 30)];
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 30)];
     title.text = @"🎴 卡包修仙";
     title.font = [UIFont boldSystemFontOfSize:22];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.86 alpha:1];
@@ -188,7 +188,7 @@ static void addLifespan(void) {
     [self.contentView addSubview:title];
     y += 35;
     
-    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 260, 20)];
+    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
     info.text = @"🎮 资源仅供学习使用";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
@@ -196,7 +196,7 @@ static void addLifespan(void) {
     [self.contentView addSubview:info];
     y += 30;
 
-    UITextView *disclaimer = [[UITextView alloc] initWithFrame:CGRectMake(20, y, 260, 60)];
+    UITextView *disclaimer = [[UITextView alloc] initWithFrame:CGRectMake(20, y, 240, 60)];
     disclaimer.text = @"免责声明：本工具仅供技术研究与学习，严禁用于商业用途。";
     disclaimer.font = [UIFont systemFontOfSize:12];
     disclaimer.textColor = [UIColor lightGrayColor];
@@ -206,7 +206,7 @@ static void addLifespan(void) {
     [self.contentView addSubview:disclaimer];
     y += 70;
     
-    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 260, 20)];
+    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
     tip.text = @"进入游戏后点击开启功能";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.86 alpha:1];
@@ -216,28 +216,28 @@ static void addLifespan(void) {
     
     // 卡包修仙的三个主要功能
     UIButton *btn1 = [self createButtonWithTitle:@"� 无限灵减石" tag:1];
-    btn1.frame = CGRectMake(20, y, 260, 35);
+    btn1.frame = CGRectMake(20, y, 240, 35);
     [self.contentView addSubview:btn1];
     y += 43;
     
     UIButton *btn2 = [self createButtonWithTitle:@"❤️ 无限血量" tag:2];
-    btn2.frame = CGRectMake(20, y, 260, 35);
+    btn2.frame = CGRectMake(20, y, 240, 35);
     [self.contentView addSubview:btn2];
     y += 43;
     
     UIButton *btn3 = [self createButtonWithTitle:@"⏰ 增加240年寿命" tag:3];
-    btn3.frame = CGRectMake(20, y, 260, 35);
+    btn3.frame = CGRectMake(20, y, 240, 35);
     [self.contentView addSubview:btn3];
     y += 43;
     
     UIButton *closeBtn = [self createButtonWithTitle:@"❌ 关闭菜单" tag:0];
-    closeBtn.frame = CGRectMake(20, y, 260, 35);
+    closeBtn.frame = CGRectMake(20, y, 240, 35);
     closeBtn.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
     [closeBtn setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
     [self.contentView addSubview:closeBtn];
     y += 43;
     
-    UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 260, 20)];
+    UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
     copyright.text = @"© 2025  𝐈𝐎𝐒𝐃𝐊 科技虎";
     copyright.font = [UIFont systemFontOfSize:12];
     copyright.textColor = [UIColor lightGrayColor];
