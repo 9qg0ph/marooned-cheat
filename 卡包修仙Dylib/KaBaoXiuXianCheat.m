@@ -212,6 +212,7 @@ static void addLifespan(void) {
     [closeButton setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
     closeButton.titleLabel.font = [UIFont boldSystemFontOfSize:16];
     [closeButton addTarget:self action:@selector(closeMenu) forControlEvents:UIControlEventTouchUpInside];
+    closeButton.layer.zPosition = 1000;  // 确保按钮在最上层
     [self.contentView addSubview:closeButton];
     
     // 创建滚动视图
@@ -308,17 +309,26 @@ static void addLifespan(void) {
         case 1:
             // 货币不减反增 - 尝试多种方式实现灵石资源修改
             enableCurrencyPatch();
-            [self showAlert:@"� 货币不减反增开启！成功！游戏将自动重启生效"];
+            [self showAlert:@"💰 货币不减反增开启成功！游戏将自动重启生效"];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                exit(0);
+            });
             break;
         case 2:
             // 无限血量
             enableInfiniteHP();
             [self showAlert:@"❤️ 无限血量开启成功！游戏将自动重启生效"];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                exit(0);
+            });
             break;
         case 3:
-            // 增加240年寿命
+            // 增加20年寿命
             addLifespan();
             [self showAlert:@"⏰ 增加20年寿命成功！游戏将自动重启生效"];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                exit(0);
+            });
             break;
     }
 }
