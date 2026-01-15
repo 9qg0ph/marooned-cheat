@@ -78,8 +78,8 @@ static void modifyKaBaoGameData(void) {
     NSLog(@"[KaBao] 游戏数据修改成功");
 }
 
-// 货币不减反增功能 - 全面修改所有相关数值
-static void enableCurrencyPatch(void) {
+// 无限灵石功能
+static void enableInfiniteLingshi(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *roleInfoStr = [defaults objectForKey:@"roleInfo"];
     if (!roleInfoStr) return;
@@ -89,29 +89,37 @@ static void enableCurrencyPatch(void) {
     NSMutableDictionary *roleInfo = [[NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error] mutableCopy];
     if (error || !roleInfo) return;
     
-    // 修改所有货币和资源相关数值
-    roleInfo[@"currency"] = @99999999;          // 主货币
-    roleInfo[@"currencyAdd"] = @99999;          // 货币增加量
-    roleInfo[@"lingzhi"] = @99999;              // 灵芝
-    roleInfo[@"lingkuang"] = @99999;            // 灵矿
-    roleInfo[@"danyao"] = @99999;               // 丹药
-    roleInfo[@"faqi"] = @99999;                 // 法器
-    roleInfo[@"gongfa"] = @99999;               // 功法
-    roleInfo[@"exp"] = @99999999;               // 经验值
-    roleInfo[@"power"] = @99999;                // 战力
+    // 修改灵石相关资源
+    roleInfo[@"currency"] = @99999999;      // 主货币（灵石）
+    roleInfo[@"lingzhi"] = @99999;          // 灵芝
+    roleInfo[@"lingkuang"] = @99999;        // 灵矿
+    roleInfo[@"danyao"] = @99999;           // 丹药
+    roleInfo[@"faqi"] = @99999;             // 法器
+    roleInfo[@"gongfa"] = @99999;           // 功法
     
-    // 尝试修改可能的其他货币字段
-    roleInfo[@"gold"] = @99999999;
-    roleInfo[@"coin"] = @99999999;
-    roleInfo[@"money"] = @99999999;
-    roleInfo[@"totalCurrency"] = @99999999;
+    NSData *modifiedJsonData = [NSJSONSerialization dataWithJSONObject:roleInfo options:0 error:&error];
+    if (error) return;
+    NSString *modifiedRoleInfoStr = [[NSString alloc] initWithData:modifiedJsonData encoding:NSUTF8StringEncoding];
+    [defaults setObject:modifiedRoleInfoStr forKey:@"roleInfo"];
+    [defaults synchronize];
+}
+
+// 无限灵气功能
+static void enableInfiniteLingqi(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *roleInfoStr = [defaults objectForKey:@"roleInfo"];
+    if (!roleInfoStr) return;
     
-    // 修改资源变化量，实现不减反增
-    roleInfo[@"linzhiChange"] = @99999;
-    roleInfo[@"lingkuangChange"] = @99999;
-    roleInfo[@"danyaoChange"] = @99999;
-    roleInfo[@"faqiChange"] = @99999;
-    roleInfo[@"gongfaChange"] = @99999;
+    NSData *jsonData = [roleInfoStr dataUsingEncoding:NSUTF8StringEncoding];
+    NSError *error;
+    NSMutableDictionary *roleInfo = [[NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error] mutableCopy];
+    if (error || !roleInfo) return;
+    
+    // 修改灵气相关数值
+    roleInfo[@"power"] = @99999;            // 战力/灵气
+    roleInfo[@"powerAdd"] = @99999;         // 灵气增加量
+    roleInfo[@"exp"] = @99999999;           // 经验值
+    roleInfo[@"expAdd2"] = @99999;          // 经验增加量
     
     NSData *modifiedJsonData = [NSJSONSerialization dataWithJSONObject:roleInfo options:0 error:&error];
     if (error) return;
@@ -215,6 +223,14 @@ static void addLifespan(void) {
     closeButton.layer.zPosition = 1000;  // 确保按钮在最上层
     [self.contentView addSubview:closeButton];
     
+    // 添加标题到和关闭按钮同一行
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
+    title.text = @"🎴 卡包修仙";
+    title.font = [UIFont boldSystemFontOfSize:20];
+    title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.86 alpha:1];
+    title.textAlignment = NSTextAlignmentCenter;
+    [self.contentView addSubview:title];
+    
     // 创建滚动视图 - 为右上角关闭按钮留出空间
     self.scrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 40, contentWidth, contentHeight - 40)];
     self.scrollView.showsVerticalScrollIndicator = YES;
@@ -222,18 +238,10 @@ static void addLifespan(void) {
     self.scrollView.bounces = YES;
     [self.contentView addSubview:self.scrollView];
     
-    CGFloat y = 20;  // 滚动视图内的相对位置
-    
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 30)];
-    title.text = @"🎴 卡包修仙";
-    title.font = [UIFont boldSystemFontOfSize:22];
-    title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.86 alpha:1];
-    title.textAlignment = NSTextAlignmentCenter;
-    [self.scrollView addSubview:title];
-    y += 35;
+    CGFloat y = 10;  // 滚动视图内的相对位置，减少顶部空间
     
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
-    info.text = @"🎮 资源仅供学习使用";
+    info.text = @"� 资源包仅供学习使用";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -259,20 +267,25 @@ static void addLifespan(void) {
     [self.scrollView addSubview:tip];
     y += 28;
     
-    // 卡包修仙的三个主要功能
-    UIButton *btn1 = [self createButtonWithTitle:@"💰 货币不减反增" tag:1];
+    // 卡包修仙的四个主要功能
+    UIButton *btn1 = [self createButtonWithTitle:@"�  无限灵石" tag:1];
     btn1.frame = CGRectMake(20, y, 240, 35);
     [self.scrollView addSubview:btn1];
     y += 43;
     
-    UIButton *btn2 = [self createButtonWithTitle:@"❤️ 无限血量" tag:2];
+    UIButton *btn2 = [self createButtonWithTitle:@"⚡ 无限灵气" tag:2];
     btn2.frame = CGRectMake(20, y, 240, 35);
     [self.scrollView addSubview:btn2];
     y += 43;
     
-    UIButton *btn3 = [self createButtonWithTitle:@"⏰ 增加20年寿命" tag:3];
+    UIButton *btn3 = [self createButtonWithTitle:@"❤️ 无限血量" tag:3];
     btn3.frame = CGRectMake(20, y, 240, 35);
     [self.scrollView addSubview:btn3];
+    y += 43;
+    
+    UIButton *btn4 = [self createButtonWithTitle:@"⏰ 增加20年寿命" tag:4];
+    btn4.frame = CGRectMake(20, y, 240, 35);
+    [self.scrollView addSubview:btn4];
     y += 43;
     
     UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
@@ -307,14 +320,22 @@ static void addLifespan(void) {
 - (void)buttonTapped:(UIButton *)sender {
     switch (sender.tag) {
         case 1:
-            // 货币不减反增 - 尝试多种方式实现灵石资源修改
-            enableCurrencyPatch();
-            [self showAlert:@"💰 货币不减反增开启成功！游戏将自动重启生效"];
+            // 无限灵石
+            enableInfiniteLingshi();
+            [self showAlert:@"� 无限灵石开启成启功！游戏将自动重启生效"];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 exit(0);
             });
             break;
         case 2:
+            // 无限灵气
+            enableInfiniteLingqi();
+            [self showAlert:@"⚡ 无限灵气开启成功！游戏将自动重启生效"];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                exit(0);
+            });
+            break;
+        case 3:
             // 无限血量
             enableInfiniteHP();
             [self showAlert:@"❤️ 无限血量开启成功！游戏将自动重启生效"];
@@ -322,7 +343,7 @@ static void addLifespan(void) {
                 exit(0);
             });
             break;
-        case 3:
+        case 4:
             // 增加20年寿命
             addLifespan();
             [self showAlert:@"⏰ 增加20年寿命成功！游戏将自动重启生效"];
