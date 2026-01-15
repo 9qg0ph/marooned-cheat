@@ -203,6 +203,17 @@ static void addLifespan(void) {
     self.contentView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
     [self addSubview:self.contentView];
     
+    // 添加右上角关闭按钮
+    UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    closeButton.frame = CGRectMake(contentWidth - 35, 5, 30, 30);
+    closeButton.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
+    closeButton.layer.cornerRadius = 15;
+    [closeButton setTitle:@"✕" forState:UIControlStateNormal];
+    [closeButton setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
+    closeButton.titleLabel.font = [UIFont boldSystemFontOfSize:16];
+    [closeButton addTarget:self action:@selector(closeMenu) forControlEvents:UIControlEventTouchUpInside];
+    [self.contentView addSubview:closeButton];
+    
     // 创建滚动视图
     self.scrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, contentWidth, contentHeight)];
     self.scrollView.showsVerticalScrollIndicator = YES;
@@ -263,13 +274,6 @@ static void addLifespan(void) {
     [self.scrollView addSubview:btn3];
     y += 43;
     
-    UIButton *closeBtn = [self createButtonWithTitle:@"❌ 关闭菜单" tag:0];
-    closeBtn.frame = CGRectMake(20, y, 240, 35);
-    closeBtn.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
-    [closeBtn setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
-    [self.scrollView addSubview:closeBtn];
-    y += 43;
-    
     UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
     copyright.text = @"© 2025  𝐈𝐎𝐒𝐃𝐊 科技虎";
     copyright.font = [UIFont systemFontOfSize:12];
@@ -280,6 +284,11 @@ static void addLifespan(void) {
     
     // 设置滚动视图的内容大小
     self.scrollView.contentSize = CGSizeMake(contentWidth, y);
+}
+
+- (void)closeMenu {
+    [self removeFromSuperview];
+    g_menuView = nil;
 }
 
 - (UIButton *)createButtonWithTitle:(NSString *)title tag:(NSInteger)tag {
