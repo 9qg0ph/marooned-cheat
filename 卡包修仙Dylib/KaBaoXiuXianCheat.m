@@ -78,7 +78,7 @@ static void modifyKaBaoGameData(void) {
     NSLog(@"[KaBao] 游戏数据修改成功");
 }
 
-// 无限灵石功能
+// 无限灵石功能 - 锁定数值不减少
 static void enableInfiniteLingshi(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *roleInfoStr = [defaults objectForKey:@"roleInfo"];
@@ -89,13 +89,25 @@ static void enableInfiniteLingshi(void) {
     NSMutableDictionary *roleInfo = [[NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error] mutableCopy];
     if (error || !roleInfo) return;
     
-    // 修改灵石相关资源
+    // 修改灵石相关资源并锁定
     roleInfo[@"currency"] = @99999999;      // 主货币（灵石）
-    roleInfo[@"lingzhi"] = @99999;          // 灵芝
-    roleInfo[@"lingkuang"] = @99999;        // 灵矿
-    roleInfo[@"danyao"] = @99999;           // 丹药
-    roleInfo[@"faqi"] = @99999;             // 法器
-    roleInfo[@"gongfa"] = @99999;           // 功法
+    roleInfo[@"currencyAdd"] = @99999999;   // 货币增加量
+    roleInfo[@"lingzhi"] = @99999999;       // 灵芝
+    roleInfo[@"lingkuang"] = @99999999;     // 灵矿
+    roleInfo[@"danyao"] = @99999999;        // 丹药
+    roleInfo[@"faqi"] = @99999999;          // 法器
+    roleInfo[@"gongfa"] = @99999999;        // 功法
+    
+    // 锁定资源变化量，确保不减反增
+    roleInfo[@"linzhiChange"] = @99999;     // 灵芝变化量为正值
+    roleInfo[@"lingkuangChange"] = @99999;  // 灵矿变化量为正值
+    roleInfo[@"danyaoChange"] = @99999;     // 丹药变化量为正值
+    roleInfo[@"faqiChange"] = @99999;       // 法器变化量为正值
+    roleInfo[@"gongfaChange"] = @99999;     // 功法变化量为正值
+    
+    // 尝试锁定可能的消耗相关字段
+    roleInfo[@"currencyReduce"] = @0;       // 货币减少量设为0
+    roleInfo[@"currencyCost"] = @0;         // 货币消耗设为0
     
     NSData *modifiedJsonData = [NSJSONSerialization dataWithJSONObject:roleInfo options:0 error:&error];
     if (error) return;
@@ -104,7 +116,7 @@ static void enableInfiniteLingshi(void) {
     [defaults synchronize];
 }
 
-// 无限灵气功能
+// 无限灵气功能 - 锁定数值不减少
 static void enableInfiniteLingqi(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *roleInfoStr = [defaults objectForKey:@"roleInfo"];
@@ -115,11 +127,23 @@ static void enableInfiniteLingqi(void) {
     NSMutableDictionary *roleInfo = [[NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error] mutableCopy];
     if (error || !roleInfo) return;
     
-    // 修改灵气相关数值
-    roleInfo[@"power"] = @99999;            // 战力/灵气
-    roleInfo[@"powerAdd"] = @99999;         // 灵气增加量
+    // 修改灵气相关数值并锁定
+    roleInfo[@"power"] = @99999999;         // 战力/灵气设置为超大值
+    roleInfo[@"powerAdd"] = @99999999;      // 灵气增加量设置为超大值
+    roleInfo[@"powerAdd2"] = @99999999;     // 额外灵气增加量
     roleInfo[@"exp"] = @99999999;           // 经验值
-    roleInfo[@"expAdd2"] = @99999;          // 经验增加量
+    roleInfo[@"expAdd2"] = @99999999;       // 经验增加量
+    roleInfo[@"expReduce"] = @0;            // 经验减少量设为0
+    
+    // 尝试锁定可能的灵气消耗相关字段
+    roleInfo[@"powerReduce"] = @0;          // 灵气减少量设为0
+    roleInfo[@"powerCost"] = @0;            // 灵气消耗设为0
+    roleInfo[@"energyCost"] = @0;           // 能量消耗设为0
+    roleInfo[@"spiritCost"] = @0;           // 精神消耗设为0
+    
+    // 修改可能的灵气相关变化量，确保不减反增
+    roleInfo[@"powerChange"] = @99999;      // 灵气变化量为正值
+    roleInfo[@"expChange"] = @99999;        // 经验变化量为正值
     
     NSData *modifiedJsonData = [NSJSONSerialization dataWithJSONObject:roleInfo options:0 error:&error];
     if (error) return;
@@ -330,7 +354,7 @@ static void addLifespan(void) {
         case 2:
             // 无限灵气
             enableInfiniteLingqi();
-            [self showAlert:@"⚡ 无限灵气开启成功！游戏将自动重启生效"];
+            [self showAlert:@"⚡ 无限灵气锁定成功！使用后不会减少，游戏将自动重启生效"];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 exit(0);
             });
