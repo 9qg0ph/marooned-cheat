@@ -71,8 +71,8 @@ static void modifyKaBaoGameData(void) {
     NSLog(@"[KaBao] 游戏数据修改成功");
 }
 
-// 无限灵石功能
-static void enableInfiniteLingshi(void) {
+// 货币不减反增功能 - 全面修改所有相关数值
+static void enableCurrencyPatch(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *roleInfoStr = [defaults objectForKey:@"roleInfo"];
     if (!roleInfoStr) return;
@@ -82,12 +82,29 @@ static void enableInfiniteLingshi(void) {
     NSMutableDictionary *roleInfo = [[NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error] mutableCopy];
     if (error || !roleInfo) return;
     
-    // 修改灵石相关资源
-    roleInfo[@"lingzhi"] = @99999;      // 灵芝
-    roleInfo[@"lingkuang"] = @99999;    // 灵矿
-    roleInfo[@"danyao"] = @99999;       // 丹药
-    roleInfo[@"faqi"] = @99999;         // 法器
-    roleInfo[@"gongfa"] = @99999;       // 功法
+    // 修改所有货币和资源相关数值
+    roleInfo[@"currency"] = @99999999;          // 主货币
+    roleInfo[@"currencyAdd"] = @99999;          // 货币增加量
+    roleInfo[@"lingzhi"] = @99999;              // 灵芝
+    roleInfo[@"lingkuang"] = @99999;            // 灵矿
+    roleInfo[@"danyao"] = @99999;               // 丹药
+    roleInfo[@"faqi"] = @99999;                 // 法器
+    roleInfo[@"gongfa"] = @99999;               // 功法
+    roleInfo[@"exp"] = @99999999;               // 经验值
+    roleInfo[@"power"] = @99999;                // 战力
+    
+    // 尝试修改可能的其他货币字段
+    roleInfo[@"gold"] = @99999999;
+    roleInfo[@"coin"] = @99999999;
+    roleInfo[@"money"] = @99999999;
+    roleInfo[@"totalCurrency"] = @99999999;
+    
+    // 修改资源变化量，实现不减反增
+    roleInfo[@"linzhiChange"] = @99999;
+    roleInfo[@"lingkuangChange"] = @99999;
+    roleInfo[@"danyaoChange"] = @99999;
+    roleInfo[@"faqiChange"] = @99999;
+    roleInfo[@"gongfaChange"] = @99999;
     
     NSData *modifiedJsonData = [NSJSONSerialization dataWithJSONObject:roleInfo options:0 error:&error];
     if (error) return;
@@ -215,7 +232,7 @@ static void addLifespan(void) {
     y += 28;
     
     // 卡包修仙的三个主要功能
-    UIButton *btn1 = [self createButtonWithTitle:@"� 无限灵减石" tag:1];
+    UIButton *btn1 = [self createButtonWithTitle:@"💰 货币不减反增" tag:1];
     btn1.frame = CGRectMake(20, y, 240, 35);
     [self.contentView addSubview:btn1];
     y += 43;
@@ -264,9 +281,9 @@ static void addLifespan(void) {
             g_menuView = nil;
             break;
         case 1:
-            // 无限灵石
-            enableInfiniteLingshi();
-            [self showAlert:@"💎 无限灵石开启成功！游戏将自动重启生效"];
+            // 货币不减反增 - 尝试多种方式实现灵石资源修改
+            enableCurrencyPatch();
+            [self showAlert:@"� 货币不减反增开启！成功！游戏将自动重启生效"];
             break;
         case 2:
             // 无限血量
