@@ -2,6 +2,12 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
+#pragma mark - 全局变量前置声明
+
+@class MaroonedMenuView;
+static UIButton *g_floatButton = nil;
+static MaroonedMenuView *g_menuView = nil;
+
 #pragma mark - 游戏数值修改
 
 static void setGameValue(NSString *key, id value, NSString *type) {
@@ -35,16 +41,18 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     
     CGFloat contentHeight = 350;
     CGFloat contentWidth = 280;
-    CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
-    CGFloat screenHeight = [UIScreen mainScreen].bounds.size.height;
+    // 使用自身尺寸（即父视图尺寸），自动适配横竖屏
+    CGFloat viewWidth = self.bounds.size.width;
+    CGFloat viewHeight = self.bounds.size.height;
     
     self.contentView = [[UIView alloc] initWithFrame:CGRectMake(
-        (screenWidth - contentWidth) / 2,
-        (screenHeight - contentHeight) / 2,
+        (viewWidth - contentWidth) / 2,
+        (viewHeight - contentHeight) / 2,
         contentWidth, contentHeight
     )];
     self.contentView.backgroundColor = [UIColor colorWithWhite:1 alpha:0.95];
     self.contentView.layer.cornerRadius = 16;
+    self.contentView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
     [self addSubview:self.contentView];
     
     CGFloat y = 20;
@@ -123,7 +131,8 @@ static void setGameValue(NSString *key, id value, NSString *type) {
 - (void)buttonTapped:(UIButton *)sender {
     switch (sender.tag) {
         case 0:
-            [self.superview removeFromSuperview];
+            [self removeFromSuperview];
+            g_menuView = nil;
             break;
         case 1:
             setGameValue(@"marooned_gold_luobo_num", @99999, @"Number");
@@ -148,7 +157,8 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     UITouch *touch = [touches anyObject];
     CGPoint loc = [touch locationInView:self];
     if (![self.contentView pointInside:[self.contentView convertPoint:loc fromView:self] withEvent:event]) {
-        [self.superview removeFromSuperview];
+        [self removeFromSuperview];
+        g_menuView = nil;
     }
 }
 @end
@@ -156,41 +166,53 @@ static void setGameValue(NSString *key, id value, NSString *type) {
 
 #pragma mark - 悬浮按钮
 
-static UIWindow *g_floatWindow = nil;
-static UIButton *g_floatButton = nil;
-static UIWindow *g_menuWindow = nil;
+static UIWindow* getKeyWindow(void) {
+    UIWindow *keyWindow = nil;
+    for (UIWindow *window in [UIApplication sharedApplication].windows) {
+        if (window.isKeyWindow) {
+            keyWindow = window;
+            break;
+        }
+    }
+    if (!keyWindow) {
+        keyWindow = [UIApplication sharedApplication].windows.firstObject;
+    }
+    return keyWindow;
+}
 
 static void showMenu(void) {
-    if (g_menuWindow) {
-        g_menuWindow.hidden = YES;
-        g_menuWindow = nil;
+    if (g_menuView) {
+        [g_menuView removeFromSuperview];
+        g_menuView = nil;
         return;
     }
     
-    CGRect screenBounds = [UIScreen mainScreen].bounds;
-    g_menuWindow = [[UIWindow alloc] initWithFrame:screenBounds];
-    g_menuWindow.windowLevel = UIWindowLevelAlert + 2;
-    g_menuWindow.backgroundColor = [UIColor clearColor];
-    g_menuWindow.rootViewController = [[UIViewController alloc] init];
+    UIWindow *keyWindow = getKeyWindow();
+    if (!keyWindow) return;
     
-    MaroonedMenuView *menuView = [[MaroonedMenuView alloc] initWithFrame:screenBounds];
-    [g_menuWindow.rootViewController.view addSubview:menuView];
-    g_menuWindow.hidden = NO;
+    // 使用当前窗口的实际尺寸（自动适配横竖屏）
+    CGRect windowBounds = keyWindow.bounds;
+    g_menuView = [[MaroonedMenuView alloc] initWithFrame:windowBounds];
+    g_menuView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [keyWindow addSubview:g_menuView];
 }
 
 static void handlePan(UIPanGestureRecognizer *pan) {
-    CGPoint translation = [pan translationInView:g_floatWindow];
-    CGRect frame = g_floatWindow.frame;
+    UIWindow *keyWindow = getKeyWindow();
+    if (!keyWindow || !g_floatButton) return;
+    
+    CGPoint translation = [pan translationInView:keyWindow];
+    CGRect frame = g_floatButton.frame;
     frame.origin.x += translation.x;
     frame.origin.y += translation.y;
     
-    CGFloat sw = [UIScreen mainScreen].bounds.size.width;
-    CGFloat sh = [UIScreen mainScreen].bounds.size.height;
+    CGFloat sw = keyWindow.bounds.size.width;
+    CGFloat sh = keyWindow.bounds.size.height;
     frame.origin.x = MAX(0, MIN(frame.origin.x, sw - 50));
     frame.origin.y = MAX(50, MIN(frame.origin.y, sh - 100));
     
-    g_floatWindow.frame = frame;
-    [pan setTranslation:CGPointZero inView:g_floatWindow];
+    g_floatButton.frame = frame;
+    [pan setTranslation:CGPointZero inView:keyWindow];
 }
 
 static void loadIconImage(void) {
@@ -210,19 +232,18 @@ static void loadIconImage(void) {
 }
 
 static void setupFloatingButton(void) {
-    if (g_floatWindow) return;
+    if (g_floatButton) return;
     
     dispatch_async(dispatch_get_main_queue(), ^{
-        g_floatWindow = [[UIWindow alloc] initWithFrame:CGRectMake(20, 100, 50, 50)];
-        g_floatWindow.windowLevel = UIWindowLevelAlert + 1;
-        g_floatWindow.backgroundColor = [UIColor clearColor];
-        g_floatWindow.rootViewController = [[UIViewController alloc] init];
+        UIWindow *keyWindow = getKeyWindow();
+        if (!keyWindow) return;
         
         g_floatButton = [UIButton buttonWithType:UIButtonTypeCustom];
-        g_floatButton.frame = CGRectMake(0, 0, 50, 50);
+        g_floatButton.frame = CGRectMake(20, 100, 50, 50);
         g_floatButton.backgroundColor = [UIColor colorWithRed:0.86 green:0.21 blue:0.27 alpha:0.9];
         g_floatButton.layer.cornerRadius = 25;
         g_floatButton.clipsToBounds = YES;
+        g_floatButton.layer.zPosition = 9999;
         
         [g_floatButton setTitle:@"虎" forState:UIControlStateNormal];
         [g_floatButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
@@ -233,8 +254,7 @@ static void setupFloatingButton(void) {
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:[NSValue class] action:@selector(mc_handlePan:)];
         [g_floatButton addGestureRecognizer:pan];
         
-        [g_floatWindow.rootViewController.view addSubview:g_floatButton];
-        g_floatWindow.hidden = NO;
+        [keyWindow addSubview:g_floatButton];
         
         loadIconImage();
     });
