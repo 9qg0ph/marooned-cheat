@@ -26,6 +26,7 @@ static void setGameValue(NSString *key, id value, NSString *type) {
 
 @interface MaroonedMenuView : UIView
 @property (nonatomic, strong) UIView *contentView;
+@property (nonatomic, strong) UIScrollView *scrollView;
 @end
 
 @implementation MaroonedMenuView

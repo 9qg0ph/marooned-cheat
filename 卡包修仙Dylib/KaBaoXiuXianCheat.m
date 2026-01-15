@@ -166,6 +166,7 @@ static void addLifespan(void) {
 
 @interface KaBaoMenuView : UIView
 @property (nonatomic, strong) UIView *contentView;
+@property (nonatomic, strong) UIScrollView *scrollView;
 @end
 
 @implementation KaBaoMenuView
@@ -195,6 +196,13 @@ static void addLifespan(void) {
     self.contentView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
     [self addSubview:self.contentView];
     
+    // 创建滚动视图
+    self.scrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, contentWidth, contentHeight)];
+    self.scrollView.showsVerticalScrollIndicator = YES;
+    self.scrollView.showsHorizontalScrollIndicator = NO;
+    self.scrollView.bounces = YES;
+    [self.contentView addSubview:self.scrollView];
+    
     CGFloat y = 20;
     
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 30)];
@@ -202,7 +210,7 @@ static void addLifespan(void) {
     title.font = [UIFont boldSystemFontOfSize:22];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.86 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
-    [self.contentView addSubview:title];
+    [self.scrollView addSubview:title];
     y += 35;
     
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
@@ -210,7 +218,7 @@ static void addLifespan(void) {
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
-    [self.contentView addSubview:info];
+    [self.scrollView addSubview:info];
     y += 30;
 
     UITextView *disclaimer = [[UITextView alloc] initWithFrame:CGRectMake(20, y, 240, 60)];
@@ -220,7 +228,8 @@ static void addLifespan(void) {
     disclaimer.backgroundColor = [UIColor colorWithWhite:0.97 alpha:1];
     disclaimer.layer.cornerRadius = 8;
     disclaimer.editable = NO;
-    [self.contentView addSubview:disclaimer];
+    disclaimer.scrollEnabled = NO;
+    [self.scrollView addSubview:disclaimer];
     y += 70;
     
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
@@ -228,30 +237,30 @@ static void addLifespan(void) {
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.86 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
-    [self.contentView addSubview:tip];
+    [self.scrollView addSubview:tip];
     y += 28;
     
     // 卡包修仙的三个主要功能
     UIButton *btn1 = [self createButtonWithTitle:@"💰 货币不减反增" tag:1];
     btn1.frame = CGRectMake(20, y, 240, 35);
-    [self.contentView addSubview:btn1];
+    [self.scrollView addSubview:btn1];
     y += 43;
     
     UIButton *btn2 = [self createButtonWithTitle:@"❤️ 无限血量" tag:2];
     btn2.frame = CGRectMake(20, y, 240, 35);
-    [self.contentView addSubview:btn2];
+    [self.scrollView addSubview:btn2];
     y += 43;
     
     UIButton *btn3 = [self createButtonWithTitle:@"⏰ 增加240年寿命" tag:3];
     btn3.frame = CGRectMake(20, y, 240, 35);
-    [self.contentView addSubview:btn3];
+    [self.scrollView addSubview:btn3];
     y += 43;
     
     UIButton *closeBtn = [self createButtonWithTitle:@"❌ 关闭菜单" tag:0];
     closeBtn.frame = CGRectMake(20, y, 240, 35);
     closeBtn.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
     [closeBtn setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
-    [self.contentView addSubview:closeBtn];
+    [self.scrollView addSubview:closeBtn];
     y += 43;
     
     UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
@@ -259,7 +268,11 @@ static void addLifespan(void) {
     copyright.font = [UIFont systemFontOfSize:12];
     copyright.textColor = [UIColor lightGrayColor];
     copyright.textAlignment = NSTextAlignmentCenter;
-    [self.contentView addSubview:copyright];
+    [self.scrollView addSubview:copyright];
+    y += 30;
+    
+    // 设置滚动视图的内容大小
+    self.scrollView.contentSize = CGSizeMake(contentWidth, y);
 }
 
 - (UIButton *)createButtonWithTitle:(NSString *)title tag:(NSInteger)tag {
