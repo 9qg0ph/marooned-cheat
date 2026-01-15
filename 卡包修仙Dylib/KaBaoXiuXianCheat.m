@@ -205,24 +205,24 @@ static void addLifespan(void) {
     
     // 添加右上角关闭按钮
     UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    closeButton.frame = CGRectMake(contentWidth - 35, 5, 30, 30);
+    closeButton.frame = CGRectMake(contentWidth - 40, 0, 40, 40);  // 增大可点击区域
     closeButton.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
-    closeButton.layer.cornerRadius = 15;
+    closeButton.layer.cornerRadius = 20;
     [closeButton setTitle:@"✕" forState:UIControlStateNormal];
     [closeButton setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
-    closeButton.titleLabel.font = [UIFont boldSystemFontOfSize:16];
+    closeButton.titleLabel.font = [UIFont boldSystemFontOfSize:18];  // 增大字体
     [closeButton addTarget:self action:@selector(closeMenu) forControlEvents:UIControlEventTouchUpInside];
     closeButton.layer.zPosition = 1000;  // 确保按钮在最上层
     [self.contentView addSubview:closeButton];
     
-    // 创建滚动视图
-    self.scrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, contentWidth, contentHeight)];
+    // 创建滚动视图 - 为右上角关闭按钮留出空间
+    self.scrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 40, contentWidth, contentHeight - 40)];
     self.scrollView.showsVerticalScrollIndicator = YES;
     self.scrollView.showsHorizontalScrollIndicator = NO;
     self.scrollView.bounces = YES;
     [self.contentView addSubview:self.scrollView];
     
-    CGFloat y = 20;
+    CGFloat y = 20;  // 滚动视图内的相对位置
     
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 30)];
     title.text = @"🎴 卡包修仙";
