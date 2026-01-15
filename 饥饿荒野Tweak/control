@@ -1,9 +1,0 @@
-Package: com.iosdk.maroonedcheat
-Name: 饥饿荒野修改器
-Depends: mobilesubstrate
-Version: 1.0.0
-Architecture: iphoneos-arm
-Description: 饥饿荒野游戏修改器 - 无限金萝卜/广告跳过
-Maintainer: IOSDK
-Author: 科技虎
-Section: Tweaks
