@@ -1,0 +1,8 @@
+# 排除大文件和二进制
+*.ipa
+*.dylib
+*.deb
+
+# 排除无关文件
+抓包到的数据.html
+ASWJGAMEPLUS_analysis.md
