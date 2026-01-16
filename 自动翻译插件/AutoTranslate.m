@@ -280,7 +280,6 @@ static void initTranslationDict() {
         @"Server Error": @"服务器错误",
         @"Error": @"错误",
         @"Warning": @"警告",
-        @"Info": @"信息",
         @"Notice": @"通知",
         @"Alert": @"提醒",
         @"Update": @"更新",
@@ -356,14 +355,12 @@ static void initTranslationDict() {
         // 方向/位置
         @"Up": @"上",
         @"Down": @"下",
-        @"Left": @"左",
         @"Right": @"右",
         @"Top": @"顶部",
         @"Bottom": @"底部",
         @"Center": @"中心",
         @"Middle": @"中间",
         @"Front": @"前",
-        @"Back": @"后",
         @"North": @"北",
         @"South": @"南",
         @"East": @"东",
@@ -389,7 +386,6 @@ static void initTranslationDict() {
         @"Castle": @"城堡",
         @"Village": @"村庄",
         @"Town": @"城镇",
-        @"City": @"城市",
         @"Kingdom": @"王国",
         @"Empire": @"帝国",
         @"Dungeon": @"地牢",
@@ -422,6 +418,8 @@ static NSString *translateOnline(NSString *text) {
         return translationCache[text];
     }
     
+    __block NSString *translatedResult = text;
+    
     @try {
         // Google翻译免费API
         NSString *encoded = [text stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
@@ -433,34 +431,40 @@ static NSString *translateOnline(NSString *text) {
         request.timeoutInterval = 3.0; // 3秒超时
         [request setValue:@"Mozilla/5.0" forHTTPHeaderField:@"User-Agent"];
         
-        // 同步请求 (在后台线程执行时)
-        NSURLResponse *response = nil;
-        NSError *error = nil;
-        NSData *data = [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
+        // 使用NSURLSession同步请求 (通过信号量实现)
+        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
         
-        if (data && !error) {
-            NSArray *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-            if (json && [json isKindOfClass:[NSArray class]] && json.count > 0) {
-                NSArray *translations = json[0];
-                if ([translations isKindOfClass:[NSArray class]]) {
-                    NSMutableString *result = [NSMutableString string];
-                    for (NSArray *item in translations) {
-                        if ([item isKindOfClass:[NSArray class]] && item.count > 0) {
-                            [result appendString:item[0]];
+        NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            if (data && !error) {
+                NSArray *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+                if (json && [json isKindOfClass:[NSArray class]] && json.count > 0) {
+                    NSArray *translations = json[0];
+                    if ([translations isKindOfClass:[NSArray class]]) {
+                        NSMutableString *result = [NSMutableString string];
+                        for (NSArray *item in translations) {
+                            if ([item isKindOfClass:[NSArray class]] && item.count > 0) {
+                                [result appendString:item[0]];
+                            }
                         }
-                    }
-                    if (result.length > 0) {
-                        translationCache[text] = result;
-                        return result;
+                        if (result.length > 0) {
+                            translationCache[text] = result;
+                            translatedResult = result;
+                        }
                     }
                 }
             }
-        }
+            dispatch_semaphore_signal(semaphore);
+        }];
+        [task resume];
+        
+        // 等待请求完成，最多3秒
+        dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC));
+        
     } @catch (NSException *e) {
         NSLog(@"[AutoTranslate] 在线翻译异常: %@", e);
     }
     
-    return text;
+    return translatedResult;
 }
 
 // 使用百度翻译API (需要申请AppID和密钥，更稳定)
