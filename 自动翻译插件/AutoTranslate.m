@@ -14,7 +14,6 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <substrate.h>
-#import <CommonCrypto/CommonDigest.h>
 
 // ============== 翻译字典 ==============
 static NSDictionary *translationDict = nil;
@@ -401,215 +400,8 @@ static void initTranslationDict() {
 }
 
 
-// ============== 在线翻译API ==============
-
-// 翻译缓存，避免重复请求
+// ============== 翻译缓存 ==============
 static NSMutableDictionary *translationCache = nil;
-
-// 使用Google翻译API (免费版，有限制)
-static NSString *translateOnline(NSString *text) {
-    if (!text || text.length == 0) return text;
-    
-    // 检查缓存
-    if (!translationCache) {
-        translationCache = [NSMutableDictionary dictionary];
-    }
-    if (translationCache[text]) {
-        return translationCache[text];
-    }
-    
-    __block NSString *translatedResult = text;
-    
-    @try {
-        // Google翻译免费API
-        NSString *encoded = [text stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-        NSString *urlStr = [NSString stringWithFormat:
-            @"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=%@", encoded];
-        
-        NSURL *url = [NSURL URLWithString:urlStr];
-        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-        request.timeoutInterval = 3.0; // 3秒超时
-        [request setValue:@"Mozilla/5.0" forHTTPHeaderField:@"User-Agent"];
-        
-        // 使用NSURLSession同步请求 (通过信号量实现)
-        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-        
-        NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            if (data && !error) {
-                NSArray *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-                if (json && [json isKindOfClass:[NSArray class]] && json.count > 0) {
-                    NSArray *translations = json[0];
-                    if ([translations isKindOfClass:[NSArray class]]) {
-                        NSMutableString *result = [NSMutableString string];
-                        for (NSArray *item in translations) {
-                            if ([item isKindOfClass:[NSArray class]] && item.count > 0) {
-                                [result appendString:item[0]];
-                            }
-                        }
-                        if (result.length > 0) {
-                            translationCache[text] = result;
-                            translatedResult = result;
-                        }
-                    }
-                }
-            }
-            dispatch_semaphore_signal(semaphore);
-        }];
-        [task resume];
-        
-        // 等待请求完成，最多3秒
-        dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC));
-        
-    } @catch (NSException *e) {
-        NSLog(@"[AutoTranslate] 在线翻译异常: %@", e);
-    }
-    
-    return translatedResult;
-}
-
-// 使用百度翻译API (需要申请AppID和密钥，更稳定)
-// 申请地址: https://fanyi-api.baidu.com/
-static NSString *const BAIDU_APP_ID = @""; // 填入你的AppID
-static NSString *const BAIDU_SECRET = @""; // 填入你的密钥
-
-static NSString *translateWithBaidu(NSString *text) {
-    if (!text || text.length == 0) return text;
-    if (BAIDU_APP_ID.length == 0 || BAIDU_SECRET.length == 0) return nil;
-    
-    // 检查缓存
-    if (translationCache[text]) {
-        return translationCache[text];
-    }
-    
-    @try {
-        // 生成签名
-        NSString *salt = [NSString stringWithFormat:@"%d", arc4random()];
-        NSString *sign = [NSString stringWithFormat:@"%@%@%@%@", BAIDU_APP_ID, text, salt, BAIDU_SECRET];
-        
-        // MD5
-        const char *cStr = [sign UTF8String];
-        unsigned char digest[CC_MD5_DIGEST_LENGTH];
-        CC_MD5(cStr, (CC_LONG)strlen(cStr), digest);
-        NSMutableString *md5 = [NSMutableString stringWithCapacity:CC_MD5_DIGEST_LENGTH * 2];
-        for (int i = 0; i < CC_MD5_DIGEST_LENGTH; i++) {
-            [md5 appendFormat:@"%02x", digest[i]];
-        }
-        
-        NSString *encoded = [text stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-        NSString *urlStr = [NSString stringWithFormat:
-            @"https://fanyi-api.baidu.com/api/trans/vip/translate?q=%@&from=en&to=zh&appid=%@&salt=%@&sign=%@",
-            encoded, BAIDU_APP_ID, salt, md5];
-        
-        NSURL *url = [NSURL URLWithString:urlStr];
-        NSData *data = [NSData dataWithContentsOfURL:url];
-        
-        if (data) {
-            NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-            NSArray *results = json[@"trans_result"];
-            if (results.count > 0) {
-                NSString *dst = results[0][@"dst"];
-                if (dst) {
-                    translationCache[text] = dst;
-                    return dst;
-                }
-            }
-        }
-    } @catch (NSException *e) {
-        NSLog(@"[AutoTranslate] 百度翻译异常: %@", e);
-    }
-    
-    return nil;
-}
-
-// ============== 翻译函数 ==============
-
-// 是否启用在线翻译 (设为NO禁用，避免闪退)
-static BOOL enableOnlineTranslation = NO;
-
-// 检查字符串是否主要是英文
-static BOOL isEnglishText(NSString *text) {
-    if (!text || text.length == 0) return NO;
-    
-    // 统计英文字符数量
-    NSUInteger englishCount = 0;
-    NSUInteger totalCount = 0;
-    
-    for (NSUInteger i = 0; i < text.length; i++) {
-        unichar c = [text characterAtIndex:i];
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
-            englishCount++;
-        }
-        if (c > 32) { // 非空白字符
-            totalCount++;
-        }
-    }
-    
-    // 如果英文字符占比超过50%，认为是英文
-    return totalCount > 0 && (englishCount * 100 / totalCount) > 50;
-}
-
-// 翻译文本
-static NSString *translateText(NSString *text) {
-    if (!text || text.length == 0) return text;
-    if (!translationDict) initTranslationDict();
-    
-    // 先尝试完全匹配本地字典
-    NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    NSString *translated = translationDict[trimmed];
-    if (translated) {
-        return translated;
-    }
-    
-    // 尝试忽略大小写匹配
-    for (NSString *key in translationDict) {
-        if ([key caseInsensitiveCompare:trimmed] == NSOrderedSame) {
-            return translationDict[key];
-        }
-    }
-    
-    // 如果不是英文，直接返回
-    if (!isEnglishText(text)) {
-        return text;
-    }
-    
-    // 尝试分词翻译
-    NSMutableString *result = [NSMutableString stringWithString:text];
-    BOOL hasTranslation = NO;
-    
-    // 按照字典key长度降序排列，优先匹配长词
-    NSArray *sortedKeys = [[translationDict allKeys] sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-        return [@(b.length) compare:@(a.length)];
-    }];
-    
-    for (NSString *key in sortedKeys) {
-        NSRange range = [result rangeOfString:key options:NSCaseInsensitiveSearch];
-        if (range.location != NSNotFound) {
-            [result replaceCharactersInRange:range withString:translationDict[key]];
-            hasTranslation = YES;
-        }
-    }
-    
-    if (hasTranslation) {
-        return result;
-    }
-    
-    // ========== 在线翻译 (全量翻译) ==========
-    if (enableOnlineTranslation && trimmed.length >= 2 && trimmed.length <= 500) {
-        // 先尝试百度翻译 (如果配置了)
-        NSString *baiduResult = translateWithBaidu(trimmed);
-        if (baiduResult) {
-            return baiduResult;
-        }
-        
-        // 使用Google翻译
-        NSString *onlineResult = translateOnline(trimmed);
-        if (onlineResult && ![onlineResult isEqualToString:trimmed]) {
-            return onlineResult;
-        }
-    }
-    
-    return text;
-}
 
 // ============== Hook UILabel ==============
 
@@ -656,7 +448,7 @@ static void hook_UILabel_setText(UILabel *self, SEL _cmd, NSString *text) {
 static void (*orig_UILabel_setAttributedText)(UILabel *self, SEL _cmd, NSAttributedString *text);
 static void hook_UILabel_setAttributedText(UILabel *self, SEL _cmd, NSAttributedString *text) {
     @try {
-        if (text && text.string.length > 0 && isEnglishText(text.string)) {
+        if (text && text.string.length > 0) {
             if (!translationDict) initTranslationDict();
             NSString *trimmed = [text.string stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
             NSString *translated = translationDict[trimmed];
@@ -898,13 +690,6 @@ static void __attribute__((constructor)) initialize() {
         
         NSLog(@"[AutoTranslate] 自动翻译插件已加载");
         NSLog(@"[AutoTranslate] 本地词库: %lu 个词条", (unsigned long)translationDict.count);
-        NSLog(@"[AutoTranslate] 在线翻译: %@", enableOnlineTranslation ? @"已启用" : @"已禁用");
-        
-        if (BAIDU_APP_ID.length > 0) {
-            NSLog(@"[AutoTranslate] 百度翻译API: 已配置");
-        } else {
-            NSLog(@"[AutoTranslate] 使用Google翻译 (免费版)");
-        }
         
         // Hook UILabel
         MSHookMessageEx(
