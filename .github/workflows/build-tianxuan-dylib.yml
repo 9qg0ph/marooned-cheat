@@ -29,6 +29,7 @@ jobs:
           -dynamiclib \
           -framework UIKit \
           -framework Foundation \
+          -framework CoreGraphics \
           -fobjc-arc \
           -Wno-deprecated-declarations \
           -o TianXuanDaGongRenCheat.dylib \
