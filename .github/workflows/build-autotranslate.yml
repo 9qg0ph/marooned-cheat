@@ -1,0 +1,61 @@
+name: Build AutoTranslate iOS Dylib
+
+on:
+  push:
+    paths:
+      - '自动翻译插件/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Theos
+      run: |
+        brew install ldid xz
+        git clone --recursive https://github.com/theos/theos.git $HOME/theos
+        echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+        
+    - name: Download iOS SDK
+      run: |
+        curl -LO https://github.com/theos/sdks/releases/download/master/iPhoneOS14.5.sdk.tar.xz
+        tar -xf iPhoneOS14.5.sdk.tar.xz -C $HOME/theos/sdks/
+        
+    - name: Build AutoTranslate Dylib
+      run: |
+        cd 自动翻译插件
+        export THEOS=$HOME/theos
+        export PATH=$THEOS/bin:$PATH
+        make package FINALPACKAGE=1
+        
+    - name: Extract Dylib
+      run: |
+        cd 自动翻译插件
+        mkdir -p output
+        # 找到生成的deb包
+        DEB_FILE=$(find packages -name "*.deb" | head -1)
+        if [ -n "$DEB_FILE" ]; then
+          dpkg-deb -x "$DEB_FILE" extracted
+          find extracted -name "*.dylib" -exec cp {} output/ \;
+        fi
+        # 如果有直接生成的dylib
+        find .theos -name "*.dylib" -exec cp {} output/ \; 2>/dev/null || true
+        ls -la output/
+        
+    - name: Upload Dylib
+      uses: actions/upload-artifact@v4
+      with:
+        name: AutoTranslate-Dylib
+        path: 自动翻译插件/output/*.dylib
+        if-no-files-found: warn
+        
+    - name: Upload Full Package
+      uses: actions/upload-artifact@v4
+      with:
+        name: AutoTranslate-Package
+        path: 自动翻译插件/packages/*.deb
+        if-no-files-found: warn
