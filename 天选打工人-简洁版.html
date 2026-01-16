@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天选打工人</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            color: #333;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+            box-sizing: border-box;
+        }
+        body {
+            background: transparent;
+            width: 100%;
+            height: 100%;
+            line-height: 1.5;
+        }
+        *:not(input) {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .popup_container {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        #H5AlertView {
+            width: 280px;
+            zoom: 0.95;
+        }
+        #title-text {
+            padding: 15px 0 5px;
+            font-size: 22px;
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+        #content-view {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(255, 152, 0, 0.15);
+            animation: popIn 0.3s ease-out;
+        }
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.3); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .button-style {
+            width: 100%;
+            height: 38px;
+            color: #fff;
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 12px;
+            margin: 8px 0;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.2);
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .button-style:active {
+            transform: scale(0.98);
+            box-shadow: 0 2px 8px rgba(255, 152, 0, 0.2);
+        }
+        .tip-text {
+            color: #FF9800;
+            font-size: 12px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .footer {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="popup_container">
+        <div id="H5AlertView">
+            <div id="content-view">
+                <div id="title-text">💼 天选打工人</div>
+                <div class="tip-text">进入游戏后点击按钮即可</div>
+                
+                <a href="javascript:void(0);" onclick="modifyMoney()" class="button-style">💰 无限金钱</a>
+                <a href="javascript:void(0);" onclick="modifyGoldBar()" class="button-style">🏆 无限金条</a>
+                <a href="javascript:void(0);" onclick="modifyEnergy()" class="button-style">⚡ 无限体力</a>
+                <a href="javascript:void(0);" onclick="modifyAll()" class="button-style">🎁 一键全开</a>
+                
+                <div class="footer">© 2025 𝐈𝐎𝐒𝐃𝐊 科技虎</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 金钱地址
+        var moneyAddrs = ['0x128D9318C', '0x12ABB5CD4'];
+        // 金条地址
+        var goldBarAddrs = ['0x1114B6CF4', '0x128D93194', '0x12ABB5CEC'];
+        // 体力地址
+        var energyAddrs = ['0x128D9319C'];
+
+        function modifyMoney() {
+            try {
+                var success = 0;
+                for (var i = 0; i < moneyAddrs.length; i++) {
+                    try {
+                        h5gg.setValue(moneyAddrs[i], 999999, 'I32');
+                        success++;
+                    } catch (e) {}
+                }
+                if (success > 0) {
+                    alert("✅ 金钱修改成功！\n已改为：999999\n返回游戏查看");
+                } else {
+                    alert("❌ 修改失败！\n地址可能已变化\n请手动搜索");
+                }
+            } catch (e) {
+                alert("❌ 错误：" + e.message);
+            }
+        }
+
+        function modifyGoldBar() {
+            try {
+                var success = 0;
+                for (var i = 0; i < goldBarAddrs.length; i++) {
+                    try {
+                        h5gg.setValue(goldBarAddrs[i], 99999, 'I32');
+                        success++;
+                    } catch (e) {}
+                }
+                if (success > 0) {
+                    alert("✅ 金条修改成功！\n已改为：99999\n返回游戏查看");
+                } else {
+                    alert("❌ 修改失败！\n地址可能已变化\n请手动搜索");
+                }
+            } catch (e) {
+                alert("❌ 错误：" + e.message);
+            }
+        }
+
+        function modifyEnergy() {
+            try {
+                var success = 0;
+                for (var i = 0; i < energyAddrs.length; i++) {
+                    try {
+                        h5gg.setValue(energyAddrs[i], 99999, 'I32');
+                        success++;
+                    } catch (e) {}
+                }
+                if (success > 0) {
+                    alert("✅ 体力修改成功！\n已改为：99999\n返回游戏查看");
+                } else {
+                    alert("❌ 修改失败！\n地址可能已变化\n请手动搜索");
+                }
+            } catch (e) {
+                alert("❌ 错误：" + e.message);
+            }
+        }
+
+        function modifyAll() {
+            try {
+                var moneyOk = 0, goldBarOk = 0, energyOk = 0;
+                
+                for (var i = 0; i < moneyAddrs.length; i++) {
+                    try {
+                        h5gg.setValue(moneyAddrs[i], 999999, 'I32');
+                        moneyOk++;
+                    } catch (e) {}
+                }
+                
+                for (var i = 0; i < goldBarAddrs.length; i++) {
+                    try {
+                        h5gg.setValue(goldBarAddrs[i], 99999, 'I32');
+                        goldBarOk++;
+                    } catch (e) {}
+                }
+                
+                for (var i = 0; i < energyAddrs.length; i++) {
+                    try {
+                        h5gg.setValue(energyAddrs[i], 99999, 'I32');
+                        energyOk++;
+                    } catch (e) {}
+                }
+                
+                var msg = "修改结果：\n\n";
+                msg += "💰 金钱：" + (moneyOk > 0 ? "成功 ✅" : "失败 ❌") + "\n";
+                msg += "🏆 金条：" + (goldBarOk > 0 ? "成功 ✅" : "失败 ❌") + "\n";
+                msg += "⚡ 体力：" + (energyOk > 0 ? "成功 ✅" : "失败 ❌") + "\n\n";
+                msg += "返回游戏查看效果";
+                alert(msg);
+            } catch (e) {
+                alert("❌ 错误：" + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

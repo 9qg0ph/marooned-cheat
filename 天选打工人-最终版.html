@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天选打工人</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            color: #333;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+            box-sizing: border-box;
+        }
+        body {
+            background: transparent;
+            width: 100%;
+            height: 100%;
+            line-height: 1.5;
+        }
+        *:not(input) {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .popup_container {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #H5AlertView {
+            width: 280px;
+        }
+        #content-view {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(255, 152, 0, 0.2);
+        }
+        #title-text {
+            font-size: 18px;
+            color: #333;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+        .contact {
+            font-size: 11px;
+            color: #999;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .btn-row {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .btn-label {
+            flex: 1;
+            font-size: 13px;
+            color: #333;
+        }
+        .btn-action {
+            width: 50px;
+            height: 28px;
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .btn-action:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+    <div class="popup_container">
+        <div id="H5AlertView">
+            <div id="content-view">
+                <div id="title-text">💼 天选打工人</div>
+                <div class="contact">若侵权联系邮箱下架删除</div>
+                
+                <div class="btn-row">
+                    <span class="btn-label">无限货币（满100爱心开启）</span>
+                    <button class="btn-action" onclick="modifyMoney()">开启</button>
+                </div>
+                
+                <div class="btn-row">
+                    <span class="btn-label">无限金条（满100爱心开启）</span>
+                    <button class="btn-action" onclick="modifyGold()">开启</button>
+                </div>
+                
+                <div class="btn-row">
+                    <span class="btn-label">一键全开（满100爱心开启）</span>
+                    <button class="btn-action" onclick="modifyAll()">开启</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 无限货币 - 满100爱心时开启
+        function modifyMoney() {
+            try {
+                h5gg.clearResults();
+                // 搜索100（爱心满值）
+                h5gg.searchNumber('100', 'I32', '0x100000000', '0x300000000');
+                // 在附近搜索金钱（范围值）
+                h5gg.searchNearby('1000~9999999', 'I32', '0x20');
+                var count = h5gg.getResultsCount();
+                
+                if (count > 0) {
+                    h5gg.editAll('999999999', 'I32');
+                    alert("✅ 无限货币开启成功！");
+                } else {
+                    alert("❌ 未找到！请确保爱心已满100");
+                }
+            } catch(e) {
+                alert("❌ 错误: " + e.message);
+            }
+        }
+        
+        // 无限金条
+        function modifyGold() {
+            try {
+                h5gg.clearResults();
+                // 搜索100（爱心满值）
+                h5gg.searchNumber('100', 'I32', '0x100000000', '0x300000000');
+                var count = h5gg.getResultsCount();
+                
+                if (count == 0) {
+                    alert("❌ 未找到！请确保爱心已满100");
+                    return;
+                }
+                
+                // 获取所有100的地址，然后修改偏移-0x14位置（金条）
+                var results = h5gg.getResults(count);
+                var modified = 0;
+                
+                for (var i = 0; i < results.length; i++) {
+                    try {
+                        var addr = results[i].address;
+                        var goldAddr = (Number(addr) - 0x14).toString(16);
+                        goldAddr = '0x' + goldAddr;
+                        h5gg.setValue(goldAddr, 999999, 'I32');
+                        modified++;
+                    } catch(e) {}
+                }
+                
+                if (modified > 0) {
+                    alert("✅ 无限金条开启成功！");
+                } else {
+                    alert("❌ 修改失败");
+                }
+            } catch(e) {
+                alert("❌ 错误: " + e.message);
+            }
+        }
+        
+        // 一键全开
+        function modifyAll() {
+            try {
+                h5gg.clearResults();
+                // 搜索100（爱心满值）
+                h5gg.searchNumber('100', 'I32', '0x100000000', '0x300000000');
+                var count = h5gg.getResultsCount();
+                
+                if (count == 0) {
+                    alert("❌ 未找到！请确保爱心已满100");
+                    return;
+                }
+                
+                var results = h5gg.getResults(count);
+                var modified = 0;
+                
+                for (var i = 0; i < results.length; i++) {
+                    try {
+                        var addr = Number(results[i].address);
+                        
+                        // 金钱 = 爱心地址 - 0x18
+                        var moneyAddr = '0x' + (addr - 0x18).toString(16);
+                        h5gg.setValue(moneyAddr, 999999999, 'I32');
+                        
+                        // 金条 = 爱心地址 - 0x14
+                        var goldAddr = '0x' + (addr - 0x14).toString(16);
+                        h5gg.setValue(goldAddr, 999999, 'I32');
+                        
+                        modified++;
+                    } catch(e) {}
+                }
+                
+                if (modified > 0) {
+                    alert("✅ 一键全开成功！\n💰 金钱: 999999999\n🏆 金条: 999999");
+                } else {
+                    alert("❌ 修改失败");
+                }
+            } catch(e) {
+                alert("❌ 错误: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
