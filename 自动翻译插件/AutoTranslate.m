@@ -611,21 +611,6 @@ static NSString *translateText(NSString *text) {
     return text;
 }
 
-// 异步翻译 (用于长文本，避免阻塞UI)
-static void translateTextAsync(NSString *text, void (^completion)(NSString *translated)) {
-    if (!text || text.length == 0) {
-        if (completion) completion(text);
-        return;
-    }
-    
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSString *result = translateText(text);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (completion) completion(result);
-        });
-    });
-}
-
 // ============== Hook UILabel ==============
 
 static void (*orig_UILabel_setText)(UILabel *self, SEL _cmd, NSString *text);
