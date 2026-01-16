@@ -265,7 +265,7 @@ static void addLifespan(void) {
     CGFloat y = 10;  // 滚动视图内的相对位置，减少顶部空间
     
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
-    info.text = @"� 资源包仅供学习使用";
+    info.text = @"🎮 资源仅供学习使用";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -273,7 +273,7 @@ static void addLifespan(void) {
     y += 30;
 
     UITextView *disclaimer = [[UITextView alloc] initWithFrame:CGRectMake(20, y, 240, 60)];
-    disclaimer.text = @"免责声明：本工具仅供技术研究与学习，严禁用于商业用途。";
+    disclaimer.text = @"免责声明：本工具仅供技术研究与学习，严禁用于商业用途及非法途径。使用本工具修改游戏可能违反游戏服务条款，用户需自行承担一切风险和责任。严禁倒卖、传播或用于牟利，否则后果自负。继续使用即表示您已阅读并同意本声明。";
     disclaimer.font = [UIFont systemFontOfSize:12];
     disclaimer.textColor = [UIColor lightGrayColor];
     disclaimer.backgroundColor = [UIColor colorWithWhite:0.97 alpha:1];
@@ -292,7 +292,7 @@ static void addLifespan(void) {
     y += 28;
     
     // 卡包修仙的四个主要功能
-    UIButton *btn1 = [self createButtonWithTitle:@"�  无限灵石" tag:1];
+    UIButton *btn1 = [self createButtonWithTitle:@"💎 无限灵石" tag:1];
     btn1.frame = CGRectMake(20, y, 240, 35);
     [self.scrollView addSubview:btn1];
     y += 43;

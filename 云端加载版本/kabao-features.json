@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "game": "卡包修仙",
+  "bundleId": "game.taptap.lantern.kbxx",
+  "features": [
+    {
+      "title": "💎 无限灵石",
+      "icon": "💎",
+      "successMessage": "💎 无限灵石锁定成功！使用后不会减少",
+      "autoRestart": true,
+      "modifications": {
+        "currency": 99999999,
+        "currencyAdd": 99999999,
+        "lingzhi": 99999999,
+        "lingkuang": 99999999,
+        "danyao": 99999999,
+        "faqi": 99999999,
+        "gongfa": 99999999,
+        "linzhiChange": 99999,
+        "lingkuangChange": 99999,
+        "danyaoChange": 99999,
+        "faqiChange": 99999,
+        "gongfaChange": 99999,
+        "currencyReduce": 0,
+        "currencyCost": 0
+      }
+    },
+    {
+      "title": "⚡ 无限灵气",
+      "icon": "⚡",
+      "successMessage": "⚡ 无限灵气锁定成功！使用后不会减少",
+      "autoRestart": true,
+      "modifications": {
+        "power": 99999999,
+        "powerAdd": 99999999,
+        "powerAdd2": 99999999,
+        "exp": 99999999,
+        "expAdd2": 99999999,
+        "expReduce": 0,
+        "powerReduce": 0,
+        "powerCost": 0,
+        "energyCost": 0,
+        "spiritCost": 0,
+        "powerChange": 99999,
+        "expChange": 99999
+      }
+    },
+    {
+      "title": "❤️ 无限血量",
+      "icon": "❤️",
+      "successMessage": "❤️ 无限血量开启成功！",
+      "autoRestart": true,
+      "modifications": {
+        "hp": 99999999,
+        "maxHp": 99999999,
+        "saveHp": 99999999
+      }
+    },
+    {
+      "title": "⏰ 增加20年寿命",
+      "icon": "⏰",
+      "successMessage": "⏰ 增加20年寿命成功！",
+      "autoRestart": true,
+      "modifications": {
+        "lifeSpan": "ADD:20"
+      }
+    },
+    {
+      "title": "🌟 新功能测试",
+      "icon": "🌟",
+      "successMessage": "🌟 新功能开启成功！这是云端新增的功能",
+      "autoRestart": true,
+      "modifications": {
+        "testValue": 12345,
+        "newFeature": true
+      }
+    }
+  ],
+  "updateTime": "2025-01-16T10:00:00Z",
+  "notice": "云端配置已更新，新增测试功能"
+}

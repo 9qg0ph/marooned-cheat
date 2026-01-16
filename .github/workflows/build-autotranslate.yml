@@ -23,13 +23,19 @@ jobs:
     - name: Download iOS SDK
       run: |
         cd $HOME/theos/sdks
-        # 使用可靠的SDK源
-        curl -L -o sdk.tar.xz "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/iPhoneOS14.4.sdk.tar.xz" || \
-        curl -L -o sdk.tar.xz "https://github.com/xybp888/iOS-SDKs/releases/download/iOS16.4/iPhoneOS16.4.sdk.tar.xz"
-        tar -xJf sdk.tar.xz || tar -xf sdk.tar.xz
+        # 从theos官方sdks仓库克隆
+        git clone --depth 1 https://github.com/theos/sdks.git temp_sdks
+        mv temp_sdks/*.sdk . 2>/dev/null || true
+        rm -rf temp_sdks
+        # 如果没有sdk，尝试其他方式
+        if [ ! -d "iPhoneOS"*".sdk" ]; then
+          # 使用Xcode自带的SDK
+          SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || echo "")
+          if [ -n "$SDK_PATH" ] && [ -d "$SDK_PATH" ]; then
+            ln -s "$SDK_PATH" iPhoneOS14.5.sdk
+          fi
+        fi
         ls -la
-        # 重命名确保兼容
-        mv iPhoneOS*.sdk iPhoneOS14.5.sdk 2>/dev/null || true
         
     - name: Build AutoTranslate Dylib
       run: |
