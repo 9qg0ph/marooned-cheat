@@ -1,199 +1,127 @@
 // 天选打工人修改器 - TianXuanDaGongRenCheat.m
-// 通过内存搜索修改金钱、金条、体力
+// 通过内存搜索修改金钱、金条
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <mach/mach.h>
-#import <mach/vm_map.h>
 
 #pragma mark - 全局变量
 
 @class TXMenuView;
 static UIButton *g_floatButton = nil;
 static TXMenuView *g_menuView = nil;
+static NSMutableArray *g_foundAddresses = nil;  // 存储找到的地址
 
-#pragma mark - 内存搜索和修改
+#pragma mark - 安全的内存操作
 
-// 在指定内存范围搜索32位整数值
-static NSMutableArray* searchMemoryForInt32(int32_t targetValue, vm_address_t startAddr, vm_address_t endAddr) {
+// 安全读取内存
+static BOOL safeReadMemory(vm_address_t address, void *buffer, vm_size_t size) {
+    vm_size_t bytesRead = 0;
+    kern_return_t kr = vm_read_overwrite(mach_task_self(), address, size, (vm_address_t)buffer, &bytesRead);
+    return (kr == KERN_SUCCESS && bytesRead == size);
+}
+
+// 安全写入内存
+static BOOL safeWriteMemory(vm_address_t address, void *buffer, vm_size_t size) {
+    kern_return_t kr = vm_write(mach_task_self(), address, (vm_offset_t)buffer, (mach_msg_type_number_t)size);
+    return (kr == KERN_SUCCESS);
+}
+
+// 搜索内存中的32位整数值（限制结果数量）
+static NSMutableArray* searchInt32InMemory(int32_t targetValue, int maxResults) {
     NSMutableArray *results = [NSMutableArray array];
     task_t task = mach_task_self();
     
-    vm_address_t address = startAddr;
-    vm_size_t size;
+    vm_address_t address = 0;
+    vm_size_t size = 0;
     vm_region_basic_info_data_64_t info;
-    mach_msg_type_number_t infoCount = VM_REGION_BASIC_INFO_COUNT_64;
+    mach_msg_type_number_t infoCount;
     mach_port_t objectName;
     
-    while (address < endAddr) {
-        kern_return_t kr = vm_region_64(task, &address, &size, VM_REGION_BASIC_INFO_64, 
+    while (results.count < maxResults) {
+        infoCount = VM_REGION_BASIC_INFO_COUNT_64;
+        kern_return_t kr = vm_region_64(task, &address, &size, VM_REGION_BASIC_INFO_64,
                                         (vm_region_info_t)&info, &infoCount, &objectName);
         if (kr != KERN_SUCCESS) break;
         
-        // 只搜索可读写的内存区域
+        // 只搜索可读写的堆内存区域
         if ((info.protection & VM_PROT_READ) && (info.protection & VM_PROT_WRITE)) {
-            vm_size_t bytesRead;
-            void *buffer = malloc(size);
+            // 限制单次读取大小，避免内存问题
+            vm_size_t chunkSize = MIN(size, 0x100000);  // 最大1MB
+            void *buffer = malloc(chunkSize);
             
-            if (buffer && vm_read_overwrite(task, address, size, (vm_address_t)buffer, &bytesRead) == KERN_SUCCESS) {
-                for (vm_size_t i = 0; i + sizeof(int32_t) <= bytesRead; i += sizeof(int32_t)) {
-                    int32_t value = *(int32_t *)((char *)buffer + i);
-                    if (value == targetValue) {
-                        [results addObject:@(address + i)];
-                        if (results.count > 10000) { // 限制结果数量
-                            free(buffer);
-                            return results;
+            if (buffer) {
+                vm_size_t bytesRead = 0;
+                if (vm_read_overwrite(task, address, chunkSize, (vm_address_t)buffer, &bytesRead) == KERN_SUCCESS) {
+                    for (vm_size_t i = 0; i + sizeof(int32_t) <= bytesRead; i += sizeof(int32_t)) {
+                        int32_t value = *(int32_t *)((char *)buffer + i);
+                        if (value == targetValue) {
+                            [results addObject:@(address + i)];
+                            if (results.count >= maxResults) {
+                                free(buffer);
+                                return results;
+                            }
                         }
                     }
                 }
+                free(buffer);
             }
-            if (buffer) free(buffer);
         }
         address += size;
     }
     return results;
 }
 
-// 在指定地址附近搜索值
-static NSMutableArray* searchNearbyForInt32(NSArray *baseAddresses, int32_t targetValue, int32_t range) {
-    NSMutableArray *results = [NSMutableArray array];
-    task_t task = mach_task_self();
-    
-    for (NSNumber *baseAddr in baseAddresses) {
-        vm_address_t addr = [baseAddr unsignedLongLongValue];
-        vm_address_t searchStart = addr - range;
-        vm_address_t searchEnd = addr + range;
-        
-        for (vm_address_t searchAddr = searchStart; searchAddr < searchEnd; searchAddr += sizeof(int32_t)) {
-            int32_t value = 0;
-            vm_size_t bytesRead;
-            if (vm_read_overwrite(task, searchAddr, sizeof(int32_t), (vm_address_t)&value, &bytesRead) == KERN_SUCCESS) {
-                if (value == targetValue) {
-                    [results addObject:@(searchAddr)];
-                }
-            }
-        }
-    }
-    return results;
-}
-
-// 修改指定地址的值
-static BOOL writeMemoryInt32(vm_address_t address, int32_t value) {
-    task_t task = mach_task_self();
-    kern_return_t kr = vm_write(task, address, (vm_offset_t)&value, sizeof(int32_t));
-    return kr == KERN_SUCCESS;
-}
-
-// 通过爱心(100)找到金钱并修改
-static BOOL modifyMoneyViaHeart(void) {
-    // 搜索100（爱心满值）
-    NSMutableArray *heart100Addrs = searchMemoryForInt32(100, 0x100000000, 0x300000000);
+// 通过爱心值(100)定位并修改金钱和金条
+static int modifyGameValues(int32_t moneyValue, int32_t goldValue) {
+    // 搜索值为100的地址（爱心满值）
+    NSMutableArray *heart100Addrs = searchInt32InMemory(100, 5000);
     
     if (heart100Addrs.count == 0) {
         NSLog(@"[TX] 未找到爱心值100");
-        return NO;
+        return 0;
     }
     
     NSLog(@"[TX] 找到 %lu 个值为100的地址", (unsigned long)heart100Addrs.count);
     
-    int modified = 0;
-    for (NSNumber *heartAddr in heart100Addrs) {
-        vm_address_t addr = [heartAddr unsignedLongLongValue];
+    int modifiedCount = 0;
+    
+    for (NSNumber *heartAddrNum in heart100Addrs) {
+        vm_address_t heartAddr = [heartAddrNum unsignedLongLongValue];
         
+        // 根据偏移计算金钱和金条地址
         // 金钱 = 爱心地址 - 0x18
-        vm_address_t moneyAddr = addr - 0x18;
+        // 金条 = 爱心地址 - 0x14
+        vm_address_t moneyAddr = heartAddr - 0x18;
+        vm_address_t goldAddr = heartAddr - 0x14;
         
-        // 验证：读取当前值，应该是一个合理的金钱数值（1-10000000）
         int32_t currentMoney = 0;
-        vm_size_t bytesRead;
-        if (vm_read_overwrite(mach_task_self(), moneyAddr, sizeof(int32_t), 
-                              (vm_address_t)&currentMoney, &bytesRead) == KERN_SUCCESS) {
-            if (currentMoney > 0 && currentMoney < 100000000) {
-                // 修改金钱
-                if (writeMemoryInt32(moneyAddr, 999999999)) {
-                    modified++;
-                    NSLog(@"[TX] 修改金钱成功: 0x%llx, 原值: %d", (unsigned long long)moneyAddr, currentMoney);
+        int32_t currentGold = 0;
+        
+        // 读取当前值进行验证
+        if (!safeReadMemory(moneyAddr, &currentMoney, sizeof(int32_t))) continue;
+        if (!safeReadMemory(goldAddr, &currentGold, sizeof(int32_t))) continue;
+        
+        // 验证：金钱应该是正数且在合理范围内
+        if (currentMoney > 0 && currentMoney < 100000000) {
+            // 修改金钱
+            if (moneyValue > 0) {
+                if (safeWriteMemory(moneyAddr, &moneyValue, sizeof(int32_t))) {
+                    NSLog(@"[TX] 修改金钱: 0x%llx, %d -> %d", (unsigned long long)moneyAddr, currentMoney, moneyValue);
+                    modifiedCount++;
+                }
+            }
+            
+            // 修改金条
+            if (goldValue > 0 && currentGold >= 0 && currentGold < 100000000) {
+                if (safeWriteMemory(goldAddr, &goldValue, sizeof(int32_t))) {
+                    NSLog(@"[TX] 修改金条: 0x%llx, %d -> %d", (unsigned long long)goldAddr, currentGold, goldValue);
+                    modifiedCount++;
                 }
             }
         }
     }
     
-    return modified > 0;
-}
-
-// 通过爱心(100)找到金条并修改
-static BOOL modifyGoldViaHeart(void) {
-    NSMutableArray *heart100Addrs = searchMemoryForInt32(100, 0x100000000, 0x300000000);
-    
-    if (heart100Addrs.count == 0) {
-        NSLog(@"[TX] 未找到爱心值100");
-        return NO;
-    }
-    
-    int modified = 0;
-    for (NSNumber *heartAddr in heart100Addrs) {
-        vm_address_t addr = [heartAddr unsignedLongLongValue];
-        
-        // 金条 = 爱心地址 - 0x14
-        vm_address_t goldAddr = addr - 0x14;
-        
-        int32_t currentGold = 0;
-        vm_size_t bytesRead;
-        if (vm_read_overwrite(mach_task_self(), goldAddr, sizeof(int32_t), 
-                              (vm_address_t)&currentGold, &bytesRead) == KERN_SUCCESS) {
-            if (currentGold >= 0 && currentGold < 100000000) {
-                if (writeMemoryInt32(goldAddr, 999999)) {
-                    modified++;
-                    NSLog(@"[TX] 修改金条成功: 0x%llx, 原值: %d", (unsigned long long)goldAddr, currentGold);
-                }
-            }
-        }
-    }
-    
-    return modified > 0;
-}
-
-// 一键全开
-static BOOL modifyAll(void) {
-    NSMutableArray *heart100Addrs = searchMemoryForInt32(100, 0x100000000, 0x300000000);
-    
-    if (heart100Addrs.count == 0) {
-        NSLog(@"[TX] 未找到爱心值100");
-        return NO;
-    }
-    
-    int modified = 0;
-    for (NSNumber *heartAddr in heart100Addrs) {
-        vm_address_t addr = [heartAddr unsignedLongLongValue];
-        
-        // 金钱 = 爱心地址 - 0x18
-        vm_address_t moneyAddr = addr - 0x18;
-        // 金条 = 爱心地址 - 0x14
-        vm_address_t goldAddr = addr - 0x14;
-        
-        int32_t currentMoney = 0;
-        int32_t currentGold = 0;
-        vm_size_t bytesRead;
-        
-        // 读取并验证金钱
-        if (vm_read_overwrite(mach_task_self(), moneyAddr, sizeof(int32_t), 
-                              (vm_address_t)&currentMoney, &bytesRead) == KERN_SUCCESS) {
-            if (currentMoney > 0 && currentMoney < 100000000) {
-                writeMemoryInt32(moneyAddr, 999999999);
-                modified++;
-            }
-        }
-        
-        // 读取并验证金条
-        if (vm_read_overwrite(mach_task_self(), goldAddr, sizeof(int32_t), 
-                              (vm_address_t)&currentGold, &bytesRead) == KERN_SUCCESS) {
-            if (currentGold >= 0 && currentGold < 100000000) {
-                writeMemoryInt32(goldAddr, 999999);
-                modified++;
-            }
-        }
-    }
-    
-    return modified > 0;
+    return modifiedCount;
 }
 
 #pragma mark - 菜单视图
@@ -251,26 +179,26 @@ static BOOL modifyAll(void) {
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 30)];
-    tip.text = @"请确保爱心已满100再开启";
+    tip.text = @"⚠️ 请确保爱心已满100再开启";
     tip.font = [UIFont systemFontOfSize:12];
-    tip.textColor = [UIColor colorWithRed:1.0 green:0.6 blue:0 alpha:1];
+    tip.textColor = [UIColor colorWithRed:1.0 green:0.4 blue:0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
     [self.contentView addSubview:tip];
     y += 40;
     
     // 按钮
-    UIButton *btn1 = [self createButtonWithTitle:@"💰 无限货币（满100爱心开启）" tag:1];
-    btn1.frame = CGRectMake(20, y, 240, 40);
+    UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金钱 (999999999)" tag:1];
+    btn1.frame = CGRectMake(20, y, 240, 44);
     [self.contentView addSubview:btn1];
-    y += 50;
+    y += 54;
     
-    UIButton *btn2 = [self createButtonWithTitle:@"🏆 无限金条（满100爱心开启）" tag:2];
-    btn2.frame = CGRectMake(20, y, 240, 40);
+    UIButton *btn2 = [self createButtonWithTitle:@"🏆 无限金条 (999999)" tag:2];
+    btn2.frame = CGRectMake(20, y, 240, 44);
     [self.contentView addSubview:btn2];
-    y += 50;
+    y += 54;
     
-    UIButton *btn3 = [self createButtonWithTitle:@"🎁 一键全开（满100爱心开启）" tag:3];
-    btn3.frame = CGRectMake(20, y, 240, 40);
+    UIButton *btn3 = [self createButtonWithTitle:@"🎁 一键全开" tag:3];
+    btn3.frame = CGRectMake(20, y, 240, 44);
     [self.contentView addSubview:btn3];
     y += 60;
     
@@ -292,7 +220,7 @@ static BOOL modifyAll(void) {
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
     [btn setTitle:title forState:UIControlStateNormal];
     [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    btn.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    btn.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
     btn.backgroundColor = [UIColor colorWithRed:1.0 green:0.6 blue:0 alpha:1];
     btn.layer.cornerRadius = 12;
     btn.tag = tag;
@@ -301,25 +229,30 @@ static BOOL modifyAll(void) {
 }
 
 - (void)buttonTapped:(UIButton *)sender {
-    BOOL success = NO;
-    NSString *message = @"";
-    
-    switch (sender.tag) {
-        case 1:
-            success = modifyMoneyViaHeart();
-            message = success ? @"💰 无限货币开启成功！" : @"❌ 未找到！请确保爱心已满100";
-            break;
-        case 2:
-            success = modifyGoldViaHeart();
-            message = success ? @"🏆 无限金条开启成功！" : @"❌ 未找到！请确保爱心已满100";
-            break;
-        case 3:
-            success = modifyAll();
-            message = success ? @"🎁 一键全开成功！\n💰 金钱: 999999999\n🏆 金条: 999999" : @"❌ 未找到！请确保爱心已满100";
-            break;
-    }
-    
-    [self showAlert:message];
+    // 在后台线程执行内存搜索，避免阻塞UI
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        int result = 0;
+        NSString *message = @"";
+        
+        switch (sender.tag) {
+            case 1:
+                result = modifyGameValues(999999999, 0);
+                message = result > 0 ? @"💰 无限金钱开启成功！" : @"❌ 未找到！请确保爱心已满100";
+                break;
+            case 2:
+                result = modifyGameValues(0, 999999);
+                message = result > 0 ? @"🏆 无限金条开启成功！" : @"❌ 未找到！请确保爱心已满100";
+                break;
+            case 3:
+                result = modifyGameValues(999999999, 999999);
+                message = result > 0 ? [NSString stringWithFormat:@"🎁 一键全开成功！\n修改了 %d 处", result] : @"❌ 未找到！请确保爱心已满100";
+                break;
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self showAlert:message];
+        });
+    });
 }
 
 - (void)showAlert:(NSString *)message {
@@ -387,7 +320,7 @@ static void handlePan(UIPanGestureRecognizer *pan) {
     frame.origin.y = MAX(50, MIN(frame.origin.y, sh - 100));
     
     g_floatButton.frame = frame;
-    [pan setTranslation:CGPointZero inView:keyWindow];
+    [pan setTranslation:CGPointMake(0, 0) inView:keyWindow];
 }
 
 static void setupFloatingButton(void) {
