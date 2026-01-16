@@ -1,0 +1,874 @@
+/**
+ * AutoTranslate.dylib - 自动将英文翻译成中文的插件
+ * 
+ * 功能：
+ * 1. Hook UILabel、UIButton、UITextField等控件的文本设置方法
+ * 2. 内置常用游戏/应用词汇翻译字典
+ * 3. 支持在线翻译API (Google/百度) - 可翻译任意英文
+ * 4. 翻译缓存，避免重复请求
+ * 
+ * 编译命令 (需要theos环境):
+ * make package
+ */
+
+#import <UIKit/UIKit.h>
+#import <objc/runtime.h>
+#import <substrate.h>
+#import <CommonCrypto/CommonDigest.h>
+
+// ============== 翻译字典 ==============
+static NSDictionary *translationDict = nil;
+
+// 初始化翻译字典
+static void initTranslationDict() {
+    translationDict = @{
+        // 通用UI
+        @"OK": @"确定",
+        @"Cancel": @"取消",
+        @"Done": @"完成",
+        @"Back": @"返回",
+        @"Next": @"下一步",
+        @"Previous": @"上一步",
+        @"Close": @"关闭",
+        @"Open": @"打开",
+        @"Save": @"保存",
+        @"Delete": @"删除",
+        @"Edit": @"编辑",
+        @"Add": @"添加",
+        @"Remove": @"移除",
+        @"Yes": @"是",
+        @"No": @"否",
+        @"Confirm": @"确认",
+        @"Submit": @"提交",
+        @"Continue": @"继续",
+        @"Skip": @"跳过",
+        @"Retry": @"重试",
+        @"Refresh": @"刷新",
+        @"Loading": @"加载中",
+        @"Loading...": @"加载中...",
+        @"Please wait": @"请稍候",
+        @"Please wait...": @"请稍候...",
+        
+        // 设置相关
+        @"Settings": @"设置",
+        @"Options": @"选项",
+        @"Preferences": @"偏好设置",
+        @"General": @"通用",
+        @"Account": @"账户",
+        @"Privacy": @"隐私",
+        @"Security": @"安全",
+        @"Notifications": @"通知",
+        @"Sound": @"声音",
+        @"Music": @"音乐",
+        @"Volume": @"音量",
+        @"Language": @"语言",
+        @"About": @"关于",
+        @"Help": @"帮助",
+        @"Support": @"支持",
+        @"Feedback": @"反馈",
+        @"Rate": @"评分",
+        @"Share": @"分享",
+        @"Restore": @"恢复",
+        @"Reset": @"重置",
+        @"Clear": @"清除",
+        @"On": @"开",
+        @"Off": @"关",
+        @"Enable": @"启用",
+        @"Disable": @"禁用",
+        @"Enabled": @"已启用",
+        @"Disabled": @"已禁用",
+        
+        // 游戏通用
+        @"Play": @"开始游戏",
+        @"Start": @"开始",
+        @"Pause": @"暂停",
+        @"Resume": @"继续",
+        @"Stop": @"停止",
+        @"Quit": @"退出",
+        @"Exit": @"退出",
+        @"Menu": @"菜单",
+        @"Main Menu": @"主菜单",
+        @"New Game": @"新游戏",
+        @"Continue Game": @"继续游戏",
+        @"Load Game": @"加载游戏",
+        @"Save Game": @"保存游戏",
+        @"Level": @"关卡",
+        @"Stage": @"阶段",
+        @"Chapter": @"章节",
+        @"Mission": @"任务",
+        @"Quest": @"任务",
+        @"Challenge": @"挑战",
+        @"Achievement": @"成就",
+        @"Achievements": @"成就",
+        @"Reward": @"奖励",
+        @"Rewards": @"奖励",
+        @"Bonus": @"奖励",
+        @"Prize": @"奖品",
+        @"Gift": @"礼物",
+        @"Free": @"免费",
+        @"Buy": @"购买",
+        @"Purchase": @"购买",
+        @"Shop": @"商店",
+        @"Store": @"商店",
+        @"Inventory": @"背包",
+        @"Items": @"物品",
+        @"Equipment": @"装备",
+        @"Weapon": @"武器",
+        @"Weapons": @"武器",
+        @"Armor": @"护甲",
+        @"Skill": @"技能",
+        @"Skills": @"技能",
+        @"Ability": @"能力",
+        @"Abilities": @"能力",
+        @"Power": @"力量",
+        @"Speed": @"速度",
+        @"Health": @"生命",
+        @"HP": @"生命值",
+        @"MP": @"魔法值",
+        @"Energy": @"能量",
+        @"Stamina": @"体力",
+        @"Attack": @"攻击",
+        @"Defense": @"防御",
+        @"Damage": @"伤害",
+        @"Critical": @"暴击",
+        @"Score": @"分数",
+        @"High Score": @"最高分",
+        @"Best Score": @"最佳分数",
+        @"Rank": @"排名",
+        @"Ranking": @"排行榜",
+        @"Leaderboard": @"排行榜",
+        @"Player": @"玩家",
+        @"Players": @"玩家",
+        @"Team": @"队伍",
+        @"Friend": @"好友",
+        @"Friends": @"好友",
+        @"Invite": @"邀请",
+        @"Join": @"加入",
+        @"Leave": @"离开",
+        @"Win": @"胜利",
+        @"Lose": @"失败",
+        @"Victory": @"胜利",
+        @"Defeat": @"失败",
+        @"Draw": @"平局",
+        @"Game Over": @"游戏结束",
+        @"You Win": @"你赢了",
+        @"You Lose": @"你输了",
+        @"Congratulations": @"恭喜",
+        @"Try Again": @"再试一次",
+        @"Unlock": @"解锁",
+        @"Unlocked": @"已解锁",
+        @"Locked": @"已锁定",
+        @"Upgrade": @"升级",
+        @"Level Up": @"升级",
+        @"Max Level": @"满级",
+        @"Experience": @"经验",
+        @"EXP": @"经验",
+        @"XP": @"经验",
+        @"Coin": @"金币",
+        @"Coins": @"金币",
+        @"Gold": @"金币",
+        @"Gem": @"宝石",
+        @"Gems": @"宝石",
+        @"Diamond": @"钻石",
+        @"Diamonds": @"钻石",
+        @"Crystal": @"水晶",
+        @"Crystals": @"水晶",
+        @"Token": @"代币",
+        @"Tokens": @"代币",
+        @"Life": @"生命",
+        @"Lives": @"生命",
+        @"Heart": @"爱心",
+        @"Hearts": @"爱心",
+        @"Star": @"星星",
+        @"Stars": @"星星",
+        @"Key": @"钥匙",
+        @"Keys": @"钥匙",
+        @"Chest": @"宝箱",
+        @"Treasure": @"宝藏",
+        @"Collect": @"收集",
+        @"Collected": @"已收集",
+        @"Complete": @"完成",
+        @"Completed": @"已完成",
+        @"Failed": @"失败",
+        @"Success": @"成功",
+        @"Perfect": @"完美",
+        @"Excellent": @"优秀",
+        @"Good": @"好",
+        @"Great": @"很好",
+        @"Amazing": @"惊人",
+        @"Awesome": @"太棒了",
+        @"Cool": @"酷",
+        @"Nice": @"不错",
+        @"Wow": @"哇",
+        
+        // 时间相关
+        @"Today": @"今天",
+        @"Yesterday": @"昨天",
+        @"Tomorrow": @"明天",
+        @"Daily": @"每日",
+        @"Weekly": @"每周",
+        @"Monthly": @"每月",
+        @"Day": @"天",
+        @"Days": @"天",
+        @"Hour": @"小时",
+        @"Hours": @"小时",
+        @"Minute": @"分钟",
+        @"Minutes": @"分钟",
+        @"Second": @"秒",
+        @"Seconds": @"秒",
+        @"Time": @"时间",
+        @"Timer": @"计时器",
+        @"Countdown": @"倒计时",
+        @"Remaining": @"剩余",
+        @"Left": @"剩余",
+        
+        // 社交/账户
+        @"Login": @"登录",
+        @"Log In": @"登录",
+        @"Sign In": @"登录",
+        @"Logout": @"退出登录",
+        @"Log Out": @"退出登录",
+        @"Sign Out": @"退出登录",
+        @"Register": @"注册",
+        @"Sign Up": @"注册",
+        @"Username": @"用户名",
+        @"Password": @"密码",
+        @"Email": @"邮箱",
+        @"Phone": @"手机",
+        @"Profile": @"个人资料",
+        @"Avatar": @"头像",
+        @"Name": @"名字",
+        @"Nickname": @"昵称",
+        @"Age": @"年龄",
+        @"Gender": @"性别",
+        @"Male": @"男",
+        @"Female": @"女",
+        @"Birthday": @"生日",
+        @"Country": @"国家",
+        @"City": @"城市",
+        @"Address": @"地址",
+        @"Message": @"消息",
+        @"Messages": @"消息",
+        @"Chat": @"聊天",
+        @"Send": @"发送",
+        @"Receive": @"接收",
+        @"Accept": @"接受",
+        @"Decline": @"拒绝",
+        @"Block": @"屏蔽",
+        @"Report": @"举报",
+        @"Follow": @"关注",
+        @"Unfollow": @"取消关注",
+        @"Following": @"正在关注",
+        @"Followers": @"粉丝",
+        @"Like": @"喜欢",
+        @"Likes": @"喜欢",
+        @"Comment": @"评论",
+        @"Comments": @"评论",
+        @"Post": @"发布",
+        @"Reply": @"回复",
+        
+        // 网络/状态
+        @"Online": @"在线",
+        @"Offline": @"离线",
+        @"Connecting": @"连接中",
+        @"Connected": @"已连接",
+        @"Disconnected": @"已断开",
+        @"Connection Error": @"连接错误",
+        @"Network Error": @"网络错误",
+        @"No Internet": @"无网络",
+        @"No Connection": @"无连接",
+        @"Server Error": @"服务器错误",
+        @"Error": @"错误",
+        @"Warning": @"警告",
+        @"Info": @"信息",
+        @"Notice": @"通知",
+        @"Alert": @"提醒",
+        @"Update": @"更新",
+        @"Update Available": @"有可用更新",
+        @"Download": @"下载",
+        @"Downloading": @"下载中",
+        @"Install": @"安装",
+        @"Installing": @"安装中",
+        @"Version": @"版本",
+        @"New Version": @"新版本",
+        
+        // 广告相关
+        @"Watch Ad": @"观看广告",
+        @"Watch Video": @"观看视频",
+        @"Free Reward": @"免费奖励",
+        @"Claim": @"领取",
+        @"Claim Reward": @"领取奖励",
+        @"No Thanks": @"不用了",
+        @"Not Now": @"以后再说",
+        @"Later": @"稍后",
+        @"Remind Me Later": @"稍后提醒",
+        @"Don't Show Again": @"不再显示",
+        @"Remove Ads": @"移除广告",
+        @"Go Premium": @"升级高级版",
+        @"Subscribe": @"订阅",
+        @"Subscription": @"订阅",
+        @"Premium": @"高级版",
+        @"VIP": @"VIP",
+        @"Pro": @"专业版",
+        
+        // 其他常用
+        @"Search": @"搜索",
+        @"Filter": @"筛选",
+        @"Sort": @"排序",
+        @"All": @"全部",
+        @"None": @"无",
+        @"More": @"更多",
+        @"Less": @"更少",
+        @"Show": @"显示",
+        @"Hide": @"隐藏",
+        @"View": @"查看",
+        @"Details": @"详情",
+        @"Info": @"信息",
+        @"Information": @"信息",
+        @"Description": @"描述",
+        @"Title": @"标题",
+        @"Content": @"内容",
+        @"Category": @"分类",
+        @"Type": @"类型",
+        @"Status": @"状态",
+        @"Progress": @"进度",
+        @"Total": @"总计",
+        @"Count": @"数量",
+        @"Amount": @"数量",
+        @"Price": @"价格",
+        @"Cost": @"花费",
+        @"Value": @"价值",
+        @"Size": @"大小",
+        @"Color": @"颜色",
+        @"Red": @"红色",
+        @"Blue": @"蓝色",
+        @"Green": @"绿色",
+        @"Yellow": @"黄色",
+        @"Orange": @"橙色",
+        @"Purple": @"紫色",
+        @"Pink": @"粉色",
+        @"Black": @"黑色",
+        @"White": @"白色",
+        @"Gray": @"灰色",
+        @"Grey": @"灰色",
+        @"Brown": @"棕色",
+        
+        // 方向/位置
+        @"Up": @"上",
+        @"Down": @"下",
+        @"Left": @"左",
+        @"Right": @"右",
+        @"Top": @"顶部",
+        @"Bottom": @"底部",
+        @"Center": @"中心",
+        @"Middle": @"中间",
+        @"Front": @"前",
+        @"Back": @"后",
+        @"North": @"北",
+        @"South": @"南",
+        @"East": @"东",
+        @"West": @"西",
+        @"Here": @"这里",
+        @"There": @"那里",
+        @"Home": @"主页",
+        @"Map": @"地图",
+        @"Location": @"位置",
+        @"World": @"世界",
+        @"Zone": @"区域",
+        @"Area": @"区域",
+        @"Region": @"地区",
+        @"Land": @"土地",
+        @"Island": @"岛屿",
+        @"Forest": @"森林",
+        @"Mountain": @"山",
+        @"River": @"河流",
+        @"Ocean": @"海洋",
+        @"Sea": @"海",
+        @"Sky": @"天空",
+        @"Space": @"太空",
+        @"Castle": @"城堡",
+        @"Village": @"村庄",
+        @"Town": @"城镇",
+        @"City": @"城市",
+        @"Kingdom": @"王国",
+        @"Empire": @"帝国",
+        @"Dungeon": @"地牢",
+        @"Cave": @"洞穴",
+        @"Temple": @"神殿",
+        @"Tower": @"塔",
+        @"Gate": @"门",
+        @"Door": @"门",
+        @"Bridge": @"桥",
+        @"Road": @"道路",
+        @"Path": @"路径",
+    };
+}
+
+
+// ============== 在线翻译API ==============
+
+// 翻译缓存，避免重复请求
+static NSMutableDictionary *translationCache = nil;
+
+// 使用Google翻译API (免费版，有限制)
+static NSString *translateOnline(NSString *text) {
+    if (!text || text.length == 0) return text;
+    
+    // 检查缓存
+    if (!translationCache) {
+        translationCache = [NSMutableDictionary dictionary];
+    }
+    if (translationCache[text]) {
+        return translationCache[text];
+    }
+    
+    @try {
+        // Google翻译免费API
+        NSString *encoded = [text stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+        NSString *urlStr = [NSString stringWithFormat:
+            @"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-CN&dt=t&q=%@", encoded];
+        
+        NSURL *url = [NSURL URLWithString:urlStr];
+        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+        request.timeoutInterval = 3.0; // 3秒超时
+        [request setValue:@"Mozilla/5.0" forHTTPHeaderField:@"User-Agent"];
+        
+        // 同步请求 (在后台线程执行时)
+        NSURLResponse *response = nil;
+        NSError *error = nil;
+        NSData *data = [NSURLConnection sendSynchronousRequest:request returningResponse:&response error:&error];
+        
+        if (data && !error) {
+            NSArray *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            if (json && [json isKindOfClass:[NSArray class]] && json.count > 0) {
+                NSArray *translations = json[0];
+                if ([translations isKindOfClass:[NSArray class]]) {
+                    NSMutableString *result = [NSMutableString string];
+                    for (NSArray *item in translations) {
+                        if ([item isKindOfClass:[NSArray class]] && item.count > 0) {
+                            [result appendString:item[0]];
+                        }
+                    }
+                    if (result.length > 0) {
+                        translationCache[text] = result;
+                        return result;
+                    }
+                }
+            }
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] 在线翻译异常: %@", e);
+    }
+    
+    return text;
+}
+
+// 使用百度翻译API (需要申请AppID和密钥，更稳定)
+// 申请地址: https://fanyi-api.baidu.com/
+static NSString *const BAIDU_APP_ID = @""; // 填入你的AppID
+static NSString *const BAIDU_SECRET = @""; // 填入你的密钥
+
+static NSString *translateWithBaidu(NSString *text) {
+    if (!text || text.length == 0) return text;
+    if (BAIDU_APP_ID.length == 0 || BAIDU_SECRET.length == 0) return nil;
+    
+    // 检查缓存
+    if (translationCache[text]) {
+        return translationCache[text];
+    }
+    
+    @try {
+        // 生成签名
+        NSString *salt = [NSString stringWithFormat:@"%d", arc4random()];
+        NSString *sign = [NSString stringWithFormat:@"%@%@%@%@", BAIDU_APP_ID, text, salt, BAIDU_SECRET];
+        
+        // MD5
+        const char *cStr = [sign UTF8String];
+        unsigned char digest[CC_MD5_DIGEST_LENGTH];
+        CC_MD5(cStr, (CC_LONG)strlen(cStr), digest);
+        NSMutableString *md5 = [NSMutableString stringWithCapacity:CC_MD5_DIGEST_LENGTH * 2];
+        for (int i = 0; i < CC_MD5_DIGEST_LENGTH; i++) {
+            [md5 appendFormat:@"%02x", digest[i]];
+        }
+        
+        NSString *encoded = [text stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+        NSString *urlStr = [NSString stringWithFormat:
+            @"https://fanyi-api.baidu.com/api/trans/vip/translate?q=%@&from=en&to=zh&appid=%@&salt=%@&sign=%@",
+            encoded, BAIDU_APP_ID, salt, md5];
+        
+        NSURL *url = [NSURL URLWithString:urlStr];
+        NSData *data = [NSData dataWithContentsOfURL:url];
+        
+        if (data) {
+            NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+            NSArray *results = json[@"trans_result"];
+            if (results.count > 0) {
+                NSString *dst = results[0][@"dst"];
+                if (dst) {
+                    translationCache[text] = dst;
+                    return dst;
+                }
+            }
+        }
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] 百度翻译异常: %@", e);
+    }
+    
+    return nil;
+}
+
+// ============== 翻译函数 ==============
+
+// 是否启用在线翻译 (设为YES开启全量翻译)
+static BOOL enableOnlineTranslation = YES;
+
+// 检查字符串是否主要是英文
+static BOOL isEnglishText(NSString *text) {
+    if (!text || text.length == 0) return NO;
+    
+    // 统计英文字符数量
+    NSUInteger englishCount = 0;
+    NSUInteger totalCount = 0;
+    
+    for (NSUInteger i = 0; i < text.length; i++) {
+        unichar c = [text characterAtIndex:i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+            englishCount++;
+        }
+        if (c > 32) { // 非空白字符
+            totalCount++;
+        }
+    }
+    
+    // 如果英文字符占比超过50%，认为是英文
+    return totalCount > 0 && (englishCount * 100 / totalCount) > 50;
+}
+
+// 翻译文本
+static NSString *translateText(NSString *text) {
+    if (!text || text.length == 0) return text;
+    if (!translationDict) initTranslationDict();
+    
+    // 先尝试完全匹配本地字典
+    NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    NSString *translated = translationDict[trimmed];
+    if (translated) {
+        return translated;
+    }
+    
+    // 尝试忽略大小写匹配
+    for (NSString *key in translationDict) {
+        if ([key caseInsensitiveCompare:trimmed] == NSOrderedSame) {
+            return translationDict[key];
+        }
+    }
+    
+    // 如果不是英文，直接返回
+    if (!isEnglishText(text)) {
+        return text;
+    }
+    
+    // 尝试分词翻译
+    NSMutableString *result = [NSMutableString stringWithString:text];
+    BOOL hasTranslation = NO;
+    
+    // 按照字典key长度降序排列，优先匹配长词
+    NSArray *sortedKeys = [[translationDict allKeys] sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        return [@(b.length) compare:@(a.length)];
+    }];
+    
+    for (NSString *key in sortedKeys) {
+        NSRange range = [result rangeOfString:key options:NSCaseInsensitiveSearch];
+        if (range.location != NSNotFound) {
+            [result replaceCharactersInRange:range withString:translationDict[key]];
+            hasTranslation = YES;
+        }
+    }
+    
+    if (hasTranslation) {
+        return result;
+    }
+    
+    // ========== 在线翻译 (全量翻译) ==========
+    if (enableOnlineTranslation && trimmed.length >= 2 && trimmed.length <= 500) {
+        // 先尝试百度翻译 (如果配置了)
+        NSString *baiduResult = translateWithBaidu(trimmed);
+        if (baiduResult) {
+            return baiduResult;
+        }
+        
+        // 使用Google翻译
+        NSString *onlineResult = translateOnline(trimmed);
+        if (onlineResult && ![onlineResult isEqualToString:trimmed]) {
+            return onlineResult;
+        }
+    }
+    
+    return text;
+}
+
+// 异步翻译 (用于长文本，避免阻塞UI)
+static void translateTextAsync(NSString *text, void (^completion)(NSString *translated)) {
+    if (!text || text.length == 0) {
+        if (completion) completion(text);
+        return;
+    }
+    
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSString *result = translateText(text);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completion) completion(result);
+        });
+    });
+}
+
+// ============== Hook UILabel ==============
+
+static void (*orig_UILabel_setText)(UILabel *self, SEL _cmd, NSString *text);
+static void hook_UILabel_setText(UILabel *self, SEL _cmd, NSString *text) {
+    // 先检查本地字典快速翻译
+    if (!translationDict) initTranslationDict();
+    NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    NSString *localTranslated = translationDict[trimmed];
+    
+    if (localTranslated) {
+        orig_UILabel_setText(self, _cmd, localTranslated);
+        return;
+    }
+    
+    // 检查缓存
+    if (translationCache && translationCache[trimmed]) {
+        orig_UILabel_setText(self, _cmd, translationCache[trimmed]);
+        return;
+    }
+    
+    // 先显示原文
+    orig_UILabel_setText(self, _cmd, text);
+    
+    // 如果是英文且启用在线翻译，异步翻译
+    if (enableOnlineTranslation && isEnglishText(text) && text.length >= 2 && text.length <= 500) {
+        __weak UILabel *weakSelf = self;
+        NSString *originalText = [text copy];
+        
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSString *translated = translateText(originalText);
+            if (translated && ![translated isEqualToString:originalText]) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    UILabel *strongSelf = weakSelf;
+                    if (strongSelf && [strongSelf.text isEqualToString:originalText]) {
+                        orig_UILabel_setText(strongSelf, _cmd, translated);
+                    }
+                });
+            }
+        });
+    }
+}
+
+static void (*orig_UILabel_setAttributedText)(UILabel *self, SEL _cmd, NSAttributedString *text);
+static void hook_UILabel_setAttributedText(UILabel *self, SEL _cmd, NSAttributedString *text) {
+    if (text && isEnglishText(text.string)) {
+        NSString *translated = translateText(text.string);
+        if (![translated isEqualToString:text.string]) {
+            NSMutableAttributedString *newText = [[NSMutableAttributedString alloc] initWithAttributedString:text];
+            [newText replaceCharactersInRange:NSMakeRange(0, newText.length) withString:translated];
+            orig_UILabel_setAttributedText(self, _cmd, newText);
+            return;
+        }
+    }
+    orig_UILabel_setAttributedText(self, _cmd, text);
+}
+
+// ============== Hook UIButton ==============
+
+static void (*orig_UIButton_setTitle)(UIButton *self, SEL _cmd, NSString *title, UIControlState state);
+static void hook_UIButton_setTitle(UIButton *self, SEL _cmd, NSString *title, UIControlState state) {
+    NSString *translated = translateText(title);
+    orig_UIButton_setTitle(self, _cmd, translated, state);
+}
+
+// ============== Hook UITextField ==============
+
+static void (*orig_UITextField_setText)(UITextField *self, SEL _cmd, NSString *text);
+static void hook_UITextField_setText(UITextField *self, SEL _cmd, NSString *text) {
+    NSString *translated = translateText(text);
+    orig_UITextField_setText(self, _cmd, translated);
+}
+
+static void (*orig_UITextField_setPlaceholder)(UITextField *self, SEL _cmd, NSString *placeholder);
+static void hook_UITextField_setPlaceholder(UITextField *self, SEL _cmd, NSString *placeholder) {
+    NSString *translated = translateText(placeholder);
+    orig_UITextField_setPlaceholder(self, _cmd, translated);
+}
+
+// ============== Hook UITextView ==============
+
+static void (*orig_UITextView_setText)(UITextView *self, SEL _cmd, NSString *text);
+static void hook_UITextView_setText(UITextView *self, SEL _cmd, NSString *text) {
+    NSString *translated = translateText(text);
+    orig_UITextView_setText(self, _cmd, translated);
+}
+
+// ============== Hook UIAlertController ==============
+
+static UIAlertController* (*orig_UIAlertController_alertControllerWithTitle)(Class self, SEL _cmd, NSString *title, NSString *message, UIAlertControllerStyle style);
+static UIAlertController* hook_UIAlertController_alertControllerWithTitle(Class self, SEL _cmd, NSString *title, NSString *message, UIAlertControllerStyle style) {
+    NSString *translatedTitle = translateText(title);
+    NSString *translatedMessage = translateText(message);
+    return orig_UIAlertController_alertControllerWithTitle(self, _cmd, translatedTitle, translatedMessage, style);
+}
+
+// ============== Hook UIAlertAction ==============
+
+static UIAlertAction* (*orig_UIAlertAction_actionWithTitle)(Class self, SEL _cmd, NSString *title, UIAlertActionStyle style, void (^handler)(UIAlertAction *));
+static UIAlertAction* hook_UIAlertAction_actionWithTitle(Class self, SEL _cmd, NSString *title, UIAlertActionStyle style, void (^handler)(UIAlertAction *)) {
+    NSString *translated = translateText(title);
+    return orig_UIAlertAction_actionWithTitle(self, _cmd, translated, style, handler);
+}
+
+// ============== Hook UINavigationItem ==============
+
+static void (*orig_UINavigationItem_setTitle)(UINavigationItem *self, SEL _cmd, NSString *title);
+static void hook_UINavigationItem_setTitle(UINavigationItem *self, SEL _cmd, NSString *title) {
+    NSString *translated = translateText(title);
+    orig_UINavigationItem_setTitle(self, _cmd, translated);
+}
+
+// ============== Hook UITabBarItem ==============
+
+static void (*orig_UITabBarItem_setTitle)(UITabBarItem *self, SEL _cmd, NSString *title);
+static void hook_UITabBarItem_setTitle(UITabBarItem *self, SEL _cmd, NSString *title) {
+    NSString *translated = translateText(title);
+    orig_UITabBarItem_setTitle(self, _cmd, translated);
+}
+
+// ============== Hook UIBarButtonItem ==============
+
+static void (*orig_UIBarButtonItem_setTitle)(UIBarButtonItem *self, SEL _cmd, NSString *title);
+static void hook_UIBarButtonItem_setTitle(UIBarButtonItem *self, SEL _cmd, NSString *title) {
+    NSString *translated = translateText(title);
+    orig_UIBarButtonItem_setTitle(self, _cmd, translated);
+}
+
+// ============== Hook UISegmentedControl ==============
+
+static void (*orig_UISegmentedControl_setTitle)(UISegmentedControl *self, SEL _cmd, NSString *title, NSUInteger segment);
+static void hook_UISegmentedControl_setTitle(UISegmentedControl *self, SEL _cmd, NSString *title, NSUInteger segment) {
+    NSString *translated = translateText(title);
+    orig_UISegmentedControl_setTitle(self, _cmd, translated, segment);
+}
+
+// ============== 初始化 ==============
+
+static void __attribute__((constructor)) initialize() {
+    @autoreleasepool {
+        // 初始化翻译字典和缓存
+        initTranslationDict();
+        translationCache = [NSMutableDictionary dictionary];
+        
+        NSLog(@"[AutoTranslate] 自动翻译插件已加载");
+        NSLog(@"[AutoTranslate] 本地词库: %lu 个词条", (unsigned long)translationDict.count);
+        NSLog(@"[AutoTranslate] 在线翻译: %@", enableOnlineTranslation ? @"已启用" : @"已禁用");
+        
+        if (BAIDU_APP_ID.length > 0) {
+            NSLog(@"[AutoTranslate] 百度翻译API: 已配置");
+        } else {
+            NSLog(@"[AutoTranslate] 使用Google翻译 (免费版)");
+        }
+        
+        // Hook UILabel
+        MSHookMessageEx(
+            objc_getClass("UILabel"),
+            @selector(setText:),
+            (IMP)hook_UILabel_setText,
+            (IMP*)&orig_UILabel_setText
+        );
+        
+        MSHookMessageEx(
+            objc_getClass("UILabel"),
+            @selector(setAttributedText:),
+            (IMP)hook_UILabel_setAttributedText,
+            (IMP*)&orig_UILabel_setAttributedText
+        );
+        
+        // Hook UIButton
+        MSHookMessageEx(
+            objc_getClass("UIButton"),
+            @selector(setTitle:forState:),
+            (IMP)hook_UIButton_setTitle,
+            (IMP*)&orig_UIButton_setTitle
+        );
+        
+        // Hook UITextField
+        MSHookMessageEx(
+            objc_getClass("UITextField"),
+            @selector(setText:),
+            (IMP)hook_UITextField_setText,
+            (IMP*)&orig_UITextField_setText
+        );
+        
+        MSHookMessageEx(
+            objc_getClass("UITextField"),
+            @selector(setPlaceholder:),
+            (IMP)hook_UITextField_setPlaceholder,
+            (IMP*)&orig_UITextField_setPlaceholder
+        );
+        
+        // Hook UITextView
+        MSHookMessageEx(
+            objc_getClass("UITextView"),
+            @selector(setText:),
+            (IMP)hook_UITextView_setText,
+            (IMP*)&orig_UITextView_setText
+        );
+        
+        // Hook UIAlertController
+        MSHookMessageEx(
+            object_getClass(objc_getClass("UIAlertController")),
+            @selector(alertControllerWithTitle:message:preferredStyle:),
+            (IMP)hook_UIAlertController_alertControllerWithTitle,
+            (IMP*)&orig_UIAlertController_alertControllerWithTitle
+        );
+        
+        // Hook UIAlertAction
+        MSHookMessageEx(
+            object_getClass(objc_getClass("UIAlertAction")),
+            @selector(actionWithTitle:style:handler:),
+            (IMP)hook_UIAlertAction_actionWithTitle,
+            (IMP*)&orig_UIAlertAction_actionWithTitle
+        );
+        
+        // Hook UINavigationItem
+        MSHookMessageEx(
+            objc_getClass("UINavigationItem"),
+            @selector(setTitle:),
+            (IMP)hook_UINavigationItem_setTitle,
+            (IMP*)&orig_UINavigationItem_setTitle
+        );
+        
+        // Hook UITabBarItem
+        MSHookMessageEx(
+            objc_getClass("UITabBarItem"),
+            @selector(setTitle:),
+            (IMP)hook_UITabBarItem_setTitle,
+            (IMP*)&orig_UITabBarItem_setTitle
+        );
+        
+        // Hook UIBarButtonItem
+        MSHookMessageEx(
+            objc_getClass("UIBarButtonItem"),
+            @selector(setTitle:),
+            (IMP)hook_UIBarButtonItem_setTitle,
+            (IMP*)&orig_UIBarButtonItem_setTitle
+        );
+        
+        // Hook UISegmentedControl
+        MSHookMessageEx(
+            objc_getClass("UISegmentedControl"),
+            @selector(setTitle:forSegmentAtIndex:),
+            (IMP)hook_UISegmentedControl_setTitle,
+            (IMP*)&orig_UISegmentedControl_setTitle
+        );
+        
+        NSLog(@"[AutoTranslate] 所有Hook已完成");
+    }
+}
