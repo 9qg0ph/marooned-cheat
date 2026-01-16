@@ -523,8 +523,8 @@ static NSString *translateWithBaidu(NSString *text) {
 
 // ============== 翻译函数 ==============
 
-// 是否启用在线翻译 (设为YES开启全量翻译)
-static BOOL enableOnlineTranslation = YES;
+// 是否启用在线翻译 (设为NO禁用，避免闪退)
+static BOOL enableOnlineTranslation = NO;
 
 // 检查字符串是否主要是英文
 static BOOL isEnglishText(NSString *text) {
@@ -615,135 +615,277 @@ static NSString *translateText(NSString *text) {
 
 static void (*orig_UILabel_setText)(UILabel *self, SEL _cmd, NSString *text);
 static void hook_UILabel_setText(UILabel *self, SEL _cmd, NSString *text) {
-    // 先检查本地字典快速翻译
-    if (!translationDict) initTranslationDict();
-    NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    NSString *localTranslated = translationDict[trimmed];
-    
-    if (localTranslated) {
-        orig_UILabel_setText(self, _cmd, localTranslated);
-        return;
-    }
-    
-    // 检查缓存
-    if (translationCache && translationCache[trimmed]) {
-        orig_UILabel_setText(self, _cmd, translationCache[trimmed]);
-        return;
-    }
-    
-    // 先显示原文
-    orig_UILabel_setText(self, _cmd, text);
-    
-    // 如果是英文且启用在线翻译，异步翻译
-    if (enableOnlineTranslation && isEnglishText(text) && text.length >= 2 && text.length <= 500) {
-        __weak UILabel *weakSelf = self;
-        NSString *originalText = [text copy];
+    @try {
+        if (!text || text.length == 0) {
+            orig_UILabel_setText(self, _cmd, text);
+            return;
+        }
         
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            NSString *translated = translateText(originalText);
-            if (translated && ![translated isEqualToString:originalText]) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    UILabel *strongSelf = weakSelf;
-                    if (strongSelf && [strongSelf.text isEqualToString:originalText]) {
-                        orig_UILabel_setText(strongSelf, _cmd, translated);
-                    }
-                });
+        // 只使用本地字典快速翻译
+        if (!translationDict) initTranslationDict();
+        NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        
+        // 检查本地字典
+        NSString *localTranslated = translationDict[trimmed];
+        if (localTranslated) {
+            orig_UILabel_setText(self, _cmd, localTranslated);
+            return;
+        }
+        
+        // 检查缓存
+        if (translationCache && translationCache[trimmed]) {
+            orig_UILabel_setText(self, _cmd, translationCache[trimmed]);
+            return;
+        }
+        
+        // 尝试忽略大小写匹配
+        for (NSString *key in translationDict) {
+            if ([key caseInsensitiveCompare:trimmed] == NSOrderedSame) {
+                orig_UILabel_setText(self, _cmd, translationDict[key]);
+                return;
             }
-        });
+        }
+        
+        orig_UILabel_setText(self, _cmd, text);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UILabel Hook异常: %@", e);
+        orig_UILabel_setText(self, _cmd, text);
     }
 }
 
 static void (*orig_UILabel_setAttributedText)(UILabel *self, SEL _cmd, NSAttributedString *text);
 static void hook_UILabel_setAttributedText(UILabel *self, SEL _cmd, NSAttributedString *text) {
-    if (text && isEnglishText(text.string)) {
-        NSString *translated = translateText(text.string);
-        if (![translated isEqualToString:text.string]) {
-            NSMutableAttributedString *newText = [[NSMutableAttributedString alloc] initWithAttributedString:text];
-            [newText replaceCharactersInRange:NSMakeRange(0, newText.length) withString:translated];
-            orig_UILabel_setAttributedText(self, _cmd, newText);
-            return;
+    @try {
+        if (text && text.string.length > 0 && isEnglishText(text.string)) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [text.string stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated && ![translated isEqualToString:text.string]) {
+                NSMutableAttributedString *newText = [[NSMutableAttributedString alloc] initWithAttributedString:text];
+                [newText replaceCharactersInRange:NSMakeRange(0, newText.length) withString:translated];
+                orig_UILabel_setAttributedText(self, _cmd, newText);
+                return;
+            }
         }
+        orig_UILabel_setAttributedText(self, _cmd, text);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UILabel AttributedText Hook异常: %@", e);
+        orig_UILabel_setAttributedText(self, _cmd, text);
     }
-    orig_UILabel_setAttributedText(self, _cmd, text);
 }
 
 // ============== Hook UIButton ==============
 
 static void (*orig_UIButton_setTitle)(UIButton *self, SEL _cmd, NSString *title, UIControlState state);
 static void hook_UIButton_setTitle(UIButton *self, SEL _cmd, NSString *title, UIControlState state) {
-    NSString *translated = translateText(title);
-    orig_UIButton_setTitle(self, _cmd, translated, state);
+    @try {
+        if (title && title.length > 0) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated) {
+                orig_UIButton_setTitle(self, _cmd, translated, state);
+                return;
+            }
+        }
+        orig_UIButton_setTitle(self, _cmd, title, state);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UIButton Hook异常: %@", e);
+        orig_UIButton_setTitle(self, _cmd, title, state);
+    }
 }
 
 // ============== Hook UITextField ==============
 
 static void (*orig_UITextField_setText)(UITextField *self, SEL _cmd, NSString *text);
 static void hook_UITextField_setText(UITextField *self, SEL _cmd, NSString *text) {
-    NSString *translated = translateText(text);
-    orig_UITextField_setText(self, _cmd, translated);
+    @try {
+        if (text && text.length > 0) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated) {
+                orig_UITextField_setText(self, _cmd, translated);
+                return;
+            }
+        }
+        orig_UITextField_setText(self, _cmd, text);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UITextField Hook异常: %@", e);
+        orig_UITextField_setText(self, _cmd, text);
+    }
 }
 
 static void (*orig_UITextField_setPlaceholder)(UITextField *self, SEL _cmd, NSString *placeholder);
 static void hook_UITextField_setPlaceholder(UITextField *self, SEL _cmd, NSString *placeholder) {
-    NSString *translated = translateText(placeholder);
-    orig_UITextField_setPlaceholder(self, _cmd, translated);
+    @try {
+        if (placeholder && placeholder.length > 0) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [placeholder stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated) {
+                orig_UITextField_setPlaceholder(self, _cmd, translated);
+                return;
+            }
+        }
+        orig_UITextField_setPlaceholder(self, _cmd, placeholder);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UITextField Placeholder Hook异常: %@", e);
+        orig_UITextField_setPlaceholder(self, _cmd, placeholder);
+    }
 }
 
 // ============== Hook UITextView ==============
 
 static void (*orig_UITextView_setText)(UITextView *self, SEL _cmd, NSString *text);
 static void hook_UITextView_setText(UITextView *self, SEL _cmd, NSString *text) {
-    NSString *translated = translateText(text);
-    orig_UITextView_setText(self, _cmd, translated);
+    @try {
+        if (text && text.length > 0) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated) {
+                orig_UITextView_setText(self, _cmd, translated);
+                return;
+            }
+        }
+        orig_UITextView_setText(self, _cmd, text);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UITextView Hook异常: %@", e);
+        orig_UITextView_setText(self, _cmd, text);
+    }
 }
 
 // ============== Hook UIAlertController ==============
 
 static UIAlertController* (*orig_UIAlertController_alertControllerWithTitle)(Class self, SEL _cmd, NSString *title, NSString *message, UIAlertControllerStyle style);
 static UIAlertController* hook_UIAlertController_alertControllerWithTitle(Class self, SEL _cmd, NSString *title, NSString *message, UIAlertControllerStyle style) {
-    NSString *translatedTitle = translateText(title);
-    NSString *translatedMessage = translateText(message);
-    return orig_UIAlertController_alertControllerWithTitle(self, _cmd, translatedTitle, translatedMessage, style);
+    @try {
+        if (!translationDict) initTranslationDict();
+        NSString *translatedTitle = title;
+        NSString *translatedMessage = message;
+        
+        if (title && title.length > 0) {
+            NSString *trimmed = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if (translationDict[trimmed]) {
+                translatedTitle = translationDict[trimmed];
+            }
+        }
+        if (message && message.length > 0) {
+            NSString *trimmed = [message stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if (translationDict[trimmed]) {
+                translatedMessage = translationDict[trimmed];
+            }
+        }
+        return orig_UIAlertController_alertControllerWithTitle(self, _cmd, translatedTitle, translatedMessage, style);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UIAlertController Hook异常: %@", e);
+        return orig_UIAlertController_alertControllerWithTitle(self, _cmd, title, message, style);
+    }
 }
 
 // ============== Hook UIAlertAction ==============
 
 static UIAlertAction* (*orig_UIAlertAction_actionWithTitle)(Class self, SEL _cmd, NSString *title, UIAlertActionStyle style, void (^handler)(UIAlertAction *));
 static UIAlertAction* hook_UIAlertAction_actionWithTitle(Class self, SEL _cmd, NSString *title, UIAlertActionStyle style, void (^handler)(UIAlertAction *)) {
-    NSString *translated = translateText(title);
-    return orig_UIAlertAction_actionWithTitle(self, _cmd, translated, style, handler);
+    @try {
+        if (title && title.length > 0) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated) {
+                return orig_UIAlertAction_actionWithTitle(self, _cmd, translated, style, handler);
+            }
+        }
+        return orig_UIAlertAction_actionWithTitle(self, _cmd, title, style, handler);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UIAlertAction Hook异常: %@", e);
+        return orig_UIAlertAction_actionWithTitle(self, _cmd, title, style, handler);
+    }
 }
 
 // ============== Hook UINavigationItem ==============
 
 static void (*orig_UINavigationItem_setTitle)(UINavigationItem *self, SEL _cmd, NSString *title);
 static void hook_UINavigationItem_setTitle(UINavigationItem *self, SEL _cmd, NSString *title) {
-    NSString *translated = translateText(title);
-    orig_UINavigationItem_setTitle(self, _cmd, translated);
+    @try {
+        if (title && title.length > 0) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated) {
+                orig_UINavigationItem_setTitle(self, _cmd, translated);
+                return;
+            }
+        }
+        orig_UINavigationItem_setTitle(self, _cmd, title);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UINavigationItem Hook异常: %@", e);
+        orig_UINavigationItem_setTitle(self, _cmd, title);
+    }
 }
 
 // ============== Hook UITabBarItem ==============
 
 static void (*orig_UITabBarItem_setTitle)(UITabBarItem *self, SEL _cmd, NSString *title);
 static void hook_UITabBarItem_setTitle(UITabBarItem *self, SEL _cmd, NSString *title) {
-    NSString *translated = translateText(title);
-    orig_UITabBarItem_setTitle(self, _cmd, translated);
+    @try {
+        if (title && title.length > 0) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated) {
+                orig_UITabBarItem_setTitle(self, _cmd, translated);
+                return;
+            }
+        }
+        orig_UITabBarItem_setTitle(self, _cmd, title);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UITabBarItem Hook异常: %@", e);
+        orig_UITabBarItem_setTitle(self, _cmd, title);
+    }
 }
 
 // ============== Hook UIBarButtonItem ==============
 
 static void (*orig_UIBarButtonItem_setTitle)(UIBarButtonItem *self, SEL _cmd, NSString *title);
 static void hook_UIBarButtonItem_setTitle(UIBarButtonItem *self, SEL _cmd, NSString *title) {
-    NSString *translated = translateText(title);
-    orig_UIBarButtonItem_setTitle(self, _cmd, translated);
+    @try {
+        if (title && title.length > 0) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated) {
+                orig_UIBarButtonItem_setTitle(self, _cmd, translated);
+                return;
+            }
+        }
+        orig_UIBarButtonItem_setTitle(self, _cmd, title);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UIBarButtonItem Hook异常: %@", e);
+        orig_UIBarButtonItem_setTitle(self, _cmd, title);
+    }
 }
 
 // ============== Hook UISegmentedControl ==============
 
 static void (*orig_UISegmentedControl_setTitle)(UISegmentedControl *self, SEL _cmd, NSString *title, NSUInteger segment);
 static void hook_UISegmentedControl_setTitle(UISegmentedControl *self, SEL _cmd, NSString *title, NSUInteger segment) {
-    NSString *translated = translateText(title);
-    orig_UISegmentedControl_setTitle(self, _cmd, translated, segment);
+    @try {
+        if (title && title.length > 0) {
+            if (!translationDict) initTranslationDict();
+            NSString *trimmed = [title stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *translated = translationDict[trimmed];
+            if (translated) {
+                orig_UISegmentedControl_setTitle(self, _cmd, translated, segment);
+                return;
+            }
+        }
+        orig_UISegmentedControl_setTitle(self, _cmd, title, segment);
+    } @catch (NSException *e) {
+        NSLog(@"[AutoTranslate] UISegmentedControl Hook异常: %@", e);
+        orig_UISegmentedControl_setTitle(self, _cmd, title, segment);
+    }
 }
 
 // ============== 初始化 ==============
