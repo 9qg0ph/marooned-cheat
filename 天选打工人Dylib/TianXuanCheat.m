@@ -1,127 +1,111 @@
-// 天选打工人修改器 - TianXuanDaGongRenCheat.m
-// 通过内存搜索修改金钱、金条
+// 天选打工人修改器 - TianXuanCheat.m
+// 参考卡包修仙的成功实现
 #import <UIKit/UIKit.h>
-#import <objc/runtime.h>
-#import <mach/mach.h>
+#import <sqlite3.h>
 
 #pragma mark - 全局变量
 
 @class TXMenuView;
 static UIButton *g_floatButton = nil;
 static TXMenuView *g_menuView = nil;
-static NSMutableArray *g_foundAddresses = nil;  // 存储找到的地址
 
-#pragma mark - 安全的内存操作
+#pragma mark - 存档修改
 
-// 安全读取内存
-static BOOL safeReadMemory(vm_address_t address, void *buffer, vm_size_t size) {
-    vm_size_t bytesRead = 0;
-    kern_return_t kr = vm_read_overwrite(mach_task_self(), address, size, (vm_address_t)buffer, &bytesRead);
-    return (kr == KERN_SUCCESS && bytesRead == size);
+// 获取存档路径
+static NSString* getSavePath(void) {
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *documentsPath = [paths firstObject];
+    return [documentsPath stringByAppendingPathComponent:@"jsb.sqlite"];
 }
 
-// 安全写入内存
-static BOOL safeWriteMemory(vm_address_t address, void *buffer, vm_size_t size) {
-    kern_return_t kr = vm_write(mach_task_self(), address, (vm_offset_t)buffer, (mach_msg_type_number_t)size);
-    return (kr == KERN_SUCCESS);
-}
-
-// 搜索内存中的32位整数值（限制结果数量）
-static NSMutableArray* searchInt32InMemory(int32_t targetValue, int maxResults) {
-    NSMutableArray *results = [NSMutableArray array];
-    task_t task = mach_task_self();
+// 智能修改存档（只修改数值，保留进度）
+static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t mood, int32_t integral) {
+    NSString *dbPath = getSavePath();
     
-    vm_address_t address = 0;
-    vm_size_t size = 0;
-    vm_region_basic_info_data_64_t info;
-    mach_msg_type_number_t infoCount;
-    mach_port_t objectName;
+    if (![[NSFileManager defaultManager] fileExistsAtPath:dbPath]) {
+        return NO;
+    }
     
-    while (results.count < maxResults) {
-        infoCount = VM_REGION_BASIC_INFO_COUNT_64;
-        kern_return_t kr = vm_region_64(task, &address, &size, VM_REGION_BASIC_INFO_64,
-                                        (vm_region_info_t)&info, &infoCount, &objectName);
-        if (kr != KERN_SUCCESS) break;
-        
-        // 只搜索可读写的堆内存区域
-        if ((info.protection & VM_PROT_READ) && (info.protection & VM_PROT_WRITE)) {
-            // 限制单次读取大小，避免内存问题
-            vm_size_t chunkSize = MIN(size, 0x100000);  // 最大1MB
-            void *buffer = malloc(chunkSize);
-            
-            if (buffer) {
-                vm_size_t bytesRead = 0;
-                if (vm_read_overwrite(task, address, chunkSize, (vm_address_t)buffer, &bytesRead) == KERN_SUCCESS) {
-                    for (vm_size_t i = 0; i + sizeof(int32_t) <= bytesRead; i += sizeof(int32_t)) {
-                        int32_t value = *(int32_t *)((char *)buffer + i);
-                        if (value == targetValue) {
-                            [results addObject:@(address + i)];
-                            if (results.count >= maxResults) {
-                                free(buffer);
-                                return results;
-                            }
-                        }
-                    }
-                }
-                free(buffer);
+    // 备份
+    NSString *backupPath = [dbPath stringByAppendingString:@".backup"];
+    [[NSFileManager defaultManager] removeItemAtPath:backupPath error:nil];
+    [[NSFileManager defaultManager] copyItemAtPath:dbPath toPath:backupPath error:nil];
+    
+    sqlite3 *db = NULL;
+    if (sqlite3_open([dbPath UTF8String], &db) != SQLITE_OK) {
+        if (db) sqlite3_close(db);
+        return NO;
+    }
+    
+    // 读取存档
+    const char *selectSQL = "SELECT value FROM data WHERE key='ssx45sss'";
+    sqlite3_stmt *stmt = NULL;
+    NSString *jsonString = nil;
+    
+    if (sqlite3_prepare_v2(db, selectSQL, -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char *jsonText = (const char *)sqlite3_column_text(stmt, 0);
+            if (jsonText) {
+                jsonString = [NSString stringWithUTF8String:jsonText];
             }
         }
-        address += size;
-    }
-    return results;
-}
-
-// 通过爱心值(100)定位并修改金钱和金条
-static int modifyGameValues(int32_t moneyValue, int32_t goldValue) {
-    // 搜索值为100的地址（爱心满值）
-    NSMutableArray *heart100Addrs = searchInt32InMemory(100, 5000);
-    
-    if (heart100Addrs.count == 0) {
-        NSLog(@"[TX] 未找到爱心值100");
-        return 0;
+        sqlite3_finalize(stmt);
     }
     
-    NSLog(@"[TX] 找到 %lu 个值为100的地址", (unsigned long)heart100Addrs.count);
+    if (!jsonString) {
+        sqlite3_close(db);
+        return NO;
+    }
     
-    int modifiedCount = 0;
+    // 解析JSON
+    NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+    NSError *error = nil;
+    NSMutableDictionary *saveDict = [NSJSONSerialization JSONObjectWithData:jsonData 
+        options:NSJSONReadingMutableContainers error:&error];
     
-    for (NSNumber *heartAddrNum in heart100Addrs) {
-        vm_address_t heartAddr = [heartAddrNum unsignedLongLongValue];
-        
-        // 根据偏移计算金钱和金条地址
-        // 金钱 = 爱心地址 - 0x18
-        // 金条 = 爱心地址 - 0x14
-        vm_address_t moneyAddr = heartAddr - 0x18;
-        vm_address_t goldAddr = heartAddr - 0x14;
-        
-        int32_t currentMoney = 0;
-        int32_t currentGold = 0;
-        
-        // 读取当前值进行验证
-        if (!safeReadMemory(moneyAddr, &currentMoney, sizeof(int32_t))) continue;
-        if (!safeReadMemory(goldAddr, &currentGold, sizeof(int32_t))) continue;
-        
-        // 验证：金钱应该是正数且在合理范围内
-        if (currentMoney > 0 && currentMoney < 100000000) {
-            // 修改金钱
-            if (moneyValue > 0) {
-                if (safeWriteMemory(moneyAddr, &moneyValue, sizeof(int32_t))) {
-                    NSLog(@"[TX] 修改金钱: 0x%llx, %d -> %d", (unsigned long long)moneyAddr, currentMoney, moneyValue);
-                    modifiedCount++;
-                }
-            }
-            
-            // 修改金条
-            if (goldValue > 0 && currentGold >= 0 && currentGold < 100000000) {
-                if (safeWriteMemory(goldAddr, &goldValue, sizeof(int32_t))) {
-                    NSLog(@"[TX] 修改金条: 0x%llx, %d -> %d", (unsigned long long)goldAddr, currentGold, goldValue);
-                    modifiedCount++;
-                }
-            }
+    if (error || !saveDict) {
+        sqlite3_close(db);
+        return NO;
+    }
+    
+    // 只修改info字段
+    NSMutableDictionary *info = saveDict[@"info"];
+    if (!info) {
+        sqlite3_close(db);
+        return NO;
+    }
+    
+    // 修改数值
+    if (money > 0) info[@"money"] = @(money);
+    if (mine > 0) info[@"mine"] = @(mine);
+    if (power > 0) info[@"power"] = @(power);
+    if (mood > 0) info[@"mood"] = @(mood);
+    if (integral > 0) info[@"integral"] = @(integral);
+    
+    // 转回JSON
+    NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:saveDict options:0 error:&error];
+    if (error || !newJsonData) {
+        sqlite3_close(db);
+        return NO;
+    }
+    
+    NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
+    
+    // 更新数据库
+    const char *updateSQL = "UPDATE data SET value=? WHERE key='ssx45sss'";
+    sqlite3_stmt *updateStmt = NULL;
+    
+    BOOL success = NO;
+    if (sqlite3_prepare_v2(db, updateSQL, -1, &updateStmt, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(updateStmt, 1, [newJsonString UTF8String], -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(updateStmt) == SQLITE_DONE) {
+            success = YES;
         }
+        sqlite3_finalize(updateStmt);
     }
     
-    return modifiedCount;
+    sqlite3_close(db);
+    return success;
 }
 
 #pragma mark - 菜单视图
@@ -141,7 +125,7 @@ static int modifyGameValues(int32_t moneyValue, int32_t goldValue) {
 - (void)setupUI {
     self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
     
-    CGFloat contentHeight = 300;
+    CGFloat contentHeight = 380;
     CGFloat contentWidth = 280;
     CGFloat viewWidth = self.bounds.size.width;
     CGFloat viewHeight = self.bounds.size.height;
@@ -168,42 +152,54 @@ static int modifyGameValues(int32_t moneyValue, int32_t goldValue) {
     [self.contentView addSubview:closeButton];
     
     // 标题
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 10, contentWidth - 60, 30)];
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
     title.text = @"💼 天选打工人";
     title.font = [UIFont boldSystemFontOfSize:20];
     title.textColor = [UIColor colorWithRed:1.0 green:0.6 blue:0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
     [self.contentView addSubview:title];
     
-    CGFloat y = 50;
+    CGFloat y = 45;
     
-    // 提示
-    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 30)];
-    tip.text = @"⚠️ 请确保爱心已满100再开启";
-    tip.font = [UIFont systemFontOfSize:12];
-    tip.textColor = [UIColor colorWithRed:1.0 green:0.4 blue:0 alpha:1];
-    tip.textAlignment = NSTextAlignmentCenter;
-    [self.contentView addSubview:tip];
-    y += 40;
+    // 说明
+    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
+    info.text = @"✨ 只修改数值，保留游戏进度\n⚠️ 修改后自动重启游戏生效";
+    info.font = [UIFont systemFontOfSize:12];
+    info.textColor = [UIColor darkGrayColor];
+    info.textAlignment = NSTextAlignmentCenter;
+    info.numberOfLines = 2;
+    [self.contentView addSubview:info];
+    y += 50;
     
     // 按钮
-    UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金钱 (999999999)" tag:1];
-    btn1.frame = CGRectMake(20, y, 240, 44);
+    UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金钱" tag:1];
+    btn1.frame = CGRectMake(20, y, contentWidth - 40, 40);
     [self.contentView addSubview:btn1];
-    y += 54;
+    y += 48;
     
-    UIButton *btn2 = [self createButtonWithTitle:@"🏆 无限金条 (999999)" tag:2];
-    btn2.frame = CGRectMake(20, y, 240, 44);
+    UIButton *btn2 = [self createButtonWithTitle:@"🏆 无限金条" tag:2];
+    btn2.frame = CGRectMake(20, y, contentWidth - 40, 40);
     [self.contentView addSubview:btn2];
-    y += 54;
+    y += 48;
     
-    UIButton *btn3 = [self createButtonWithTitle:@"🎁 一键全开" tag:3];
-    btn3.frame = CGRectMake(20, y, 240, 44);
+    UIButton *btn3 = [self createButtonWithTitle:@"⚡ 无限体力" tag:3];
+    btn3.frame = CGRectMake(20, y, contentWidth - 40, 40);
     [self.contentView addSubview:btn3];
-    y += 60;
+    y += 48;
+    
+    UIButton *btn4 = [self createButtonWithTitle:@"🎯 无限积分" tag:4];
+    btn4.frame = CGRectMake(20, y, contentWidth - 40, 40);
+    [self.contentView addSubview:btn4];
+    y += 48;
+    
+    UIButton *btn5 = [self createButtonWithTitle:@"🎁 一键全开" tag:5];
+    btn5.frame = CGRectMake(20, y, contentWidth - 40, 40);
+    btn5.backgroundColor = [UIColor colorWithRed:1.0 green:0.6 blue:0 alpha:1];
+    [self.contentView addSubview:btn5];
+    y += 55;
     
     // 版权
-    UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, 240, 20)];
+    UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
     copyright.text = @"© 2025  𝐈𝐎𝐒𝐃𝐊 科技虎";
     copyright.font = [UIFont systemFontOfSize:12];
     copyright.textColor = [UIColor lightGrayColor];
@@ -229,30 +225,39 @@ static int modifyGameValues(int32_t moneyValue, int32_t goldValue) {
 }
 
 - (void)buttonTapped:(UIButton *)sender {
-    // 在后台线程执行内存搜索，避免阻塞UI
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        int result = 0;
-        NSString *message = @"";
-        
-        switch (sender.tag) {
-            case 1:
-                result = modifyGameValues(999999999, 0);
-                message = result > 0 ? @"💰 无限金钱开启成功！" : @"❌ 未找到！请确保爱心已满100";
-                break;
-            case 2:
-                result = modifyGameValues(0, 999999);
-                message = result > 0 ? @"🏆 无限金条开启成功！" : @"❌ 未找到！请确保爱心已满100";
-                break;
-            case 3:
-                result = modifyGameValues(999999999, 999999);
-                message = result > 0 ? [NSString stringWithFormat:@"🎁 一键全开成功！\n修改了 %d 处", result] : @"❌ 未找到！请确保爱心已满100";
-                break;
-        }
-        
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self showAlert:message];
+    BOOL success = NO;
+    NSString *message = @"";
+    
+    switch (sender.tag) {
+        case 1:
+            success = modifyGameData(999999999, 0, 0, 0, 0);
+            message = success ? @"💰 无限金钱开启成功！游戏将自动重启生效" : @"❌ 修改失败";
+            break;
+        case 2:
+            success = modifyGameData(0, 999999999, 0, 0, 0);
+            message = success ? @"🏆 无限金条开启成功！游戏将自动重启生效" : @"❌ 修改失败";
+            break;
+        case 3:
+            success = modifyGameData(0, 0, 999999999, 0, 0);
+            message = success ? @"⚡ 无限体力开启成功！游戏将自动重启生效" : @"❌ 修改失败";
+            break;
+        case 4:
+            success = modifyGameData(0, 0, 0, 0, 999999999);
+            message = success ? @"🎯 无限积分开启成功！游戏将自动重启生效" : @"❌ 修改失败";
+            break;
+        case 5:
+            success = modifyGameData(999999999, 999999999, 999999999, 100, 999999999);
+            message = success ? @"🎁 一键全开成功！\n💰 金钱: 999999999\n🏆 金条: 999999999\n⚡ 体力: 999999999\n😊 心情: 100\n🎯 积分: 999999999\n\n游戏将自动重启生效" : @"❌ 修改失败";
+            break;
+    }
+    
+    [self showAlert:message];
+    
+    if (success) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            exit(0);
         });
-    });
+    }
 }
 
 - (void)showAlert:(NSString *)message {
@@ -320,7 +325,7 @@ static void handlePan(UIPanGestureRecognizer *pan) {
     frame.origin.y = MAX(50, MIN(frame.origin.y, sh - 100));
     
     g_floatButton.frame = frame;
-    [pan setTranslation:CGPointMake(0, 0) inView:keyWindow];
+    [pan setTranslation:CGPointZero inView:keyWindow];
 }
 
 static void setupFloatingButton(void) {

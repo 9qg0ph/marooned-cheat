@@ -22,26 +22,27 @@ jobs:
       run: |
         cd 天选打工人Dylib
         
-        # 编译极简测试版（用于调试）
+        # 编译天选打工人修改器
         clang -arch arm64 \
           -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
           -miphoneos-version-min=14.0 \
           -dynamiclib \
           -framework UIKit \
           -framework Foundation \
+          -lsqlite3 \
           -fobjc-arc \
           -Wno-deprecated-declarations \
-          -o TianXuanMinimal.dylib \
-          TianXuanMinimal.m
+          -o TianXuanCheat.dylib \
+          TianXuanCheat.m
         
         # 签名
-        ldid -S TianXuanMinimal.dylib || codesign -f -s - TianXuanMinimal.dylib
+        ldid -S TianXuanCheat.dylib || codesign -f -s - TianXuanCheat.dylib
         
-        echo "✅ 极简测试版编译完成!"
+        echo "✅ 天选打工人修改器编译完成!"
         ls -la *.dylib
     
     - name: Upload dylib
       uses: actions/upload-artifact@v4
       with:
-        name: TianXuanMinimal-dylib
-        path: 天选打工人Dylib/TianXuanMinimal.dylib
+        name: TianXuanCheat-dylib
+        path: 天选打工人Dylib/TianXuanCheat.dylib
