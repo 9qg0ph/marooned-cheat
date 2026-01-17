@@ -101,7 +101,7 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     }
     
     // 读取存档
-    const char *selectSQL = "SELECT value FROM data WHERE key='ssx45sss'";
+    const char *selectSQL = "SELECT value FROM data WHERE key='012345678ssx45sss'";
     sqlite3_stmt *stmt = NULL;
     NSString *jsonString = nil;
     
@@ -171,7 +171,7 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     writeLog([NSString stringWithFormat:@"✅ 新JSON长度: %lu", (unsigned long)newJsonString.length]);
     
     // 更新数据库
-    const char *updateSQL = "UPDATE data SET value=? WHERE key='ssx45sss'";
+    const char *updateSQL = "UPDATE data SET value=? WHERE key='012345678ssx45sss'";
     sqlite3_stmt *updateStmt = NULL;
     
     BOOL success = NO;
