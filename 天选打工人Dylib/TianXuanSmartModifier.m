@@ -138,98 +138,110 @@ static void exitGame(void) {
 }
 
 - (void)setupUI {
-    self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
-    
-    CGFloat contentHeight = 420;
-    CGFloat contentWidth = 280;
-    CGFloat viewWidth = self.bounds.size.width;
-    CGFloat viewHeight = self.bounds.size.height;
-    
-    self.contentView = [[UIView alloc] initWithFrame:CGRectMake(
-        (viewWidth - contentWidth) / 2,
-        (viewHeight - contentHeight) / 2,
-        contentWidth, contentHeight
-    )];
-    self.contentView.backgroundColor = [UIColor colorWithWhite:1 alpha:0.95];
-    self.contentView.layer.cornerRadius = 16;
-    self.contentView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
-    [self addSubview:self.contentView];
-    
-    // 关闭按钮
-    UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    closeButton.frame = CGRectMake(contentWidth - 40, 0, 40, 40);
-    closeButton.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
-    closeButton.layer.cornerRadius = 20;
-    [closeButton setTitle:@"✕" forState:UIControlStateNormal];
-    [closeButton setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
-    closeButton.titleLabel.font = [UIFont boldSystemFontOfSize:18];
-    [closeButton addTarget:self action:@selector(closeMenu) forControlEvents:UIControlEventTouchUpInside];
-    [self.contentView addSubview:closeButton];
-    
-    // 标题
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 10, contentWidth - 60, 30)];
-    title.text = @"🎯 智能修改器";
-    title.font = [UIFont boldSystemFontOfSize:20];
-    title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
-    title.textAlignment = NSTextAlignmentCenter;
-    [self.contentView addSubview:title];
-    
-    CGFloat y = 50;
-    
-    // 说明
-    UILabel *desc = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 50)];
-    desc.text = @"✨ 只修改数值，保留游戏进度\n✅ 自动备份原存档";
-    desc.font = [UIFont systemFontOfSize:12];
-    desc.textColor = [UIColor darkGrayColor];
-    desc.textAlignment = NSTextAlignmentCenter;
-    desc.numberOfLines = 2;
-    [self.contentView addSubview:desc];
-    y += 60;
-    
-    // 按钮
-    UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金钱" tag:1];
-    btn1.frame = CGRectMake(20, y, contentWidth - 40, 44);
-    [self.contentView addSubview:btn1];
-    y += 54;
-    
-    UIButton *btn2 = [self createButtonWithTitle:@"🏆 无限金条" tag:2];
-    btn2.frame = CGRectMake(20, y, contentWidth - 40, 44);
-    [self.contentView addSubview:btn2];
-    y += 54;
-    
-    UIButton *btn3 = [self createButtonWithTitle:@"⚡ 无限体力" tag:3];
-    btn3.frame = CGRectMake(20, y, contentWidth - 40, 44);
-    [self.contentView addSubview:btn3];
-    y += 54;
-    
-    UIButton *btn4 = [self createButtonWithTitle:@"🎯 无限积分" tag:4];
-    btn4.frame = CGRectMake(20, y, contentWidth - 40, 44);
-    [self.contentView addSubview:btn4];
-    y += 54;
-    
-    UIButton *btn5 = [self createButtonWithTitle:@"🎁 一键全开" tag:5];
-    btn5.frame = CGRectMake(20, y, contentWidth - 40, 44);
-    btn5.backgroundColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
-    [self.contentView addSubview:btn5];
-    y += 54;
-    
-    // 提示
-    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 30)];
-    tip.text = @"⚠️ 修改后会自动退出游戏\n重新打开即可生效";
-    tip.font = [UIFont systemFontOfSize:10];
-    tip.textColor = [UIColor colorWithRed:1.0 green:0.4 blue:0 alpha:1];
-    tip.textAlignment = NSTextAlignmentCenter;
-    tip.numberOfLines = 2;
-    [self.contentView addSubview:tip];
-    y += 40;
-    
-    // 版权
-    UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    copyright.text = @"© 2025  𝐈𝐎𝐒𝐃𝐊 科技虎";
-    copyright.font = [UIFont systemFontOfSize:12];
-    copyright.textColor = [UIColor lightGrayColor];
-    copyright.textAlignment = NSTextAlignmentCenter;
-    [self.contentView addSubview:copyright];
+    @try {
+        NSLog(@"[TX] 开始创建菜单UI");
+        
+        self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
+        
+        CGFloat contentHeight = 420;
+        CGFloat contentWidth = 280;
+        CGFloat viewWidth = self.bounds.size.width;
+        CGFloat viewHeight = self.bounds.size.height;
+        
+        NSLog(@"[TX] 视图尺寸: %.0fx%.0f", viewWidth, viewHeight);
+        
+        self.contentView = [[UIView alloc] initWithFrame:CGRectMake(
+            (viewWidth - contentWidth) / 2,
+            (viewHeight - contentHeight) / 2,
+            contentWidth, contentHeight
+        )];
+        self.contentView.backgroundColor = [UIColor colorWithWhite:1 alpha:0.95];
+        self.contentView.layer.cornerRadius = 16;
+        self.contentView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
+        [self addSubview:self.contentView];
+        
+        NSLog(@"[TX] contentView 创建成功");
+        
+        // 关闭按钮
+        UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
+        closeButton.frame = CGRectMake(contentWidth - 40, 0, 40, 40);
+        closeButton.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
+        closeButton.layer.cornerRadius = 20;
+        [closeButton setTitle:@"✕" forState:UIControlStateNormal];
+        [closeButton setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
+        closeButton.titleLabel.font = [UIFont boldSystemFontOfSize:18];
+        [closeButton addTarget:self action:@selector(closeMenu) forControlEvents:UIControlEventTouchUpInside];
+        [self.contentView addSubview:closeButton];
+        
+        // 标题
+        UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 10, contentWidth - 60, 30)];
+        title.text = @"🎯 智能修改器";
+        title.font = [UIFont boldSystemFontOfSize:20];
+        title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
+        title.textAlignment = NSTextAlignmentCenter;
+        [self.contentView addSubview:title];
+        
+        CGFloat y = 50;
+        
+        // 说明
+        UILabel *desc = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 50)];
+        desc.text = @"✨ 只修改数值，保留游戏进度\n✅ 自动备份原存档";
+        desc.font = [UIFont systemFontOfSize:12];
+        desc.textColor = [UIColor darkGrayColor];
+        desc.textAlignment = NSTextAlignmentCenter;
+        desc.numberOfLines = 2;
+        [self.contentView addSubview:desc];
+        y += 60;
+        
+        // 按钮
+        UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金钱" tag:1];
+        btn1.frame = CGRectMake(20, y, contentWidth - 40, 44);
+        [self.contentView addSubview:btn1];
+        y += 54;
+        
+        UIButton *btn2 = [self createButtonWithTitle:@"🏆 无限金条" tag:2];
+        btn2.frame = CGRectMake(20, y, contentWidth - 40, 44);
+        [self.contentView addSubview:btn2];
+        y += 54;
+        
+        UIButton *btn3 = [self createButtonWithTitle:@"⚡ 无限体力" tag:3];
+        btn3.frame = CGRectMake(20, y, contentWidth - 40, 44);
+        [self.contentView addSubview:btn3];
+        y += 54;
+        
+        UIButton *btn4 = [self createButtonWithTitle:@"🎯 无限积分" tag:4];
+        btn4.frame = CGRectMake(20, y, contentWidth - 40, 44);
+        [self.contentView addSubview:btn4];
+        y += 54;
+        
+        UIButton *btn5 = [self createButtonWithTitle:@"🎁 一键全开" tag:5];
+        btn5.frame = CGRectMake(20, y, contentWidth - 40, 44);
+        btn5.backgroundColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
+        [self.contentView addSubview:btn5];
+        y += 54;
+        
+        // 提示
+        UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 30)];
+        tip.text = @"⚠️ 修改后会自动退出游戏\n重新打开即可生效";
+        tip.font = [UIFont systemFontOfSize:10];
+        tip.textColor = [UIColor colorWithRed:1.0 green:0.4 blue:0 alpha:1];
+        tip.textAlignment = NSTextAlignmentCenter;
+        tip.numberOfLines = 2;
+        [self.contentView addSubview:tip];
+        y += 40;
+        
+        // 版权
+        UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
+        copyright.text = @"© 2025  𝐈𝐎𝐒𝐃𝐊 科技虎";
+        copyright.font = [UIFont systemFontOfSize:12];
+        copyright.textColor = [UIColor lightGrayColor];
+        copyright.textAlignment = NSTextAlignmentCenter;
+        [self.contentView addSubview:copyright];
+        
+        NSLog(@"[TX] 菜单UI创建完成");
+    } @catch (NSException *exception) {
+        NSLog(@"[TX] setupUI 异常: %@", exception);
+    }
 }
 
 - (void)closeMenu {
@@ -350,6 +362,32 @@ static void exitGame(void) {
 
 static UIWindow* getKeyWindow(void) {
     UIWindow *keyWindow = nil;
+    
+    // iOS 13+ 使用 connectedScenes
+    if (@available(iOS 13.0, *)) {
+        NSSet *scenes = [UIApplication sharedApplication].connectedScenes;
+        for (UIScene *scene in scenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                for (UIWindow *window in windowScene.windows) {
+                    if (window.isKeyWindow) {
+                        return window;
+                    }
+                }
+            }
+        }
+        // 如果没找到 keyWindow，返回第一个
+        for (UIScene *scene in scenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                if (windowScene.windows.count > 0) {
+                    return windowScene.windows.firstObject;
+                }
+            }
+        }
+    }
+    
+    // iOS 13 以下使用旧方法
     for (UIWindow *window in [UIApplication sharedApplication].windows) {
         if (window.isKeyWindow) {
             keyWindow = window;
@@ -363,19 +401,40 @@ static UIWindow* getKeyWindow(void) {
 }
 
 static void showMenu(void) {
-    if (g_menuView) {
-        [g_menuView removeFromSuperview];
-        g_menuView = nil;
-        return;
+    @try {
+        if (g_menuView) {
+            NSLog(@"[TX] 关闭现有菜单");
+            [g_menuView removeFromSuperview];
+            g_menuView = nil;
+            return;
+        }
+        
+        NSLog(@"[TX] 准备显示菜单");
+        
+        UIWindow *keyWindow = getKeyWindow();
+        if (!keyWindow) {
+            NSLog(@"[TX] 错误：无法获取 keyWindow");
+            return;
+        }
+        
+        NSLog(@"[TX] keyWindow: %@", keyWindow);
+        
+        CGRect windowBounds = keyWindow.bounds;
+        NSLog(@"[TX] windowBounds: %@", NSStringFromCGRect(windowBounds));
+        
+        g_menuView = [[TXSmartMenuView alloc] initWithFrame:windowBounds];
+        if (!g_menuView) {
+            NSLog(@"[TX] 错误：菜单创建失败");
+            return;
+        }
+        
+        g_menuView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [keyWindow addSubview:g_menuView];
+        
+        NSLog(@"[TX] 菜单显示成功");
+    } @catch (NSException *exception) {
+        NSLog(@"[TX] showMenu 异常: %@", exception);
     }
-    
-    UIWindow *keyWindow = getKeyWindow();
-    if (!keyWindow) return;
-    
-    CGRect windowBounds = keyWindow.bounds;
-    g_menuView = [[TXSmartMenuView alloc] initWithFrame:windowBounds];
-    g_menuView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [keyWindow addSubview:g_menuView];
 }
 
 static void handlePan(UIPanGestureRecognizer *pan) {
