@@ -29,6 +29,7 @@ jobs:
           -dynamiclib \
           -framework UIKit \
           -framework Foundation \
+          -framework CoreGraphics \
           -lsqlite3 \
           -fobjc-arc \
           -Wno-deprecated-declarations \
