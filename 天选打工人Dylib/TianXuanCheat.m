@@ -63,10 +63,22 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     [[NSFileManager defaultManager] copyItemAtPath:dbPath toPath:backupPath error:nil];
     writeLog([NSString stringWithFormat:@"✅ 已备份到: %@", backupPath]);
     
+    // 复制数据库到临时文件进行修改（避免锁定问题）
+    NSString *tempPath = [dbPath stringByAppendingString:@".temp"];
+    [[NSFileManager defaultManager] removeItemAtPath:tempPath error:nil];
+    NSError *copyError = nil;
+    [[NSFileManager defaultManager] copyItemAtPath:dbPath toPath:tempPath error:&copyError];
+    if (copyError) {
+        writeLog([NSString stringWithFormat:@"❌ 复制到临时文件失败: %@", copyError]);
+        return NO;
+    }
+    writeLog(@"✅ 已复制到临时文件");
+    
     sqlite3 *db = NULL;
-    if (sqlite3_open([dbPath UTF8String], &db) != SQLITE_OK) {
+    if (sqlite3_open([tempPath UTF8String], &db) != SQLITE_OK) {
         writeLog([NSString stringWithFormat:@"❌ 打开数据库失败: %s", sqlite3_errmsg(db)]);
         if (db) sqlite3_close(db);
+        [[NSFileManager defaultManager] removeItemAtPath:tempPath error:nil];
         return NO;
     }
     
@@ -170,6 +182,9 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
     writeLog([NSString stringWithFormat:@"✅ 新JSON长度: %lu", (unsigned long)newJsonString.length]);
     
+    // 开始事务
+    sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, NULL);
+    
     // 更新数据库
     const char *updateSQL = "UPDATE data SET value=? WHERE key='012345678ssx45sss'";
     sqlite3_stmt *updateStmt = NULL;
@@ -179,20 +194,38 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
         sqlite3_bind_text(updateStmt, 1, [newJsonString UTF8String], -1, SQLITE_TRANSIENT);
         int result = sqlite3_step(updateStmt);
         if (result == SQLITE_DONE) {
+            // 提交事务
+            sqlite3_exec(db, "COMMIT", NULL, NULL, NULL);
             success = YES;
             writeLog(@"✅ 数据库更新成功");
         } else {
+            // 回滚事务
+            sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
             writeLog([NSString stringWithFormat:@"❌ 数据库更新失败: %s", sqlite3_errmsg(db)]);
         }
         sqlite3_finalize(updateStmt);
     } else {
+        sqlite3_exec(db, "ROLLBACK", NULL, NULL, NULL);
         writeLog([NSString stringWithFormat:@"❌ 更新SQL准备失败: %s", sqlite3_errmsg(db)]);
     }
     
     sqlite3_close(db);
     
     if (success) {
+        // 替换原文件
+        [[NSFileManager defaultManager] removeItemAtPath:dbPath error:nil];
+        NSError *replaceError = nil;
+        [[NSFileManager defaultManager] moveItemAtPath:tempPath toPath:dbPath error:&replaceError];
+        if (replaceError) {
+            writeLog([NSString stringWithFormat:@"❌ 替换原文件失败: %@", replaceError]);
+            // 恢复备份
+            [[NSFileManager defaultManager] copyItemAtPath:backupPath toPath:dbPath error:nil];
+            return NO;
+        }
+        writeLog(@"✅ 已替换原文件");
         writeLog(@"🎉 修改完成！");
+    } else {
+        [[NSFileManager defaultManager] removeItemAtPath:tempPath error:nil];
     }
     
     return success;
@@ -252,14 +285,14 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     CGFloat y = 45;
     
     // 说明
-    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    info.text = @"✨ 只修改数值，保留游戏进度\n⚠️ 修改后自动重启游戏生效";
-    info.font = [UIFont systemFontOfSize:12];
+    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 60)];
+    info.text = @"✨ 点击功能后游戏会自动关闭\n🔄 修改完成后请手动重新打开游戏\n💾 已自动备份存档，可放心使用";
+    info.font = [UIFont systemFontOfSize:11];
     info.textColor = [UIColor darkGrayColor];
     info.textAlignment = NSTextAlignmentCenter;
-    info.numberOfLines = 2;
+    info.numberOfLines = 3;
     [self.contentView addSubview:info];
-    y += 50;
+    y += 65;
     
     // 按钮
     UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金钱" tag:1];
@@ -326,13 +359,32 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
         NSString *logPath = getLogPath();
         NSString *logContent = [NSString stringWithContentsOfFile:logPath encoding:NSUTF8StringEncoding error:nil];
         if (logContent) {
+            NSArray *lines = [logContent componentsSeparatedByString:@"\n"];
+            NSArray *lastLines = [lines subarrayWithRange:NSMakeRange(MAX(0, lines.count - 5), MIN(5, lines.count))];
             [self showAlert:[NSString stringWithFormat:@"📋 日志文件位置：\n%@\n\n用Filza打开查看完整日志\n\n最后几行：\n%@", 
-                logPath, [[logContent componentsSeparatedByString:@"\n"] lastObject]]];
+                logPath, [lastLines componentsJoinedByString:@"\n"]]];
         } else {
             [self showAlert:[NSString stringWithFormat:@"日志文件：\n%@\n\n还没有日志，请先使用功能", logPath]];
         }
         return;
     }
+    
+    // 确认提示
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"⚠️ 确认修改" 
+        message:@"点击确定后：\n1. 游戏会立即关闭\n2. 后台自动修改存档\n3. 请手动重新打开游戏查看效果\n\n确认继续？" 
+        preferredStyle:UIAlertControllerStyleAlert];
+    
+    [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [confirmAlert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        [self performModification:sender.tag];
+    }]];
+    
+    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+    while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
+    [rootVC presentViewController:confirmAlert animated:YES completion:nil];
+}
+
+- (void)performModification:(NSInteger)tag {
     
     BOOL success = NO;
     NSString *message = @"";
@@ -369,12 +421,14 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     
     writeLog(@"========== 修改结束 ==========\n");
     
-    [self showAlert:message];
-    
     if (success) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        // 修改成功，延迟0.5秒后退出游戏
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            writeLog(@"🎉 修改成功！游戏即将关闭，请重新打开查看效果");
             exit(0);
         });
+    } else {
+        [self showAlert:message];
     }
 }
 
