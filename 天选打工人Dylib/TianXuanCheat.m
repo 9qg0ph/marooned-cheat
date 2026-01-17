@@ -22,20 +22,29 @@ static NSString* getSavePath(void) {
 static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t mood, int32_t integral) {
     NSString *dbPath = getSavePath();
     
+    NSLog(@"[TX] 存档路径: %@", dbPath);
+    
     if (![[NSFileManager defaultManager] fileExistsAtPath:dbPath]) {
+        NSLog(@"[TX] 存档文件不存在");
         return NO;
     }
+    
+    NSLog(@"[TX] 存档文件存在，开始修改");
     
     // 备份
     NSString *backupPath = [dbPath stringByAppendingString:@".backup"];
     [[NSFileManager defaultManager] removeItemAtPath:backupPath error:nil];
     [[NSFileManager defaultManager] copyItemAtPath:dbPath toPath:backupPath error:nil];
+    NSLog(@"[TX] 已备份到: %@", backupPath);
     
     sqlite3 *db = NULL;
     if (sqlite3_open([dbPath UTF8String], &db) != SQLITE_OK) {
+        NSLog(@"[TX] 打开数据库失败: %s", sqlite3_errmsg(db));
         if (db) sqlite3_close(db);
         return NO;
     }
+    
+    NSLog(@"[TX] 数据库打开成功");
     
     // 读取存档
     const char *selectSQL = "SELECT value FROM data WHERE key='ssx45sss'";
@@ -47,12 +56,16 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
             const char *jsonText = (const char *)sqlite3_column_text(stmt, 0);
             if (jsonText) {
                 jsonString = [NSString stringWithUTF8String:jsonText];
+                NSLog(@"[TX] 读取到存档数据，长度: %lu", (unsigned long)jsonString.length);
             }
         }
         sqlite3_finalize(stmt);
+    } else {
+        NSLog(@"[TX] SQL准备失败: %s", sqlite3_errmsg(db));
     }
     
     if (!jsonString) {
+        NSLog(@"[TX] 未找到存档数据");
         sqlite3_close(db);
         return NO;
     }
@@ -64,16 +77,22 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
         options:NSJSONReadingMutableContainers error:&error];
     
     if (error || !saveDict) {
+        NSLog(@"[TX] JSON解析失败: %@", error);
         sqlite3_close(db);
         return NO;
     }
     
+    NSLog(@"[TX] JSON解析成功");
+    
     // 只修改info字段
     NSMutableDictionary *info = saveDict[@"info"];
     if (!info) {
+        NSLog(@"[TX] 未找到info字段");
         sqlite3_close(db);
         return NO;
     }
+    
+    NSLog(@"[TX] 修改前: %@", info);
     
     // 修改数值
     if (money > 0) info[@"money"] = @(money);
@@ -82,14 +101,18 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     if (mood > 0) info[@"mood"] = @(mood);
     if (integral > 0) info[@"integral"] = @(integral);
     
+    NSLog(@"[TX] 修改后: %@", info);
+    
     // 转回JSON
     NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:saveDict options:0 error:&error];
     if (error || !newJsonData) {
+        NSLog(@"[TX] JSON序列化失败: %@", error);
         sqlite3_close(db);
         return NO;
     }
     
     NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
+    NSLog(@"[TX] 新JSON长度: %lu", (unsigned long)newJsonString.length);
     
     // 更新数据库
     const char *updateSQL = "UPDATE data SET value=? WHERE key='ssx45sss'";
@@ -98,10 +121,16 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     BOOL success = NO;
     if (sqlite3_prepare_v2(db, updateSQL, -1, &updateStmt, NULL) == SQLITE_OK) {
         sqlite3_bind_text(updateStmt, 1, [newJsonString UTF8String], -1, SQLITE_TRANSIENT);
-        if (sqlite3_step(updateStmt) == SQLITE_DONE) {
+        int result = sqlite3_step(updateStmt);
+        if (result == SQLITE_DONE) {
             success = YES;
+            NSLog(@"[TX] 数据库更新成功");
+        } else {
+            NSLog(@"[TX] 数据库更新失败: %s", sqlite3_errmsg(db));
         }
         sqlite3_finalize(updateStmt);
+    } else {
+        NSLog(@"[TX] 更新SQL准备失败: %s", sqlite3_errmsg(db));
     }
     
     sqlite3_close(db);
