@@ -168,7 +168,17 @@ A: 安装 Git: https://git-scm.com/download/windows
    & "C:\Program Files\Git\bin\git.exe" config --global --unset http.proxy
    & "C:\Program Files\Git\bin\git.exe" config --global --unset https.proxy
    ```
-3. 然后再执行 push
+3. **如果仍然连接失败（Connection reset / Could not connect to server）**，禁用 SSL 验证：
+   ```powershell
+   & "C:\Program Files\Git\bin\git.exe" config --global http.sslVerify false
+   ```
+   然后再执行 push
+
+**故障排查：**
+- ✅ 网络测试通过（`Test-NetConnection github.com -Port 443` 返回 True）
+- ❌ Git push 失败：`Failed to connect to github.com port 443`
+- 💡 **解决方案**：禁用 SSL 验证后推送成功
+- ⚠️ **原因**：可能是 SSL 证书验证问题或网络环境导致
 
 ---
 

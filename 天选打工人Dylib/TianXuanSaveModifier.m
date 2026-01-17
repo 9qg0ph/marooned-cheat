@@ -20,91 +20,119 @@ static NSString* getSavePath(void) {
 
 // 修改存档数据
 static BOOL modifySaveData(int32_t money, int32_t mine, int32_t power, int32_t mood, int32_t integral) {
-    NSString *dbPath = getSavePath();
-    
-    if (![[NSFileManager defaultManager] fileExistsAtPath:dbPath]) {
-        NSLog(@"[TX] 存档文件不存在: %@", dbPath);
-        return NO;
-    }
-    
-    sqlite3 *db = NULL;
-    if (sqlite3_open([dbPath UTF8String], &db) != SQLITE_OK) {
-        NSLog(@"[TX] 打开数据库失败");
-        return NO;
-    }
-    
-    // 读取当前存档JSON
-    const char *selectSQL = "SELECT value FROM data WHERE key='ssx45sss'";
-    sqlite3_stmt *stmt = NULL;
-    NSString *jsonString = nil;
-    
-    if (sqlite3_prepare_v2(db, selectSQL, -1, &stmt, NULL) == SQLITE_OK) {
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            const char *jsonText = (const char *)sqlite3_column_text(stmt, 0);
-            if (jsonText) {
-                jsonString = [NSString stringWithUTF8String:jsonText];
+    @try {
+        NSString *dbPath = getSavePath();
+        
+        if (![[NSFileManager defaultManager] fileExistsAtPath:dbPath]) {
+            NSLog(@"[TX] 存档文件不存在: %@", dbPath);
+            return NO;
+        }
+        
+        sqlite3 *db = NULL;
+        if (sqlite3_open([dbPath UTF8String], &db) != SQLITE_OK) {
+            NSLog(@"[TX] 打开数据库失败: %@", [NSString stringWithUTF8String:sqlite3_errmsg(db)]);
+            if (db) sqlite3_close(db);
+            return NO;
+        }
+        
+        // 读取当前存档JSON
+        const char *selectSQL = "SELECT value FROM data WHERE key='ssx45sss'";
+        sqlite3_stmt *stmt = NULL;
+        NSString *jsonString = nil;
+        
+        if (sqlite3_prepare_v2(db, selectSQL, -1, &stmt, NULL) == SQLITE_OK) {
+            if (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char *jsonText = (const char *)sqlite3_column_text(stmt, 0);
+                if (jsonText) {
+                    jsonString = [NSString stringWithUTF8String:jsonText];
+                }
             }
+            sqlite3_finalize(stmt);
+        } else {
+            NSLog(@"[TX] SQL准备失败: %@", [NSString stringWithUTF8String:sqlite3_errmsg(db)]);
+            sqlite3_close(db);
+            return NO;
         }
-        sqlite3_finalize(stmt);
-    }
-    
-    if (!jsonString) {
-        NSLog(@"[TX] 未找到存档数据");
-        sqlite3_close(db);
-        return NO;
-    }
-    
-    // 解析JSON
-    NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
-    NSError *error = nil;
-    NSMutableDictionary *saveDict = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
-    
-    if (error || !saveDict) {
-        NSLog(@"[TX] JSON解析失败: %@", error);
-        sqlite3_close(db);
-        return NO;
-    }
-    
-    // 修改数据
-    NSMutableDictionary *info = saveDict[@"info"];
-    if (!info) {
-        NSLog(@"[TX] 未找到info字段");
-        sqlite3_close(db);
-        return NO;
-    }
-    
-    if (money > 0) info[@"money"] = @(money);
-    if (mine > 0) info[@"mine"] = @(mine);
-    if (power > 0) info[@"power"] = @(power);
-    if (mood > 0) info[@"mood"] = @(mood);
-    if (integral > 0) info[@"integral"] = @(integral);
-    
-    // 转回JSON
-    NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:saveDict options:0 error:&error];
-    if (error || !newJsonData) {
-        NSLog(@"[TX] JSON序列化失败: %@", error);
-        sqlite3_close(db);
-        return NO;
-    }
-    
-    NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
-    
-    // 更新数据库
-    const char *updateSQL = "UPDATE data SET value=? WHERE key='ssx45sss'";
-    sqlite3_stmt *updateStmt = NULL;
-    
-    BOOL success = NO;
-    if (sqlite3_prepare_v2(db, updateSQL, -1, &updateStmt, NULL) == SQLITE_OK) {
-        sqlite3_bind_text(updateStmt, 1, [newJsonString UTF8String], -1, SQLITE_TRANSIENT);
-        if (sqlite3_step(updateStmt) == SQLITE_DONE) {
-            success = YES;
-            NSLog(@"[TX] 存档修改成功");
+        
+        if (!jsonString || jsonString.length == 0) {
+            NSLog(@"[TX] 未找到存档数据");
+            sqlite3_close(db);
+            return NO;
         }
-        sqlite3_finalize(updateStmt);
+        
+        // 解析JSON
+        NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+        if (!jsonData) {
+            NSLog(@"[TX] JSON数据转换失败");
+            sqlite3_close(db);
+            return NO;
+        }
+        
+        NSError *error = nil;
+        NSMutableDictionary *saveDict = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
+        
+        if (error || !saveDict || ![saveDict isKindOfClass:[NSDictionary class]]) {
+            NSLog(@"[TX] JSON解析失败: %@", error);
+            sqlite3_close(db);
+            return NO;
+        }
+        
+        // 修改数据
+        NSMutableDictionary *info = saveDict[@"info"];
+        if (!info || ![info isKindOfClass:[NSDictionary class]]) {
+            NSLog(@"[TX] 未找到info字段或格式错误");
+            sqlite3_close(db);
+            return NO;
+        }
+        
+        // 只修改传入的非零值
+        if (money > 0) info[@"money"] = @(money);
+        if (mine > 0) info[@"mine"] = @(mine);
+        if (power > 0) info[@"power"] = @(power);
+        if (mood > 0) info[@"mood"] = @(mood);
+        if (integral > 0) info[@"integral"] = @(integral);
+        
+        // 转回JSON
+        NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:saveDict options:0 error:&error];
+        if (error || !newJsonData) {
+            NSLog(@"[TX] JSON序列化失败: %@", error);
+            sqlite3_close(db);
+            return NO;
+        }
+        
+        NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
+        if (!newJsonString) {
+            NSLog(@"[TX] JSON字符串转换失败");
+            sqlite3_close(db);
+            return NO;
+        }
+        
+        // 更新数据库
+        const char *updateSQL = "UPDATE data SET value=? WHERE key='ssx45sss'";
+        sqlite3_stmt *updateStmt = NULL;
+        
+        BOOL success = NO;
+        if (sqlite3_prepare_v2(db, updateSQL, -1, &updateStmt, NULL) == SQLITE_OK) {
+            sqlite3_bind_text(updateStmt, 1, [newJsonString UTF8String], -1, SQLITE_TRANSIENT);
+            int result = sqlite3_step(updateStmt);
+            if (result == SQLITE_DONE) {
+                success = YES;
+                NSLog(@"[TX] 存档修改成功");
+            } else {
+                NSLog(@"[TX] 更新失败: %@", [NSString stringWithUTF8String:sqlite3_errmsg(db)]);
+            }
+            sqlite3_finalize(updateStmt);
+        } else {
+            NSLog(@"[TX] 更新SQL准备失败: %@", [NSString stringWithUTF8String:sqlite3_errmsg(db)]);
+        }
+        
+        sqlite3_close(db);
+        return success;
+        
+    } @catch (NSException *exception) {
+        NSLog(@"[TX] 异常: %@", exception);
+        return NO;
     }
-    
-    sqlite3_close(db);
-    return success;
 }
 
 #pragma mark - 菜单视图
@@ -224,33 +252,50 @@ static BOOL modifySaveData(int32_t money, int32_t mine, int32_t power, int32_t m
 }
 
 - (void)buttonTapped:(UIButton *)sender {
-    BOOL success = NO;
-    NSString *message = @"";
-    
-    switch (sender.tag) {
-        case 1:
-            success = modifySaveData(999999999, 0, 0, 0, 0);
-            message = success ? @"💰 无限金钱设置成功！\n请重启游戏生效" : @"❌ 修改失败！请确保游戏已启动";
-            break;
-        case 2:
-            success = modifySaveData(0, 999999999, 0, 0, 0);
-            message = success ? @"🏆 无限金条设置成功！\n请重启游戏生效" : @"❌ 修改失败！请确保游戏已启动";
-            break;
-        case 3:
-            success = modifySaveData(0, 0, 999999999, 0, 0);
-            message = success ? @"⚡ 无限体力设置成功！\n请重启游戏生效" : @"❌ 修改失败！请确保游戏已启动";
-            break;
-        case 4:
-            success = modifySaveData(0, 0, 0, 0, 999999999);
-            message = success ? @"🎯 无限积分设置成功！\n请重启游戏生效" : @"❌ 修改失败！请确保游戏已启动";
-            break;
-        case 5:
-            success = modifySaveData(999999999, 999999999, 999999999, 100, 999999999);
-            message = success ? @"🎁 一键满级成功！\n💰 金钱: 999999999\n🏆 金条: 999999999\n⚡ 体力: 999999999\n😊 心情: 100\n🎯 积分: 999999999\n\n请重启游戏生效" : @"❌ 修改失败！请确保游戏已启动";
-            break;
+    // 先检查存档文件是否存在
+    NSString *dbPath = getSavePath();
+    if (![[NSFileManager defaultManager] fileExistsAtPath:dbPath]) {
+        [self showAlert:@"❌ 存档文件不存在！\n\n请先启动游戏并进入主界面"];
+        return;
     }
     
-    [self showAlert:message];
+    // 在后台线程执行，避免阻塞UI
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        BOOL success = NO;
+        NSString *message = @"";
+        
+        @try {
+            switch (sender.tag) {
+                case 1:
+                    success = modifySaveData(999999999, 0, 0, 0, 0);
+                    message = success ? @"💰 无限金钱设置成功！\n请重启游戏生效" : @"❌ 修改失败！\n请查看日志或联系作者";
+                    break;
+                case 2:
+                    success = modifySaveData(0, 999999999, 0, 0, 0);
+                    message = success ? @"🏆 无限金条设置成功！\n请重启游戏生效" : @"❌ 修改失败！\n请查看日志或联系作者";
+                    break;
+                case 3:
+                    success = modifySaveData(0, 0, 999999999, 0, 0);
+                    message = success ? @"⚡ 无限体力设置成功！\n请重启游戏生效" : @"❌ 修改失败！\n请查看日志或联系作者";
+                    break;
+                case 4:
+                    success = modifySaveData(0, 0, 0, 0, 999999999);
+                    message = success ? @"🎯 无限积分设置成功！\n请重启游戏生效" : @"❌ 修改失败！\n请查看日志或联系作者";
+                    break;
+                case 5:
+                    success = modifySaveData(999999999, 999999999, 999999999, 100, 999999999);
+                    message = success ? @"🎁 一键满级成功！\n💰 金钱: 999999999\n🏆 金条: 999999999\n⚡ 体力: 999999999\n😊 心情: 100\n🎯 积分: 999999999\n\n请重启游戏生效" : @"❌ 修改失败！\n请查看日志或联系作者";
+                    break;
+            }
+        } @catch (NSException *exception) {
+            NSLog(@"[TX] 按钮处理异常: %@", exception);
+            message = [NSString stringWithFormat:@"❌ 发生异常: %@", exception.reason];
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self showAlert:message];
+        });
+    });
 }
 
 - (void)showAlert:(NSString *)message {
@@ -355,8 +400,20 @@ static void setupFloatingButton(void) {
 __attribute__((constructor))
 static void TXSaveCheatInit(void) {
     @autoreleasepool {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            setupFloatingButton();
-        });
+        @try {
+            NSLog(@"[TX] 天选打工人存档修改器初始化...");
+            
+            // 延迟2秒后显示悬浮按钮，确保游戏已完全启动
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                @try {
+                    setupFloatingButton();
+                    NSLog(@"[TX] 悬浮按钮创建成功");
+                } @catch (NSException *exception) {
+                    NSLog(@"[TX] 悬浮按钮创建失败: %@", exception);
+                }
+            });
+        } @catch (NSException *exception) {
+            NSLog(@"[TX] 初始化失败: %@", exception);
+        }
     }
 }
