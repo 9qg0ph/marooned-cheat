@@ -22,7 +22,7 @@ jobs:
       run: |
         cd 天选打工人Dylib
         
-        # 编译存档恢复版（推荐）
+        # 编译智能修改版（推荐 - 保留游戏进度）
         clang -arch arm64 \
           -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
           -miphoneos-version-min=14.0 \
@@ -33,17 +33,17 @@ jobs:
           -lsqlite3 \
           -fobjc-arc \
           -Wno-deprecated-declarations \
-          -o TianXuanSaveRestore.dylib \
-          TianXuanSaveRestore.m
+          -o TianXuanSmartModifier.dylib \
+          TianXuanSmartModifier.m
         
         # 签名
-        ldid -S TianXuanSaveRestore.dylib || codesign -f -s - TianXuanSaveRestore.dylib
+        ldid -S TianXuanSmartModifier.dylib || codesign -f -s - TianXuanSmartModifier.dylib
         
-        echo "✅ 存档恢复版编译完成!"
+        echo "✅ 智能修改版编译完成!"
         ls -la *.dylib
     
     - name: Upload dylib
       uses: actions/upload-artifact@v4
       with:
-        name: TianXuanSaveRestore-dylib
-        path: 天选打工人Dylib/TianXuanSaveRestore.dylib
+        name: TianXuanSmartModifier-dylib
+        path: 天选打工人Dylib/TianXuanSmartModifier.dylib
