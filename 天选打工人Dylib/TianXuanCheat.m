@@ -72,6 +72,34 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     
     writeLog(@"✅ 数据库打开成功");
     
+    // 先查看数据库中有哪些表
+    const char *tablesSQL = "SELECT name FROM sqlite_master WHERE type='table'";
+    sqlite3_stmt *tablesStmt = NULL;
+    if (sqlite3_prepare_v2(db, tablesSQL, -1, &tablesStmt, NULL) == SQLITE_OK) {
+        writeLog(@"数据库中的表：");
+        while (sqlite3_step(tablesStmt) == SQLITE_ROW) {
+            const char *tableName = (const char *)sqlite3_column_text(tablesStmt, 0);
+            if (tableName) {
+                writeLog([NSString stringWithFormat:@"  - %s", tableName]);
+            }
+        }
+        sqlite3_finalize(tablesStmt);
+    }
+    
+    // 查看data表中有哪些key
+    const char *keysSQL = "SELECT key FROM data LIMIT 10";
+    sqlite3_stmt *keysStmt = NULL;
+    if (sqlite3_prepare_v2(db, keysSQL, -1, &keysStmt, NULL) == SQLITE_OK) {
+        writeLog(@"data表中的key（前10个）：");
+        while (sqlite3_step(keysStmt) == SQLITE_ROW) {
+            const char *keyName = (const char *)sqlite3_column_text(keysStmt, 0);
+            if (keyName) {
+                writeLog([NSString stringWithFormat:@"  - %s", keyName]);
+            }
+        }
+        sqlite3_finalize(keysStmt);
+    }
+    
     // 读取存档
     const char *selectSQL = "SELECT value FROM data WHERE key='ssx45sss'";
     sqlite3_stmt *stmt = NULL;
