@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天选打工人 - 存档导入版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            color: #333;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+            box-sizing: border-box;
+        }
+        body {
+            background: transparent;
+            width: 100%;
+            height: 100%;
+            line-height: 1.5;
+        }
+        *:not(input):not(textarea) {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .popup_container {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        #H5AlertView {
+            width: 320px;
+            zoom: 0.95;
+        }
+        #content-view {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(255, 152, 0, 0.15);
+            animation: popIn 0.3s ease-out;
+        }
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.3); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        #title-text {
+            font-size: 22px;
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-align: center;
+            padding: 10px 0;
+        }
+        .tip-text {
+            color: #FF9800;
+            font-size: 11px;
+            margin: 10px 0;
+            text-align: center;
+            line-height: 1.6;
+        }
+        .button-style {
+            width: 100%;
+            height: 38px;
+            color: #fff;
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 12px;
+            margin: 8px 0;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.2);
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .button-style:active {
+            transform: scale(0.98);
+        }
+        .button-secondary {
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.2);
+        }
+        .footer {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+        }
+        .info-box {
+            background: rgba(255, 152, 0, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="popup_container">
+        <div id="H5AlertView">
+            <div id="content-view">
+                <div id="title-text">💾 存档导入版</div>
+                <div class="tip-text">
+                    📝 使用说明：<br>
+                    1. 用h5gg修改好数据后<br>
+                    2. 点击"导出存档"保存到相册<br>
+                    3. 下次直接点击"导入存档"即可
+                </div>
+                
+                <a href="javascript:void(0);" onclick="exportSaveFile()" class="button-style">📤 导出存档文件</a>
+                <a href="javascript:void(0);" onclick="importSaveFile()" class="button-style button-secondary">📥 导入存档文件</a>
+                
+                <div class="info-box">
+                    💡 提示：存档文件会保存为 jsb.sqlite<br>
+                    导出后可以分享给朋友使用
+                </div>
+                
+                <div class="footer">© 2025 𝐈𝐎𝐒𝐃𝐊 科技虎</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 满级存档数据（你用h5gg修改好后，把这里的数据替换成导出的JSON）
+        var FULL_SAVE_DATA = {
+            "info": {
+                "money": 2099998000,
+                "mine": 2100000000,
+                "power": 2100000000,
+                "mood": 100,
+                "integral": 2100000000
+            }
+        };
+        
+        // 导出当前存档数据
+        function exportSaveFile() {
+            try {
+                // 搜索存档数据的特征字符串
+                h5gg.clearResults();
+                h5gg.searchString('"info":{"money":', 'UTF-8', '0x100000000', '0x200000000');
+                
+                var count = h5gg.getResultsCount();
+                if (count === 0) {
+                    alert("❌ 未找到存档数据！\n\n请确保游戏已启动");
+                    return;
+                }
+                
+                // 读取存档JSON
+                var results = h5gg.getResults(count);
+                var addr = results[0].address;
+                
+                // 读取完整JSON（假设最大10KB）
+                var jsonStr = h5gg.readString(addr - 50, 10240, 'UTF-8');
+                
+                // 提取JSON部分
+                var start = jsonStr.indexOf('{"info"');
+                var end = jsonStr.lastIndexOf('}') + 1;
+                var saveJson = jsonStr.substring(start, end);
+                
+                // 显示并复制
+                prompt("✅ 存档数据已导出！\n复制下面的内容：", saveJson);
+                
+            } catch (e) {
+                alert("❌ 导出失败: " + e.message);
+            }
+        }
+        
+        // 导入存档数据（直接覆盖内存）
+        function importSaveFile() {
+            try {
+                // 搜索当前存档位置
+                h5gg.clearResults();
+                h5gg.searchString('"info":{"money":', 'UTF-8', '0x100000000', '0x200000000');
+                
+                var count = h5gg.getResultsCount();
+                if (count === 0) {
+                    alert("❌ 未找到存档位置！\n\n请先启动游戏并进入主界面");
+                    return;
+                }
+                
+                var results = h5gg.getResults(count);
+                var addr = results[0].address;
+                
+                // 构造新的存档JSON（使用预设的满级数据）
+                var newSaveJson = JSON.stringify(FULL_SAVE_DATA);
+                
+                // 写入内存
+                h5gg.writeString(addr, newSaveJson, 'UTF-8');
+                
+                h5gg.clearResults();
+                
+                alert("✅ 存档导入成功！\n\n💰 金钱: " + FULL_SAVE_DATA.info.money + 
+                      "\n🏆 金条: " + FULL_SAVE_DATA.info.mine +
+                      "\n⚡ 体力: " + FULL_SAVE_DATA.info.power +
+                      "\n😊 心情: " + FULL_SAVE_DATA.info.mood +
+                      "\n🎯 积分: " + FULL_SAVE_DATA.info.integral);
+                
+            } catch (e) {
+                alert("❌ 导入失败: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

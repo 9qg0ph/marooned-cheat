@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>天选打工人</title>
+    <title>天选打工人 - 一键满级</title>
     <style>
         * {
             margin: 0;
@@ -60,6 +60,7 @@
             font-size: 22px;
             background: linear-gradient(135deg, #FF9800, #FFC107);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             font-weight: 700;
             letter-spacing: 2px;
@@ -105,10 +106,10 @@
     <div class="popup_container">
         <div id="H5AlertView">
             <div id="content-view">
-                <div id="title-text">💼 天选打工人</div>
-                <div class="tip-text">⚠️ 开局时使用（金钱5000/爱心100/金条0）<br>过程会卡属正常，等待提示</div>
+                <div id="title-text">🚀 一键满级</div>
+                <div class="tip-text">⚠️ 进入游戏主界面后使用<br>直接修改存档数据，永久生效</div>
                 
-                <a href="javascript:void(0);" onclick="modifyAll()" class="button-style">🎁 一键全开（金钱+金条）</a>
+                <a href="javascript:void(0);" onclick="modifyAll()" class="button-style">🎁 一键满级</a>
                 
                 <div class="footer">© 2025 𝐈𝐎𝐒𝐃𝐊 科技虎</div>
             </div>
@@ -116,46 +117,60 @@
     </div>
 
     <script>
-        // 一键全开 - 通过开局固定值精确定位
+        // 一键满级 - 直接修改存档JSON数据
         function modifyAll() {
-            h5gg.clearResults();
-            
-            // 先搜索爱心100
-            h5gg.searchNumber('100', 'I32', '0x100000000', '0x200000000');
-            // 在附近搜索金钱5000（开局默认值）
-            h5gg.searchNearby('5000', 'I32', '0x20');
-            
-            var count = h5gg.getResultsCount();
-            if (count == 0) {
-                alert("❌ 未找到！\n请确保：\n1. 刚开局（金钱5000）\n2. 爱心满100\n3. 金条为0");
-                return;
-            }
-            
-            // 获取金钱地址
-            var r = h5gg.getResults(count);
-            var modified = 0;
-            
-            for (var i = 0; i < r.length; i++) {
-                var moneyAddr = r[i].address;
-                if (moneyAddr) {
-                    var addr = Number(moneyAddr);
-                    
-                    // 金条 = 金钱地址 + 0x4（金钱后面4字节）
-                    var goldAddr = '0x' + (addr + 0x4).toString(16);
-                    
-                    // 修改金钱和金条
-                    h5gg.setValue(moneyAddr, 999999999, 'I32');
-                    h5gg.setValue(goldAddr, 999999, 'I32');
-                    modified++;
+            try {
+                h5gg.clearResults();
+                
+                // 搜索存档特征：'"info":{"money":'
+                h5gg.searchString('"info":{"money":', 'UTF-8', '0x100000000', '0x200000000');
+                
+                var count = h5gg.getResultsCount();
+                if (count === 0) {
+                    alert("❌ 未找到存档数据！\n\n请确保：\n1. 已进入游戏主界面\n2. 游戏已加载完成");
+                    return;
                 }
-            }
-            
-            h5gg.clearResults();
-            
-            if (modified > 0) {
-                alert("🎁 一键全开成功！\n💰 金钱: 999999999\n🏆 金条: 999999");
-            } else {
-                alert("❌ 修改失败！请重试");
+                
+                var results = h5gg.getResults(count);
+                var baseAddr = results[0].address;
+                
+                // 计算各个字段的偏移地址
+                // JSON格式: {"info":{"money":5000,"mine":0,"power":2100000000,"mood":100,"integral":0}
+                var moneyOffset = 17;  // "money": 后面
+                var mineOffset = moneyOffset + 20;  // "mine": 后面
+                var powerOffset = mineOffset + 20;  // "power": 后面
+                var integralOffset = powerOffset + 40;  // "integral": 后面
+                
+                // 读取当前JSON字符串（读取500字节）
+                var jsonStr = h5gg.readString(baseAddr, 500, 'UTF-8');
+                
+                // 解析JSON
+                var startIdx = jsonStr.indexOf('{"info"');
+                var infoEnd = jsonStr.indexOf('},"cards"');
+                var infoJson = jsonStr.substring(startIdx, infoEnd + 1);
+                
+                // 修改数据
+                var newInfo = {
+                    "info": {
+                        "money": 999999999,
+                        "mine": 999999999,
+                        "power": 999999999,
+                        "mood": 100,
+                        "integral": 999999999
+                    }
+                };
+                
+                var newInfoStr = JSON.stringify(newInfo).slice(0, -1);  // 去掉最后的 }
+                
+                // 写入新数据
+                h5gg.writeString(baseAddr, newInfoStr, 'UTF-8');
+                
+                h5gg.clearResults();
+                
+                alert("🎉 一键满级成功！\n\n💰 金钱: 999999999\n🏆 金条: 999999999\n⚡ 体力: 999999999\n😊 心情: 100\n🎯 积分: 999999999\n\n存档已永久修改！");
+                
+            } catch (e) {
+                alert("❌ 修改失败: " + e.message + "\n\n请重试或联系作者");
             }
         }
     </script>

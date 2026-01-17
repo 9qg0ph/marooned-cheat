@@ -1,0 +1,15 @@
+INFO  [HMDBUCrashDetectMach.c:228] mach detector launch complete
+INFO  [HMDBUCrashDetectCPP.mm:44] cpp detector launch complete
+INFO  [HMDBUCrashDetectFatalSignal.c:70] signal detector launch complete
+INFO INFO  [HMDBUCrashKit.m:134] HMDBUCrashKit setup finished
+ [HMDBUCrashException.c:50] truncate success! 256KB
+INFO  [HMDBUCrashKit.m:89] binary images setup finish
+INFO  [HMDBUCrashDetect.c:89] check crash handler in 100ms
+INFO  [HMDBUCrashDetectMach.c:366] mach exception port is valid
+INFO  [HMDBUCrashDetectCPP.mm:250] terminate handler is valid
+ERROR [HMDBUCrashDetectFatalSignal.c:172] signal handler is invalid
+INFO  [HMDBUCrashDirectory.m:204] launch state file removed success!
+INFO  [HMDBUCrashDetect.c:94] check crash handler in 3000ms
+INFO  [HMDBUCrashDetectMach.c:366] mach exception port is valid
+INFO  [HMDBUCrashDetectCPP.mm:250] terminate handler is valid
+ERROR [HMDBUCrashDetectFatalSignal.c:172] signal handler is invalid

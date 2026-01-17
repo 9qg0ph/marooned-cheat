@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天选打工人 - 存档覆盖版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            color: #333;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+            box-sizing: border-box;
+        }
+        body {
+            background: transparent;
+            width: 100%;
+            height: 100%;
+            line-height: 1.5;
+        }
+        *:not(input):not(textarea) {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .popup_container {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        #H5AlertView {
+            width: 320px;
+            zoom: 0.95;
+        }
+        #content-view {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(255, 152, 0, 0.15);
+            animation: popIn 0.3s ease-out;
+        }
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.3); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        #title-text {
+            font-size: 22px;
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-align: center;
+            padding: 10px 0;
+        }
+        .tip-text {
+            color: #FF9800;
+            font-size: 12px;
+            margin: 10px 0;
+            text-align: center;
+            line-height: 1.6;
+        }
+        .button-style {
+            width: 100%;
+            height: 38px;
+            color: #fff;
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 12px;
+            margin: 8px 0;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.2);
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .button-style:active {
+            transform: scale(0.98);
+        }
+        .button-secondary {
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.2);
+        }
+        textarea {
+            width: 100%;
+            height: 80px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px solid #FF9800;
+            border-radius: 8px;
+            font-size: 12px;
+            resize: none;
+            -webkit-user-select: text;
+            user-select: text;
+        }
+        .footer {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="popup_container">
+        <div id="H5AlertView">
+            <div id="content-view">
+                <div id="title-text">💾 存档覆盖版</div>
+                <div class="tip-text">
+                    📝 使用说明：<br>
+                    1. 先用h5gg修改好数据<br>
+                    2. 点击"导出存档"复制数据<br>
+                    3. 粘贴到下方输入框<br>
+                    4. 点击"覆盖存档"即可
+                </div>
+                
+                <a href="javascript:void(0);" onclick="exportSave()" class="button-style">📤 导出当前存档</a>
+                
+                <textarea id="saveData" placeholder="在这里粘贴导出的存档数据..."></textarea>
+                
+                <a href="javascript:void(0);" onclick="importSave()" class="button-style button-secondary">📥 覆盖存档</a>
+                
+                <div class="footer">© 2025 𝐈𝐎𝐒𝐃𝐊 科技虎</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 存档数据结构（需要根据实际游戏确定）
+        // 这里假设游戏使用 localStorage 或特定内存地址保存数据
+        
+        // 导出存档
+        function exportSave() {
+            try {
+                // 方法1: 如果游戏使用 localStorage
+                var saveData = {};
+                for (var i = 0; i < localStorage.length; i++) {
+                    var key = localStorage.key(i);
+                    saveData[key] = localStorage.getItem(key);
+                }
+                
+                if (Object.keys(saveData).length > 0) {
+                    var jsonStr = JSON.stringify(saveData, null, 2);
+                    document.getElementById('saveData').value = jsonStr;
+                    
+                    // 自动复制到剪贴板
+                    document.getElementById('saveData').select();
+                    document.execCommand('copy');
+                    
+                    alert("✅ 存档已导出并复制到剪贴板！\n\n数据条目: " + Object.keys(saveData).length);
+                } else {
+                    alert("⚠️ 未找到 localStorage 数据\n\n请确认游戏是否使用其他存储方式");
+                }
+            } catch (e) {
+                alert("❌ 导出失败: " + e.message);
+            }
+        }
+        
+        // 覆盖存档
+        function importSave() {
+            var saveDataStr = document.getElementById('saveData').value.trim();
+            
+            if (!saveDataStr) {
+                alert("❌ 请先粘贴存档数据！");
+                return;
+            }
+            
+            try {
+                var saveData = JSON.parse(saveDataStr);
+                var count = 0;
+                
+                // 清空现有存档
+                localStorage.clear();
+                
+                // 写入新存档
+                for (var key in saveData) {
+                    localStorage.setItem(key, saveData[key]);
+                    count++;
+                }
+                
+                alert("✅ 存档覆盖成功！\n\n已写入 " + count + " 条数据\n请重启游戏生效");
+            } catch (e) {
+                alert("❌ 覆盖失败: " + e.message + "\n\n请检查存档数据格式是否正确");
+            }
+        }
+    </script>
+</body>
+</html>
