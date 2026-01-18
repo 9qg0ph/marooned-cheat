@@ -12,6 +12,7 @@ static WDZMenuView *g_menuView = nil;
 
 static void showMenu(void);
 static void writeLog(NSString *message);
+static UIWindow* getKeyWindow(void);
 
 #pragma mark - 版权保护
 
