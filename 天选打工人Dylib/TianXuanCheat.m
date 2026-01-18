@@ -391,7 +391,7 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     
     writeLog(@"========== 开始修改 ==========");
     
-    switch (sender.tag) {
+    switch (tag) {
         case 1:
             writeLog(@"功能：无限金钱");
             success = modifyGameData(999999999, 0, 0, 0, 0);
