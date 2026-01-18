@@ -82,7 +82,7 @@ static void showDisclaimerAlert(void) {
         showMenu();
     }]];
     
-    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+    UIViewController *rootVC = getKeyWindow().rootViewController;
     while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
     [rootVC presentViewController:alert animated:YES completion:nil];
 }
@@ -345,7 +345,7 @@ static void enableAllFeatures(void) {
         [self performModification:sender.tag];
     }]];
     
-    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+    UIViewController *rootVC = getKeyWindow().rootViewController;
     while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
     [rootVC presentViewController:confirmAlert animated:YES completion:nil];
 }
@@ -394,7 +394,7 @@ static void enableAllFeatures(void) {
 - (void)showAlert:(NSString *)message {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"提示" message:message preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
-    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+    UIViewController *rootVC = getKeyWindow().rootViewController;
     while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
     [rootVC presentViewController:alert animated:YES completion:nil];
 }

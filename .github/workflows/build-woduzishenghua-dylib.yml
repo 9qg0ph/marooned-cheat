@@ -36,9 +36,6 @@ jobs:
           -o WoduziCheat.dylib \
           WoduziCheat.m
         
-        # Sign the dylib
-        ldid -S WoduziCheat.dylib
-        
         # Verify the build
         file WoduziCheat.dylib
         ls -la WoduziCheat.dylib
