@@ -13,6 +13,7 @@ static WDZMenuView *g_menuView = nil;
 static void showMenu(void);
 static void writeLog(NSString *message);
 static UIWindow* getKeyWindow(void);
+static BOOL searchAndModifyES3Data(NSMutableDictionary *es3Dict, NSUserDefaults *defaults);
 
 #pragma mark - 版权保护
 
