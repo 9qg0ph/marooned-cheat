@@ -96,17 +96,34 @@ static void showSimpleMenu(void) {
     g_menuView = [[UIView alloc] initWithFrame:window.bounds];
     g_menuView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
     
+    // 添加点击背景关闭功能
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:g_menuView action:@selector(closeMenuByTap)];
+    [g_menuView addGestureRecognizer:tap];
+    
+    // 计算居中位置
+    CGFloat screenWidth = window.bounds.size.width;
+    CGFloat screenHeight = window.bounds.size.height;
+    CGFloat menuWidth = 280;
+    CGFloat menuHeight = 320;
+    CGFloat menuX = (screenWidth - menuWidth) / 2;
+    CGFloat menuY = (screenHeight - menuHeight) / 2;
+    
     // 创建菜单容器
-    UIView *menu = [[UIView alloc] initWithFrame:CGRectMake(50, 200, 280, 300)];
+    UIView *menu = [[UIView alloc] initWithFrame:CGRectMake(menuX, menuY, menuWidth, menuHeight)];
     menu.backgroundColor = [UIColor whiteColor];
     menu.layer.cornerRadius = 15;
+    menu.layer.shadowColor = [UIColor blackColor].CGColor;
+    menu.layer.shadowOffset = CGSizeMake(0, 2);
+    menu.layer.shadowOpacity = 0.3;
+    menu.layer.shadowRadius = 10;
     [g_menuView addSubview:menu];
     
     // 标题
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 20, 280, 30)];
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 20, menuWidth, 30)];
     title.text = @"🏠 我独自生活修改器";
     title.textAlignment = NSTextAlignmentCenter;
     title.font = [UIFont boldSystemFontOfSize:18];
+    title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.86 alpha:1];
     [menu addSubview:title];
     
     // 按钮1：一次性修改
@@ -116,6 +133,7 @@ static void showSimpleMenu(void) {
     btn1.backgroundColor = [UIColor systemBlueColor];
     [btn1 setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     btn1.layer.cornerRadius = 8;
+    btn1.titleLabel.font = [UIFont systemFontOfSize:16];
     [btn1 addTarget:btn1 action:@selector(onceModify) forControlEvents:UIControlEventTouchUpInside];
     [menu addSubview:btn1];
     
@@ -126,6 +144,7 @@ static void showSimpleMenu(void) {
     btn2.backgroundColor = [UIColor systemGreenColor];
     [btn2 setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     btn2.layer.cornerRadius = 8;
+    btn2.titleLabel.font = [UIFont systemFontOfSize:16];
     [btn2 addTarget:btn2 action:@selector(startModify) forControlEvents:UIControlEventTouchUpInside];
     [menu addSubview:btn2];
     
@@ -136,18 +155,28 @@ static void showSimpleMenu(void) {
     btn3.backgroundColor = [UIColor systemOrangeColor];
     [btn3 setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     btn3.layer.cornerRadius = 8;
+    btn3.titleLabel.font = [UIFont systemFontOfSize:16];
     [btn3 addTarget:btn3 action:@selector(stopModify) forControlEvents:UIControlEventTouchUpInside];
     [menu addSubview:btn3];
     
     // 关闭按钮
     UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
     closeBtn.frame = CGRectMake(40, 220, 200, 40);
-    [closeBtn setTitle:@"❌ 关闭" forState:UIControlStateNormal];
+    [closeBtn setTitle:@"❌ 关闭菜单" forState:UIControlStateNormal];
     closeBtn.backgroundColor = [UIColor systemRedColor];
     [closeBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     closeBtn.layer.cornerRadius = 8;
+    closeBtn.titleLabel.font = [UIFont systemFontOfSize:16];
     [closeBtn addTarget:closeBtn action:@selector(closeMenu) forControlEvents:UIControlEventTouchUpInside];
     [menu addSubview:closeBtn];
+    
+    // 提示文字
+    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, 270, menuWidth - 40, 30)];
+    tip.text = @"点击背景或关闭按钮可关闭菜单";
+    tip.textAlignment = NSTextAlignmentCenter;
+    tip.font = [UIFont systemFontOfSize:12];
+    tip.textColor = [UIColor grayColor];
+    [menu addSubview:tip];
     
     [window addSubview:g_menuView];
 }
@@ -158,12 +187,13 @@ static void showSimpleMenu(void) {
 - (void)startModify;
 - (void)stopModify;
 - (void)closeMenu;
+- (void)closeMenuByTap;
 @end
 
 @implementation NSObject (WDZActions)
 - (void)onceModify {
     modifyPlayerData();
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"完成" message:@"数据修改完成！" preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"✅ 完成" message:@"数据修改完成！现金、体力、健康、心情已设置为最大值。" preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
     UIViewController *vc = getMainWindow().rootViewController;
     while (vc.presentedViewController) vc = vc.presentedViewController;
@@ -172,7 +202,7 @@ static void showSimpleMenu(void) {
 
 - (void)startModify {
     startContinuousModify();
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"启动" message:@"持续修改已启动！每秒自动修改一次数据。" preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"🔄 启动成功" message:@"持续修改已启动！每秒自动修改一次数据，确保数值不被重置。" preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
     UIViewController *vc = getMainWindow().rootViewController;
     while (vc.presentedViewController) vc = vc.presentedViewController;
@@ -181,7 +211,7 @@ static void showSimpleMenu(void) {
 
 - (void)stopModify {
     stopContinuousModify();
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"停止" message:@"持续修改已停止。" preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"⏹️ 已停止" message:@"持续修改已停止。" preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
     UIViewController *vc = getMainWindow().rootViewController;
     while (vc.presentedViewController) vc = vc.presentedViewController;
@@ -189,6 +219,13 @@ static void showSimpleMenu(void) {
 }
 
 - (void)closeMenu {
+    if (g_menuView) {
+        [g_menuView removeFromSuperview];
+        g_menuView = nil;
+    }
+}
+
+- (void)closeMenuByTap {
     if (g_menuView) {
         [g_menuView removeFromSuperview];
         g_menuView = nil;
