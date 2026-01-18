@@ -118,11 +118,54 @@ static void writeLog(NSString *message) {
 
 #pragma mark - 游戏数据修改
 
-// 修改游戏存档数据 - 针对特殊的JSON存档结构
+// 修改游戏存档数据 - 针对特殊的JSON存档结构和ES3存档
 static void modifyGameSaveData(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // 查找包含游戏数据的键
+    // 首先尝试修改ES3存档，因为玩家属性可能在那里
+    writeLog(@"========== 尝试修改ES3存档 ==========");
+    
+    NSString *es3Data = [defaults objectForKey:@"data0.es3"];
+    if (es3Data) {
+        writeLog(@"✅ 找到ES3存档数据");
+        
+        // ES3数据是Base64编码的JSON
+        NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:es3Data options:NSDataBase64DecodingIgnoreUnknownCharacters];
+        if (decodedData) {
+            NSString *jsonString = [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
+            if (jsonString) {
+                NSError *error = nil;
+                NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+                id jsonObject = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
+                
+                if (!error && [jsonObject isKindOfClass:[NSDictionary class]]) {
+                    NSMutableDictionary *es3Dict = [jsonObject mutableCopy];
+                    writeLog(@"✅ ES3 JSON解析成功");
+                    
+                    // 在ES3存档中搜索玩家属性
+                    BOOL es3Modified = searchAndModifyES3Data(es3Dict, defaults);
+                    
+                    if (es3Modified) {
+                        // 重新保存ES3存档
+                        NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:es3Dict options:0 error:&error];
+                        if (!error && newJsonData) {
+                            NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
+                            NSData *encodedData = [newJsonString dataUsingEncoding:NSUTF8StringEncoding];
+                            NSString *newES3Data = [encodedData base64EncodedStringWithOptions:0];
+                            
+                            [defaults setObject:newES3Data forKey:@"data0.es3"];
+                            [defaults synchronize];
+                            writeLog(@"🎉 ES3存档修改完成！");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 然后尝试修改JSON存档
+    writeLog(@"========== 尝试修改JSON存档 ==========");
+    
     NSString *gameDataKey = @"0";
     id gameData = [defaults objectForKey:gameDataKey];
     
@@ -256,6 +299,80 @@ static void modifyGameSaveData(void) {
     } else {
         writeLog(@"❌ 存档数据格式不支持");
     }
+}
+
+// 搜索并修改ES3数据中的玩家属性
+static BOOL searchAndModifyES3Data(NSMutableDictionary *es3Dict, NSUserDefaults *defaults) {
+    BOOL modified = NO;
+    
+    // 遍历ES3存档中的所有对象
+    for (NSString *key in es3Dict) {
+        id value = es3Dict[key];
+        if ([value isKindOfClass:[NSDictionary class]]) {
+            NSMutableDictionary *objDict = [value mutableCopy];
+            
+            // 检查是否有value数组（GameObject数组）
+            if (objDict[@"value"] && [objDict[@"value"] isKindOfClass:[NSArray class]]) {
+                NSMutableArray *valueArray = [objDict[@"value"] mutableCopy];
+                
+                for (int i = 0; i < valueArray.count; i++) {
+                    id item = valueArray[i];
+                    if ([item isKindOfClass:[NSDictionary class]]) {
+                        NSMutableDictionary *itemDict = [item mutableCopy];
+                        
+                        // 检查components数组
+                        if (itemDict[@"components"] && [itemDict[@"components"] isKindOfClass:[NSArray class]]) {
+                            NSMutableArray *components = [itemDict[@"components"] mutableCopy];
+                            
+                            for (int j = 0; j < components.count; j++) {
+                                id component = components[j];
+                                if ([component isKindOfClass:[NSDictionary class]]) {
+                                    NSMutableDictionary *compDict = [component mutableCopy];
+                                    
+                                    // 搜索玩家属性字段
+                                    for (NSString *compKey in [compDict allKeys]) {
+                                        if ([compKey containsString:@"现金"] || [compKey containsString:@"金钱"] || 
+                                            [compKey containsString:@"cash"] || [compKey containsString:@"money"]) {
+                                            compDict[compKey] = @21000000000;
+                                            modified = YES;
+                                            writeLog([NSString stringWithFormat:@"✅ ES3修改现金字段 %@ = 21000000000", compKey]);
+                                        } else if ([compKey containsString:@"体力"] || [compKey containsString:@"energy"] || 
+                                                  [compKey containsString:@"stamina"]) {
+                                            compDict[compKey] = @21000000000;
+                                            modified = YES;
+                                            writeLog([NSString stringWithFormat:@"✅ ES3修改体力字段 %@ = 21000000000", compKey]);
+                                        } else if ([compKey containsString:@"健康"] || [compKey containsString:@"health"] || 
+                                                  [compKey containsString:@"hp"]) {
+                                            compDict[compKey] = @1000000;
+                                            modified = YES;
+                                            writeLog([NSString stringWithFormat:@"✅ ES3修改健康字段 %@ = 1000000", compKey]);
+                                        } else if ([compKey containsString:@"心情"] || [compKey containsString:@"mood"] || 
+                                                  [compKey containsString:@"happiness"]) {
+                                            compDict[compKey] = @1000000;
+                                            modified = YES;
+                                            writeLog([NSString stringWithFormat:@"✅ ES3修改心情字段 %@ = 1000000", compKey]);
+                                        }
+                                    }
+                                    
+                                    components[j] = compDict;
+                                }
+                            }
+                            
+                            itemDict[@"components"] = components;
+                        }
+                        
+                        valueArray[i] = itemDict;
+                    }
+                }
+                
+                objDict[@"value"] = valueArray;
+            }
+            
+            es3Dict[key] = objDict;
+        }
+    }
+    
+    return modified;
 }
 
 // 无限现金功能
