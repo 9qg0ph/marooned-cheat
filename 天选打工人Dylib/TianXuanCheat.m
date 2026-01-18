@@ -13,22 +13,14 @@ static TXMenuView *g_menuView = nil;
 
 // 解密版权字符串（防止二进制修改）
 static NSString* getCopyrightText(void) {
-    // Base64编码: "© 2026  𝐈𝐎𝐒𝐃𝐊 科技虎"
-    const char *encoded = "wqkgMjAyNiAg8JCIiPCQjojwnIyD8JCMiiDnp5bmioDomY4=";
-    NSData *data = [[NSData alloc] initWithBase64EncodedString:[NSString stringWithUTF8String:encoded] options:0];
-    NSString *decoded = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    
-    // 动态拼接（增加混淆）
+    // 动态拼接（防止Base64编码问题）
     NSString *part1 = @"©";
     NSString *part2 = @" 2026";
-    NSString *part3 = @"  𝐈𝐎𝐒𝐃𝐊";
-    NSString *part4 = @" 科技虎";
+    NSString *part3 = @"  ";
+    NSString *part4 = @"𝐈𝐎𝐒𝐃𝐊";
+    NSString *part5 = @" 科技虎";
     
-    // 验证解码是否成功，失败则使用拼接
-    if (decoded && decoded.length > 0) {
-        return decoded;
-    }
-    return [NSString stringWithFormat:@"%@%@%@%@", part1, part2, part3, part4];
+    return [NSString stringWithFormat:@"%@%@%@%@%@", part1, part2, part3, part4, part5];
 }
 
 #pragma mark - 存档修改
@@ -323,7 +315,8 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     disclaimer.backgroundColor = [UIColor colorWithWhite:0.97 alpha:1];
     disclaimer.layer.cornerRadius = 8;
     disclaimer.editable = NO;
-    disclaimer.scrollEnabled = NO;
+    disclaimer.scrollEnabled = YES;  // 启用滚动
+    disclaimer.showsVerticalScrollIndicator = YES;  // 显示滚动条
     [self.contentView addSubview:disclaimer];
     y += 70;
     
