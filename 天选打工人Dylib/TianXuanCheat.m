@@ -515,9 +515,30 @@ static void handlePan(UIPanGestureRecognizer *pan) {
     [pan setTranslation:CGPointZero inView:keyWindow];
 }
 
+// 解密图片URL（防止二进制修改）
+static NSString* getIconURL(void) {
+    // Base64编码: "https://iosdk.cn/tu/2023/04/17/p9CjtUg1.png"
+    const char *encoded = "aHR0cHM6Ly9pb3Nkay5jbi90dS8yMDIzLzA0LzE3L3A5Q2p0VWcxLnBuZw==";
+    NSData *data = [[NSData alloc] initWithBase64EncodedString:[NSString stringWithUTF8String:encoded] options:0];
+    NSString *decoded = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    
+    // 动态拼接备份（增加混淆）
+    NSString *protocol = @"https://";
+    NSString *domain = @"iosdk.cn";
+    NSString *path1 = @"/tu/2023";
+    NSString *path2 = @"/04/17/";
+    NSString *filename = @"p9CjtUg1.png";
+    
+    // 验证解码是否成功，失败则使用拼接
+    if (decoded && decoded.length > 0) {
+        return decoded;
+    }
+    return [NSString stringWithFormat:@"%@%@%@%@%@", protocol, domain, path1, path2, filename];
+}
+
 static void loadIconImage(void) {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSURL *url = [NSURL URLWithString:@"https://iosdk.cn/tu/2023/04/17/p9CjtUg1.png"];
+        NSURL *url = [NSURL URLWithString:getIconURL()];
         NSData *data = [NSData dataWithContentsOfURL:url];
         UIImage *image = [UIImage imageWithData:data];
         
