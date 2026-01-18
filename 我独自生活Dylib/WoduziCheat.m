@@ -118,9 +118,29 @@ static void writeLog(NSString *message) {
 
 #pragma mark - 游戏数据修改
 
+// 调试：列出所有NSUserDefaults中的键值对
+static void debugListAllKeys(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSDictionary *allKeys = [defaults dictionaryRepresentation];
+    
+    writeLog(@"========== 调试：所有存档键值对 ==========");
+    for (NSString *key in allKeys) {
+        id value = allKeys[key];
+        NSString *valueStr = [NSString stringWithFormat:@"%@", value];
+        if (valueStr.length > 100) {
+            valueStr = [[valueStr substringToIndex:100] stringByAppendingString:@"..."];
+        }
+        writeLog([NSString stringWithFormat:@"Key: %@ = %@", key, valueStr]);
+    }
+    writeLog(@"========== 调试结束 ==========");
+}
+
 // 无限金币功能
 static void enableInfiniteMoney(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    
+    // 先调试查看所有键
+    debugListAllKeys();
     
     // 常见的金币字段名
     [defaults setInteger:999999999 forKey:@"money"];
@@ -134,6 +154,14 @@ static void enableInfiniteMoney(void) {
     [defaults setInteger:999999999 forKey:@"金币"];
     [defaults setInteger:999999999 forKey:@"金钱"];
     [defaults setInteger:999999999 forKey:@"货币"];
+    
+    // 尝试一些可能的字段名
+    [defaults setInteger:999999999 forKey:@"Money"];
+    [defaults setInteger:999999999 forKey:@"Coin"];
+    [defaults setInteger:999999999 forKey:@"Gold"];
+    [defaults setInteger:999999999 forKey:@"userMoney"];
+    [defaults setInteger:999999999 forKey:@"playerMoney"];
+    [defaults setInteger:999999999 forKey:@"gameMoney"];
     
     [defaults synchronize];
     writeLog(@"无限金币已开启");
@@ -156,6 +184,13 @@ static void enableInfiniteDiamond(void) {
     [defaults setInteger:999999999 forKey:@"宝石"];
     [defaults setInteger:999999999 forKey:@"水晶"];
     
+    // 尝试一些可能的字段名
+    [defaults setInteger:999999999 forKey:@"Diamond"];
+    [defaults setInteger:999999999 forKey:@"Gem"];
+    [defaults setInteger:999999999 forKey:@"userDiamond"];
+    [defaults setInteger:999999999 forKey:@"playerDiamond"];
+    [defaults setInteger:999999999 forKey:@"gameDiamond"];
+    
     [defaults synchronize];
     writeLog(@"无限钻石已开启");
 }
@@ -175,6 +210,13 @@ static void enableInfiniteEnergy(void) {
     [defaults setInteger:999999999 forKey:@"体力"];
     [defaults setInteger:999999999 forKey:@"能量"];
     [defaults setInteger:999999999 forKey:@"血量"];
+    
+    // 尝试一些可能的字段名
+    [defaults setInteger:999999999 forKey:@"Energy"];
+    [defaults setInteger:999999999 forKey:@"Power"];
+    [defaults setInteger:999999999 forKey:@"userEnergy"];
+    [defaults setInteger:999999999 forKey:@"playerEnergy"];
+    [defaults setInteger:999999999 forKey:@"gameEnergy"];
     
     [defaults synchronize];
     writeLog(@"无限体力已开启");
