@@ -118,220 +118,155 @@ static void writeLog(NSString *message) {
 
 #pragma mark - 游戏数据修改
 
-// ES3存档修改 - 针对Unity Easy Save 3系统
-static void modifyES3SaveData(void) {
+// 修改游戏存档数据 - 针对特殊的JSON存档结构
+static void modifyGameSaveData(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // 获取ES3存档数据
-    NSString *es3Data = [defaults objectForKey:@"data0.es3"];
-    if (!es3Data) {
-        writeLog(@"❌ 未找到ES3存档数据 (data0.es3)");
+    // 查找包含游戏数据的键
+    NSString *gameDataKey = @"0";
+    id gameData = [defaults objectForKey:gameDataKey];
+    
+    if (!gameData) {
+        writeLog(@"❌ 未找到游戏存档数据");
+        return;
+    }
+    
+    writeLog(@"✅ 找到游戏存档数据");
+    
+    // 如果是字符串，尝试解析JSON
+    if ([gameData isKindOfClass:[NSString class]]) {
+        NSString *jsonString = (NSString *)gameData;
+        writeLog([NSString stringWithFormat:@"存档数据长度: %lu", (unsigned long)jsonString.length]);
         
-        // 尝试其他可能的ES3键名
-        NSArray *possibleKeys = @[@"data.es3", @"save.es3", @"gamedata.es3", @"es3data", @"savedata"];
-        for (NSString *key in possibleKeys) {
-            es3Data = [defaults objectForKey:key];
-            if (es3Data) {
-                writeLog([NSString stringWithFormat:@"✅ 找到ES3存档: %@", key]);
-                break;
-            }
-        }
+        NSError *error = nil;
+        NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+        NSMutableDictionary *saveDict = [NSJSONSerialization JSONObjectWithData:jsonData 
+            options:NSJSONReadingMutableContainers error:&error];
         
-        if (!es3Data) {
-            writeLog(@"❌ 未找到任何ES3存档数据");
+        if (error || !saveDict) {
+            writeLog([NSString stringWithFormat:@"❌ JSON解析失败: %@", error.localizedDescription]);
             return;
         }
+        
+        writeLog(@"✅ JSON解析成功");
+        
+        // 修改游戏数据
+        BOOL modified = NO;
+        
+        // 查找并修改可能的现金字段
+        NSArray *cashKeys = @[@"现金", @"金钱", @"cash", @"money", @"当前现金", @"玩家现金", @"存档数据_现金"];
+        for (NSString *key in cashKeys) {
+            if (saveDict[key]) {
+                saveDict[key] = @21000000000;
+                modified = YES;
+                writeLog([NSString stringWithFormat:@"✅ 修改 %@ = 21000000000", key]);
+            }
+        }
+        
+        // 查找并修改可能的体力字段
+        NSArray *energyKeys = @[@"体力", @"当前体力", @"玩家体力", @"存档数据_体力", @"体力值"];
+        for (NSString *key in energyKeys) {
+            if (saveDict[key]) {
+                saveDict[key] = @21000000000;
+                modified = YES;
+                writeLog([NSString stringWithFormat:@"✅ 修改 %@ = 21000000000", key]);
+            }
+        }
+        
+        // 查找并修改可能的健康字段
+        NSArray *healthKeys = @[@"健康", @"当前健康", @"玩家健康", @"存档数据_健康", @"健康值"];
+        for (NSString *key in healthKeys) {
+            if (saveDict[key]) {
+                saveDict[key] = @1000000;
+                modified = YES;
+                writeLog([NSString stringWithFormat:@"✅ 修改 %@ = 1000000", key]);
+            }
+        }
+        
+        // 查找并修改可能的心情字段
+        NSArray *moodKeys = @[@"心情", @"当前心情", @"玩家心情", @"存档数据_心情", @"心情值"];
+        for (NSString *key in moodKeys) {
+            if (saveDict[key]) {
+                saveDict[key] = @1000000;
+                modified = YES;
+                writeLog([NSString stringWithFormat:@"✅ 修改 %@ = 1000000", key]);
+            }
+        }
+        
+        // 遍历所有键，寻找可能的数值字段
+        for (NSString *key in [saveDict allKeys]) {
+            id value = saveDict[key];
+            if ([value isKindOfClass:[NSNumber class]]) {
+                NSNumber *numValue = (NSNumber *)value;
+                // 如果是较大的数值，可能是游戏资源
+                if ([numValue integerValue] > 1000 && [numValue integerValue] < 100000000) {
+                    if ([key containsString:@"现金"] || [key containsString:@"金钱"] || [key containsString:@"cash"] || [key containsString:@"money"]) {
+                        saveDict[key] = @21000000000;
+                        modified = YES;
+                        writeLog([NSString stringWithFormat:@"✅ 修改现金字段 %@ = 21000000000", key]);
+                    } else if ([key containsString:@"体力"] || [key containsString:@"energy"] || [key containsString:@"stamina"]) {
+                        saveDict[key] = @21000000000;
+                        modified = YES;
+                        writeLog([NSString stringWithFormat:@"✅ 修改体力字段 %@ = 21000000000", key]);
+                    } else if ([key containsString:@"健康"] || [key containsString:@"health"] || [key containsString:@"hp"]) {
+                        saveDict[key] = @1000000;
+                        modified = YES;
+                        writeLog([NSString stringWithFormat:@"✅ 修改健康字段 %@ = 1000000", key]);
+                    } else if ([key containsString:@"心情"] || [key containsString:@"mood"] || [key containsString:@"happiness"]) {
+                        saveDict[key] = @1000000;
+                        modified = YES;
+                        writeLog([NSString stringWithFormat:@"✅ 修改心情字段 %@ = 1000000", key]);
+                    }
+                }
+            }
+        }
+        
+        if (modified) {
+            // 重新序列化为JSON字符串
+            NSError *serializeError = nil;
+            NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:saveDict options:0 error:&serializeError];
+            
+            if (serializeError || !newJsonData) {
+                writeLog([NSString stringWithFormat:@"❌ JSON序列化失败: %@", serializeError.localizedDescription]);
+                return;
+            }
+            
+            NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
+            
+            // 保存回NSUserDefaults
+            [defaults setObject:newJsonString forKey:gameDataKey];
+            [defaults synchronize];
+            
+            writeLog(@"🎉 游戏存档修改完成！");
+        } else {
+            writeLog(@"❌ 未找到可修改的游戏数据字段");
+        }
     } else {
-        writeLog(@"✅ 找到ES3存档数据 (data0.es3)");
+        writeLog(@"❌ 存档数据格式不支持");
     }
-    
-    writeLog([NSString stringWithFormat:@"ES3存档长度: %lu", (unsigned long)es3Data.length]);
-    writeLog([NSString stringWithFormat:@"ES3数据预览: %@", [es3Data substringToIndex:MIN(100, es3Data.length)]]);
-    
-    // ES3数据是Base64编码的JSON
-    NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:es3Data options:NSDataBase64DecodingIgnoreUnknownCharacters];
-    if (!decodedData) {
-        writeLog(@"❌ ES3数据Base64解码失败，尝试直接解析JSON");
-        // 可能不是Base64编码，直接尝试JSON解析
-        decodedData = [es3Data dataUsingEncoding:NSUTF8StringEncoding];
-    }
-    
-    if (!decodedData) {
-        writeLog(@"❌ ES3数据处理失败");
-        return;
-    }
-    
-    NSString *jsonString = [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
-    if (!jsonString) {
-        writeLog(@"❌ ES3数据转换为字符串失败");
-        return;
-    }
-    
-    writeLog([NSString stringWithFormat:@"✅ ES3 JSON解码成功，长度: %lu", (unsigned long)jsonString.length]);
-    writeLog([NSString stringWithFormat:@"ES3内容预览: %@", [jsonString substringToIndex:MIN(200, jsonString.length)]]);
-    
-    // 解析JSON
-    NSError *error = nil;
-    NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
-    id jsonObject = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
-    
-    if (error || !jsonObject) {
-        writeLog([NSString stringWithFormat:@"❌ ES3 JSON解析失败: %@", error.localizedDescription]);
-        return;
-    }
-    
-    writeLog(@"✅ ES3 JSON解析成功");
-    
-    NSMutableDictionary *saveDict = nil;
-    if ([jsonObject isKindOfClass:[NSDictionary class]]) {
-        saveDict = [jsonObject mutableCopy];
-        writeLog([NSString stringWithFormat:@"ES3存档包含 %lu 个对象", (unsigned long)saveDict.count]);
-    } else if ([jsonObject isKindOfClass:[NSArray class]]) {
-        writeLog(@"ES3存档是数组格式，尝试处理");
-        // 如果是数组，可能需要特殊处理
-        return;
-    } else {
-        writeLog(@"❌ ES3存档格式不支持");
-        return;
-    }
-    
-    // 列出所有键，寻找游戏数据
-    for (NSString *key in saveDict) {
-        id value = saveDict[key];
-        NSString *valueStr = [NSString stringWithFormat:@"%@", value];
-        if (valueStr.length > 100) {
-            valueStr = [[valueStr substringToIndex:100] stringByAppendingString:@"..."];
-        }
-        writeLog([NSString stringWithFormat:@"ES3 Key: %@ = %@", key, valueStr]);
-    }
-    
-    // 尝试修改可能的游戏数据字段
-    BOOL modified = NO;
-    
-    // 我独自生活游戏的具体属性
-    NSArray *cashKeys = @[@"cash", @"money", @"现金", @"金钱", @"Cash", @"Money"];
-    NSArray *energyKeys = @[@"energy", @"stamina", @"体力", @"Energy", @"Stamina"];
-    NSArray *healthKeys = @[@"health", @"hp", @"健康", @"Health", @"HP"];
-    NSArray *moodKeys = @[@"mood", @"happiness", @"心情", @"Mood", @"Happiness"];
-    
-    for (NSString *cashKey in cashKeys) {
-        if (saveDict[cashKey]) {
-            saveDict[cashKey] = @999999999;
-            modified = YES;
-            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", cashKey]);
-        }
-    }
-    
-    for (NSString *energyKey in energyKeys) {
-        if (saveDict[energyKey]) {
-            saveDict[energyKey] = @999999999;
-            modified = YES;
-            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", energyKey]);
-        }
-    }
-    
-    for (NSString *healthKey in healthKeys) {
-        if (saveDict[healthKey]) {
-            saveDict[healthKey] = @999999999;
-            modified = YES;
-            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", healthKey]);
-        }
-    }
-    
-    for (NSString *moodKey in moodKeys) {
-        if (saveDict[moodKey]) {
-            saveDict[moodKey] = @999999999;
-            modified = YES;
-            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", moodKey]);
-        }
-    }
-    
-    // 递归修改嵌套对象
-    for (NSString *key in saveDict) {
-        id value = saveDict[key];
-        if ([value isKindOfClass:[NSDictionary class]]) {
-            NSMutableDictionary *objDict = [value mutableCopy];
-            
-            for (NSString *cashKey in cashKeys) {
-                if (objDict[cashKey]) {
-                    objDict[cashKey] = @999999999;
-                    modified = YES;
-                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, cashKey]);
-                }
-            }
-            
-            for (NSString *energyKey in energyKeys) {
-                if (objDict[energyKey]) {
-                    objDict[energyKey] = @999999999;
-                    modified = YES;
-                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, energyKey]);
-                }
-            }
-            
-            for (NSString *healthKey in healthKeys) {
-                if (objDict[healthKey]) {
-                    objDict[healthKey] = @999999999;
-                    modified = YES;
-                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, healthKey]);
-                }
-            }
-            
-            for (NSString *moodKey in moodKeys) {
-                if (objDict[moodKey]) {
-                    objDict[moodKey] = @999999999;
-                    modified = YES;
-                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, moodKey]);
-                }
-            }
-            
-            saveDict[key] = objDict;
-        }
-    }
-    
-    if (!modified) {
-        writeLog(@"❌ 未找到可修改的游戏数据字段");
-        return;
-    }
-    
-    // 重新编码为JSON
-    NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:saveDict options:0 error:&error];
-    if (error || !newJsonData) {
-        writeLog([NSString stringWithFormat:@"❌ ES3 JSON序列化失败: %@", error.localizedDescription]);
-        return;
-    }
-    
-    NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
-    
-    // Base64编码
-    NSData *encodedData = [newJsonString dataUsingEncoding:NSUTF8StringEncoding];
-    NSString *newES3Data = [encodedData base64EncodedStringWithOptions:0];
-    
-    // 保存回NSUserDefaults
-    [defaults setObject:newES3Data forKey:@"data0.es3"];
-    [defaults synchronize];
-    
-    writeLog(@"🎉 ES3存档修改完成！");
 }
 
 // 无限现金功能
 static void enableInfiniteCash(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // 先尝试修改ES3存档
-    modifyES3SaveData();
+    // 先尝试修改游戏存档
+    modifyGameSaveData();
     
     // 同时修改NSUserDefaults中的字段（作为备用）
-    [defaults setInteger:999999999 forKey:@"cash"];
-    [defaults setInteger:999999999 forKey:@"money"];
-    [defaults setInteger:999999999 forKey:@"现金"];
-    [defaults setInteger:999999999 forKey:@"金钱"];
+    [defaults setInteger:21000000000 forKey:@"cash"];
+    [defaults setInteger:21000000000 forKey:@"money"];
+    [defaults setInteger:21000000000 forKey:@"现金"];
+    [defaults setInteger:21000000000 forKey:@"金钱"];
     
     // 尝试一些可能的字段名
-    [defaults setInteger:999999999 forKey:@"Cash"];
-    [defaults setInteger:999999999 forKey:@"Money"];
-    [defaults setInteger:999999999 forKey:@"userCash"];
-    [defaults setInteger:999999999 forKey:@"playerCash"];
-    [defaults setInteger:999999999 forKey:@"gameCash"];
+    [defaults setInteger:21000000000 forKey:@"Cash"];
+    [defaults setInteger:21000000000 forKey:@"Money"];
+    [defaults setInteger:21000000000 forKey:@"userCash"];
+    [defaults setInteger:21000000000 forKey:@"playerCash"];
+    [defaults setInteger:21000000000 forKey:@"gameCash"];
+    [defaults setInteger:21000000000 forKey:@"当前现金"];
+    [defaults setInteger:21000000000 forKey:@"玩家现金"];
     
     [defaults synchronize];
     writeLog(@"无限现金已开启");
@@ -341,17 +276,19 @@ static void enableInfiniteCash(void) {
 static void enableInfiniteHealth(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // ES3存档已在现金函数中处理，这里只处理NSUserDefaults
-    [defaults setInteger:999999999 forKey:@"health"];
-    [defaults setInteger:999999999 forKey:@"hp"];
-    [defaults setInteger:999999999 forKey:@"健康"];
+    // 游戏存档已在现金函数中处理，这里只处理NSUserDefaults
+    [defaults setInteger:1000000 forKey:@"health"];
+    [defaults setInteger:1000000 forKey:@"hp"];
+    [defaults setInteger:1000000 forKey:@"健康"];
     
     // 尝试一些可能的字段名
-    [defaults setInteger:999999999 forKey:@"Health"];
-    [defaults setInteger:999999999 forKey:@"HP"];
-    [defaults setInteger:999999999 forKey:@"userHealth"];
-    [defaults setInteger:999999999 forKey:@"playerHealth"];
-    [defaults setInteger:999999999 forKey:@"gameHealth"];
+    [defaults setInteger:1000000 forKey:@"Health"];
+    [defaults setInteger:1000000 forKey:@"HP"];
+    [defaults setInteger:1000000 forKey:@"userHealth"];
+    [defaults setInteger:1000000 forKey:@"playerHealth"];
+    [defaults setInteger:1000000 forKey:@"gameHealth"];
+    [defaults setInteger:1000000 forKey:@"当前健康"];
+    [defaults setInteger:1000000 forKey:@"玩家健康"];
     
     [defaults synchronize];
     writeLog(@"无限健康已开启");
@@ -361,17 +298,19 @@ static void enableInfiniteHealth(void) {
 static void enableInfiniteEnergy(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // ES3存档已在现金函数中处理，这里只处理NSUserDefaults
-    [defaults setInteger:999999999 forKey:@"energy"];
-    [defaults setInteger:999999999 forKey:@"stamina"];
-    [defaults setInteger:999999999 forKey:@"体力"];
+    // 游戏存档已在现金函数中处理，这里只处理NSUserDefaults
+    [defaults setInteger:21000000000 forKey:@"energy"];
+    [defaults setInteger:21000000000 forKey:@"stamina"];
+    [defaults setInteger:21000000000 forKey:@"体力"];
     
     // 尝试一些可能的字段名
-    [defaults setInteger:999999999 forKey:@"Energy"];
-    [defaults setInteger:999999999 forKey:@"Stamina"];
-    [defaults setInteger:999999999 forKey:@"userEnergy"];
-    [defaults setInteger:999999999 forKey:@"playerEnergy"];
-    [defaults setInteger:999999999 forKey:@"gameEnergy"];
+    [defaults setInteger:21000000000 forKey:@"Energy"];
+    [defaults setInteger:21000000000 forKey:@"Stamina"];
+    [defaults setInteger:21000000000 forKey:@"userEnergy"];
+    [defaults setInteger:21000000000 forKey:@"playerEnergy"];
+    [defaults setInteger:21000000000 forKey:@"gameEnergy"];
+    [defaults setInteger:21000000000 forKey:@"当前体力"];
+    [defaults setInteger:21000000000 forKey:@"玩家体力"];
     
     [defaults synchronize];
     writeLog(@"无限体力已开启");
@@ -381,17 +320,19 @@ static void enableInfiniteEnergy(void) {
 static void enableInfiniteMood(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // ES3存档已在现金函数中处理，这里只处理NSUserDefaults
-    [defaults setInteger:999999999 forKey:@"mood"];
-    [defaults setInteger:999999999 forKey:@"happiness"];
-    [defaults setInteger:999999999 forKey:@"心情"];
+    // 游戏存档已在现金函数中处理，这里只处理NSUserDefaults
+    [defaults setInteger:1000000 forKey:@"mood"];
+    [defaults setInteger:1000000 forKey:@"happiness"];
+    [defaults setInteger:1000000 forKey:@"心情"];
     
     // 尝试一些可能的字段名
-    [defaults setInteger:999999999 forKey:@"Mood"];
-    [defaults setInteger:999999999 forKey:@"Happiness"];
-    [defaults setInteger:999999999 forKey:@"userMood"];
-    [defaults setInteger:999999999 forKey:@"playerMood"];
-    [defaults setInteger:999999999 forKey:@"gameMood"];
+    [defaults setInteger:1000000 forKey:@"Mood"];
+    [defaults setInteger:1000000 forKey:@"Happiness"];
+    [defaults setInteger:1000000 forKey:@"userMood"];
+    [defaults setInteger:1000000 forKey:@"playerMood"];
+    [defaults setInteger:1000000 forKey:@"gameMood"];
+    [defaults setInteger:1000000 forKey:@"当前心情"];
+    [defaults setInteger:1000000 forKey:@"玩家心情"];
     
     [defaults synchronize];
     writeLog(@"无限心情已开启");
