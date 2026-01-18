@@ -146,34 +146,6 @@ static UIWindow* getKeyWindow(void);
 static BOOL searchAndModifyES3Data(NSMutableDictionary *es3Dict, NSUserDefaults *defaults);
 static BOOL searchDictionaryRecursively(NSMutableDictionary *dict, BOOL searchAttributes);
 
-#pragma mark - 日志系统
-
-// 获取日志路径
-static NSString* getLogPath(void) {
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    NSString *documentsPath = [paths firstObject];
-    return [documentsPath stringByAppendingPathComponent:@"woduzishenghua_cheat.log"];
-}
-
-// 写日志到文件
-static void writeLog(NSString *message) {
-    NSString *logPath = getLogPath();
-    NSString *timestamp = [NSDateFormatter localizedStringFromDate:[NSDate date] 
-        dateStyle:NSDateFormatterShortStyle timeStyle:NSDateFormatterMediumStyle];
-    NSString *logMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
-    
-    NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logPath];
-    if (fileHandle) {
-        [fileHandle seekToEndOfFile];
-        [fileHandle writeData:[logMessage dataUsingEncoding:NSUTF8StringEncoding]];
-        [fileHandle closeFile];
-    } else {
-        [logMessage writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    }
-    
-    NSLog(@"[WDZ] %@", message);
-}
-
 #pragma mark - 版权保护
 
 // 解密版权字符串（防止二进制修改）
