@@ -1,6 +1,109 @@
 // 我独自生活修改器 - WoduziCheat.m
 // 参考卡包修仙和天选打工人的成功实现
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
+#import <dlfcn.h>
+
+#pragma mark - 实时Hook功能
+
+// 全局开关
+static BOOL g_infiniteCashEnabled = NO;
+static BOOL g_infiniteEnergyEnabled = NO;
+static BOOL g_infiniteHealthEnabled = NO;
+static BOOL g_infiniteMoodEnabled = NO;
+
+// Hook NSUserDefaults的integerForKey方法
+static NSInteger (*original_integerForKey)(id self, SEL _cmd, NSString *key);
+static NSInteger hooked_integerForKey(id self, SEL _cmd, NSString *key) {
+    NSInteger originalValue = original_integerForKey(self, _cmd, key);
+    
+    // 检查是否是我们要修改的字段
+    NSString *lowerKey = [key lowercaseString];
+    
+    if (g_infiniteCashEnabled && ([lowerKey containsString:@"cash"] || [lowerKey containsString:@"money"] || 
+        [lowerKey containsString:@"现金"] || [lowerKey containsString:@"金钱"] || [lowerKey containsString:@"coin"])) {
+        writeLog([NSString stringWithFormat:@"🎯 Hook拦截现金字段: %@ (原值: %ld → 新值: 21000000000)", key, (long)originalValue]);
+        return 21000000000;
+    }
+    
+    if (g_infiniteEnergyEnabled && ([lowerKey containsString:@"energy"] || [lowerKey containsString:@"stamina"] || 
+        [lowerKey containsString:@"体力"] || [lowerKey containsString:@"power"])) {
+        writeLog([NSString stringWithFormat:@"🎯 Hook拦截体力字段: %@ (原值: %ld → 新值: 21000000000)", key, (long)originalValue]);
+        return 21000000000;
+    }
+    
+    if (g_infiniteHealthEnabled && ([lowerKey containsString:@"health"] || [lowerKey containsString:@"hp"] || 
+        [lowerKey containsString:@"健康"] || [lowerKey containsString:@"life"])) {
+        writeLog([NSString stringWithFormat:@"🎯 Hook拦截健康字段: %@ (原值: %ld → 新值: 1000000)", key, (long)originalValue]);
+        return 1000000;
+    }
+    
+    if (g_infiniteMoodEnabled && ([lowerKey containsString:@"mood"] || [lowerKey containsString:@"happiness"] || 
+        [lowerKey containsString:@"心情"] || [lowerKey containsString:@"spirit"])) {
+        writeLog([NSString stringWithFormat:@"🎯 Hook拦截心情字段: %@ (原值: %ld → 新值: 1000000)", key, (long)originalValue]);
+        return 1000000;
+    }
+    
+    return originalValue;
+}
+
+// Hook NSUserDefaults的objectForKey方法
+static id (*original_objectForKey)(id self, SEL _cmd, NSString *key);
+static id hooked_objectForKey(id self, SEL _cmd, NSString *key) {
+    id originalValue = original_objectForKey(self, _cmd, key);
+    
+    // 如果返回的是NSNumber，进行数值检查
+    if ([originalValue isKindOfClass:[NSNumber class]]) {
+        NSString *lowerKey = [key lowercaseString];
+        
+        if (g_infiniteCashEnabled && ([lowerKey containsString:@"cash"] || [lowerKey containsString:@"money"] || 
+            [lowerKey containsString:@"现金"] || [lowerKey containsString:@"金钱"] || [lowerKey containsString:@"coin"])) {
+            writeLog([NSString stringWithFormat:@"🎯 Hook拦截现金对象: %@ (原值: %@ → 新值: 21000000000)", key, originalValue]);
+            return @21000000000;
+        }
+        
+        if (g_infiniteEnergyEnabled && ([lowerKey containsString:@"energy"] || [lowerKey containsString:@"stamina"] || 
+            [lowerKey containsString:@"体力"] || [lowerKey containsString:@"power"])) {
+            writeLog([NSString stringWithFormat:@"🎯 Hook拦截体力对象: %@ (原值: %@ → 新值: 21000000000)", key, originalValue]);
+            return @21000000000;
+        }
+        
+        if (g_infiniteHealthEnabled && ([lowerKey containsString:@"health"] || [lowerKey containsString:@"hp"] || 
+            [lowerKey containsString:@"健康"] || [lowerKey containsString:@"life"])) {
+            writeLog([NSString stringWithFormat:@"🎯 Hook拦截健康对象: %@ (原值: %@ → 新值: 1000000)", key, originalValue]);
+            return @1000000;
+        }
+        
+        if (g_infiniteMoodEnabled && ([lowerKey containsString:@"mood"] || [lowerKey containsString:@"happiness"] || 
+            [lowerKey containsString:@"心情"] || [lowerKey containsString:@"spirit"])) {
+            writeLog([NSString stringWithFormat:@"🎯 Hook拦截心情对象: %@ (原值: %@ → 新值: 1000000)", key, originalValue]);
+            return @1000000;
+        }
+    }
+    
+    return originalValue;
+}
+
+// 安装Hook
+static void installHooks(void) {
+    Class nsUserDefaultsClass = [NSUserDefaults class];
+    
+    // Hook integerForKey:
+    Method integerMethod = class_getInstanceMethod(nsUserDefaultsClass, @selector(integerForKey:));
+    if (integerMethod) {
+        original_integerForKey = (NSInteger (*)(id, SEL, NSString *))method_getImplementation(integerMethod);
+        method_setImplementation(integerMethod, (IMP)hooked_integerForKey);
+        writeLog(@"✅ 已安装 integerForKey Hook");
+    }
+    
+    // Hook objectForKey:
+    Method objectMethod = class_getInstanceMethod(nsUserDefaultsClass, @selector(objectForKey:));
+    if (objectMethod) {
+        original_objectForKey = (id (*)(id, SEL, NSString *))method_getImplementation(objectMethod);
+        method_setImplementation(objectMethod, (IMP)hooked_objectForKey);
+        writeLog(@"✅ 已安装 objectForKey Hook");
+    }
+}
 
 #pragma mark - 全局变量
 
@@ -507,6 +610,10 @@ static BOOL searchDictionaryRecursively(NSMutableDictionary *dict, BOOL searchAt
 static void enableInfiniteCash(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
+    // 启用实时Hook
+    g_infiniteCashEnabled = YES;
+    writeLog(@"🎯 启用现金实时Hook");
+    
     // 先尝试修改游戏存档
     modifyGameSaveData();
     
@@ -533,6 +640,10 @@ static void enableInfiniteCash(void) {
 static void enableInfiniteHealth(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
+    // 启用实时Hook
+    g_infiniteHealthEnabled = YES;
+    writeLog(@"🎯 启用健康实时Hook");
+    
     // 游戏存档已在现金函数中处理，这里只处理NSUserDefaults
     [defaults setInteger:1000000 forKey:@"health"];
     [defaults setInteger:1000000 forKey:@"hp"];
@@ -555,6 +666,10 @@ static void enableInfiniteHealth(void) {
 static void enableInfiniteEnergy(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
+    // 启用实时Hook
+    g_infiniteEnergyEnabled = YES;
+    writeLog(@"🎯 启用体力实时Hook");
+    
     // 游戏存档已在现金函数中处理，这里只处理NSUserDefaults
     [defaults setInteger:21000000000 forKey:@"energy"];
     [defaults setInteger:21000000000 forKey:@"stamina"];
@@ -576,6 +691,10 @@ static void enableInfiniteEnergy(void) {
 // 无限心情功能
 static void enableInfiniteMood(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    
+    // 启用实时Hook
+    g_infiniteMoodEnabled = YES;
+    writeLog(@"🎯 启用心情实时Hook");
     
     // 游戏存档已在现金函数中处理，这里只处理NSUserDefaults
     [defaults setInteger:1000000 forKey:@"mood"];
@@ -949,6 +1068,10 @@ static void setupFloatingButton(void) {
 __attribute__((constructor))
 static void WDZCheatInit(void) {
     @autoreleasepool {
+        // 安装Hook
+        installHooks();
+        writeLog(@"🚀 我独自生活修改器已加载，Hook已安装");
+        
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             setupFloatingButton();
         });
