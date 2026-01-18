@@ -9,6 +9,11 @@
 static UIButton *g_floatButton = nil;
 static TXMenuView *g_menuView = nil;
 
+#pragma mark - 函数前向声明
+
+static void showMenu(void);
+static void writeLog(NSString *message);
+
 #pragma mark - 版权保护
 
 // 解密版权字符串（防止二进制修改）
