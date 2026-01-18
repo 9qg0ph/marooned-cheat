@@ -1,0 +1,50 @@
+name: Build WoduziShenghua Dylib
+
+on:
+  push:
+    paths:
+      - '我独自生活Dylib/**'
+      - '.github/workflows/build-woduzishenghua-dylib.yml'
+  pull_request:
+    paths:
+      - '我独自生活Dylib/**'
+      - '.github/workflows/build-woduzishenghua-dylib.yml'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+    
+    - name: Build WoduziShenghua Dylib
+      run: |
+        cd 我独自生活Dylib
+        clang -arch arm64 \
+          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+          -miphoneos-version-min=14.0 \
+          -dynamiclib \
+          -framework UIKit \
+          -framework Foundation \
+          -fobjc-arc \
+          -o WoduziCheat.dylib \
+          WoduziCheat.m
+        
+        # Sign the dylib
+        ldid -S WoduziCheat.dylib
+        
+        # Verify the build
+        file WoduziCheat.dylib
+        ls -la WoduziCheat.dylib
+    
+    - name: Upload Dylib
+      uses: actions/upload-artifact@v4
+      with:
+        name: WoduziShenghua-Dylib
+        path: 我独自生活Dylib/WoduziCheat.dylib
+        retention-days: 30
