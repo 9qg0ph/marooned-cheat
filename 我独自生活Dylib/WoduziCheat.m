@@ -208,24 +208,17 @@ static void modifyES3SaveData(void) {
     // 尝试修改可能的游戏数据字段
     BOOL modified = NO;
     
-    // 直接修改顶级字段
-    NSArray *moneyKeys = @[@"money", @"coin", @"coins", @"gold", @"currency", @"cash", @"金币", @"金钱", @"货币", @"Money", @"Coin", @"Gold"];
-    NSArray *diamondKeys = @[@"diamond", @"diamonds", @"gem", @"gems", @"crystal", @"premium", @"钻石", @"宝石", @"水晶", @"Diamond", @"Gem"];
-    NSArray *energyKeys = @[@"energy", @"stamina", @"power", @"hp", @"health", @"体力", @"能量", @"血量", @"Energy", @"Power", @"HP"];
+    // 我独自生活游戏的具体属性
+    NSArray *cashKeys = @[@"cash", @"money", @"现金", @"金钱", @"Cash", @"Money"];
+    NSArray *energyKeys = @[@"energy", @"stamina", @"体力", @"Energy", @"Stamina"];
+    NSArray *healthKeys = @[@"health", @"hp", @"健康", @"Health", @"HP"];
+    NSArray *moodKeys = @[@"mood", @"happiness", @"心情", @"Mood", @"Happiness"];
     
-    for (NSString *moneyKey in moneyKeys) {
-        if (saveDict[moneyKey]) {
-            saveDict[moneyKey] = @999999999;
+    for (NSString *cashKey in cashKeys) {
+        if (saveDict[cashKey]) {
+            saveDict[cashKey] = @999999999;
             modified = YES;
-            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", moneyKey]);
-        }
-    }
-    
-    for (NSString *diamondKey in diamondKeys) {
-        if (saveDict[diamondKey]) {
-            saveDict[diamondKey] = @999999999;
-            modified = YES;
-            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", diamondKey]);
+            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", cashKey]);
         }
     }
     
@@ -237,25 +230,33 @@ static void modifyES3SaveData(void) {
         }
     }
     
+    for (NSString *healthKey in healthKeys) {
+        if (saveDict[healthKey]) {
+            saveDict[healthKey] = @999999999;
+            modified = YES;
+            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", healthKey]);
+        }
+    }
+    
+    for (NSString *moodKey in moodKeys) {
+        if (saveDict[moodKey]) {
+            saveDict[moodKey] = @999999999;
+            modified = YES;
+            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", moodKey]);
+        }
+    }
+    
     // 递归修改嵌套对象
     for (NSString *key in saveDict) {
         id value = saveDict[key];
         if ([value isKindOfClass:[NSDictionary class]]) {
             NSMutableDictionary *objDict = [value mutableCopy];
             
-            for (NSString *moneyKey in moneyKeys) {
-                if (objDict[moneyKey]) {
-                    objDict[moneyKey] = @999999999;
+            for (NSString *cashKey in cashKeys) {
+                if (objDict[cashKey]) {
+                    objDict[cashKey] = @999999999;
                     modified = YES;
-                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, moneyKey]);
-                }
-            }
-            
-            for (NSString *diamondKey in diamondKeys) {
-                if (objDict[diamondKey]) {
-                    objDict[diamondKey] = @999999999;
-                    modified = YES;
-                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, diamondKey]);
+                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, cashKey]);
                 }
             }
             
@@ -264,6 +265,22 @@ static void modifyES3SaveData(void) {
                     objDict[energyKey] = @999999999;
                     modified = YES;
                     writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, energyKey]);
+                }
+            }
+            
+            for (NSString *healthKey in healthKeys) {
+                if (objDict[healthKey]) {
+                    objDict[healthKey] = @999999999;
+                    modified = YES;
+                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, healthKey]);
+                }
+            }
+            
+            for (NSString *moodKey in moodKeys) {
+                if (objDict[moodKey]) {
+                    objDict[moodKey] = @999999999;
+                    modified = YES;
+                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, moodKey]);
                 }
             }
             
@@ -296,85 +313,62 @@ static void modifyES3SaveData(void) {
     writeLog(@"🎉 ES3存档修改完成！");
 }
 
-// 无限金币功能
-static void enableInfiniteMoney(void) {
+// 无限现金功能
+static void enableInfiniteCash(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
     // 先尝试修改ES3存档
     modifyES3SaveData();
     
     // 同时修改NSUserDefaults中的字段（作为备用）
-    [defaults setInteger:999999999 forKey:@"money"];
-    [defaults setInteger:999999999 forKey:@"coin"];
-    [defaults setInteger:999999999 forKey:@"coins"];
-    [defaults setInteger:999999999 forKey:@"gold"];
-    [defaults setInteger:999999999 forKey:@"currency"];
     [defaults setInteger:999999999 forKey:@"cash"];
-    
-    // 可能的中文字段
-    [defaults setInteger:999999999 forKey:@"金币"];
+    [defaults setInteger:999999999 forKey:@"money"];
+    [defaults setInteger:999999999 forKey:@"现金"];
     [defaults setInteger:999999999 forKey:@"金钱"];
-    [defaults setInteger:999999999 forKey:@"货币"];
     
     // 尝试一些可能的字段名
+    [defaults setInteger:999999999 forKey:@"Cash"];
     [defaults setInteger:999999999 forKey:@"Money"];
-    [defaults setInteger:999999999 forKey:@"Coin"];
-    [defaults setInteger:999999999 forKey:@"Gold"];
-    [defaults setInteger:999999999 forKey:@"userMoney"];
-    [defaults setInteger:999999999 forKey:@"playerMoney"];
-    [defaults setInteger:999999999 forKey:@"gameMoney"];
+    [defaults setInteger:999999999 forKey:@"userCash"];
+    [defaults setInteger:999999999 forKey:@"playerCash"];
+    [defaults setInteger:999999999 forKey:@"gameCash"];
     
     [defaults synchronize];
-    writeLog(@"无限金币已开启");
+    writeLog(@"无限现金已开启");
 }
 
-// 无限钻石功能
-static void enableInfiniteDiamond(void) {
+// 无限健康功能
+static void enableInfiniteHealth(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // ES3存档已在金币函数中处理，这里只处理NSUserDefaults
-    [defaults setInteger:999999999 forKey:@"diamond"];
-    [defaults setInteger:999999999 forKey:@"diamonds"];
-    [defaults setInteger:999999999 forKey:@"gem"];
-    [defaults setInteger:999999999 forKey:@"gems"];
-    [defaults setInteger:999999999 forKey:@"crystal"];
-    [defaults setInteger:999999999 forKey:@"premium"];
-    
-    // 可能的中文字段
-    [defaults setInteger:999999999 forKey:@"钻石"];
-    [defaults setInteger:999999999 forKey:@"宝石"];
-    [defaults setInteger:999999999 forKey:@"水晶"];
+    // ES3存档已在现金函数中处理，这里只处理NSUserDefaults
+    [defaults setInteger:999999999 forKey:@"health"];
+    [defaults setInteger:999999999 forKey:@"hp"];
+    [defaults setInteger:999999999 forKey:@"健康"];
     
     // 尝试一些可能的字段名
-    [defaults setInteger:999999999 forKey:@"Diamond"];
-    [defaults setInteger:999999999 forKey:@"Gem"];
-    [defaults setInteger:999999999 forKey:@"userDiamond"];
-    [defaults setInteger:999999999 forKey:@"playerDiamond"];
-    [defaults setInteger:999999999 forKey:@"gameDiamond"];
+    [defaults setInteger:999999999 forKey:@"Health"];
+    [defaults setInteger:999999999 forKey:@"HP"];
+    [defaults setInteger:999999999 forKey:@"userHealth"];
+    [defaults setInteger:999999999 forKey:@"playerHealth"];
+    [defaults setInteger:999999999 forKey:@"gameHealth"];
     
     [defaults synchronize];
-    writeLog(@"无限钻石已开启");
+    writeLog(@"无限健康已开启");
 }
 
 // 无限体力功能
 static void enableInfiniteEnergy(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // ES3存档已在金币函数中处理，这里只处理NSUserDefaults
+    // ES3存档已在现金函数中处理，这里只处理NSUserDefaults
     [defaults setInteger:999999999 forKey:@"energy"];
     [defaults setInteger:999999999 forKey:@"stamina"];
-    [defaults setInteger:999999999 forKey:@"power"];
-    [defaults setInteger:999999999 forKey:@"hp"];
-    [defaults setInteger:999999999 forKey:@"health"];
-    
-    // 可能的中文字段
     [defaults setInteger:999999999 forKey:@"体力"];
-    [defaults setInteger:999999999 forKey:@"能量"];
-    [defaults setInteger:999999999 forKey:@"血量"];
     
     // 尝试一些可能的字段名
     [defaults setInteger:999999999 forKey:@"Energy"];
-    [defaults setInteger:999999999 forKey:@"Power"];
+    [defaults setInteger:999999999 forKey:@"Stamina"];
     [defaults setInteger:999999999 forKey:@"userEnergy"];
     [defaults setInteger:999999999 forKey:@"playerEnergy"];
     [defaults setInteger:999999999 forKey:@"gameEnergy"];
@@ -383,11 +377,32 @@ static void enableInfiniteEnergy(void) {
     writeLog(@"无限体力已开启");
 }
 
+// 无限心情功能
+static void enableInfiniteMood(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    
+    // ES3存档已在现金函数中处理，这里只处理NSUserDefaults
+    [defaults setInteger:999999999 forKey:@"mood"];
+    [defaults setInteger:999999999 forKey:@"happiness"];
+    [defaults setInteger:999999999 forKey:@"心情"];
+    
+    // 尝试一些可能的字段名
+    [defaults setInteger:999999999 forKey:@"Mood"];
+    [defaults setInteger:999999999 forKey:@"Happiness"];
+    [defaults setInteger:999999999 forKey:@"userMood"];
+    [defaults setInteger:999999999 forKey:@"playerMood"];
+    [defaults setInteger:999999999 forKey:@"gameMood"];
+    
+    [defaults synchronize];
+    writeLog(@"无限心情已开启");
+}
+
 // 一键全开功能
 static void enableAllFeatures(void) {
-    enableInfiniteMoney();
-    enableInfiniteDiamond();
+    enableInfiniteCash();
     enableInfiniteEnergy();
+    enableInfiniteHealth();
+    enableInfiniteMood();
     
     // 额外的通用字段
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
@@ -424,7 +439,7 @@ static void enableAllFeatures(void) {
 - (void)setupUI {
     self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
     
-    CGFloat contentHeight = 380;
+    CGFloat contentHeight = 420;
     CGFloat contentWidth = 280;
     CGFloat viewWidth = self.bounds.size.width;
     CGFloat viewHeight = self.bounds.size.height;
@@ -493,24 +508,29 @@ static void enableAllFeatures(void) {
     y += 48;
     
     // 按钮
-    UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金币" tag:1];
+    UIButton *btn1 = [self createButtonWithTitle:@"💰 无限现金" tag:1];
     btn1.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn1];
     y += 43;
     
-    UIButton *btn2 = [self createButtonWithTitle:@"💎 无限钻石" tag:2];
+    UIButton *btn2 = [self createButtonWithTitle:@"⚡ 无限体力" tag:2];
     btn2.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn2];
     y += 43;
     
-    UIButton *btn3 = [self createButtonWithTitle:@"⚡ 无限体力" tag:3];
+    UIButton *btn3 = [self createButtonWithTitle:@"❤️ 无限健康" tag:3];
     btn3.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn3];
     y += 43;
     
-    UIButton *btn4 = [self createButtonWithTitle:@"🎁 一键全开" tag:4];
+    UIButton *btn4 = [self createButtonWithTitle:@"😊 无限心情" tag:4];
     btn4.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn4];
+    y += 43;
+    
+    UIButton *btn5 = [self createButtonWithTitle:@"🎁 一键全开" tag:5];
+    btn5.frame = CGRectMake(20, y, contentWidth - 40, 35);
+    [self.contentView addSubview:btn5];
     y += 48;
     
     // 版权
@@ -564,24 +584,29 @@ static void enableAllFeatures(void) {
     
     switch (tag) {
         case 1:
-            writeLog(@"功能：无限金币");
-            enableInfiniteMoney();
-            message = @"💰 无限金币开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
+            writeLog(@"功能：无限现金");
+            enableInfiniteCash();
+            message = @"💰 无限现金开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
             break;
         case 2:
-            writeLog(@"功能：无限钻石");
-            enableInfiniteDiamond();
-            message = @"💎 无限钻石开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
-            break;
-        case 3:
             writeLog(@"功能：无限体力");
             enableInfiniteEnergy();
             message = @"⚡ 无限体力开启成功！\n\n请进行一次消费操作来刷新数值\n（如使用体力、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
             break;
+        case 3:
+            writeLog(@"功能：无限健康");
+            enableInfiniteHealth();
+            message = @"❤️ 无限健康开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
+            break;
         case 4:
+            writeLog(@"功能：无限心情");
+            enableInfiniteMood();
+            message = @"😊 无限心情开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
+            break;
+        case 5:
             writeLog(@"功能：一键全开");
             enableAllFeatures();
-            message = @"🎁 一键全开成功！\n💰 金币、💎 钻石、⚡ 体力已修改\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
+            message = @"🎁 一键全开成功！\n💰 现金、⚡ 体力、❤️ 健康、😊 心情已修改\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
             break;
     }
     
