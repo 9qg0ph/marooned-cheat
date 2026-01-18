@@ -248,7 +248,7 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
 - (void)setupUI {
     self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
     
-    CGFloat contentHeight = 430;
+    CGFloat contentHeight = 380;
     CGFloat contentWidth = 280;
     CGFloat viewWidth = self.bounds.size.width;
     CGFloat viewHeight = self.bounds.size.height;
@@ -284,48 +284,56 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     
     CGFloat y = 45;
     
-    // 说明
-    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 60)];
-    info.text = @"✨ 点击功能后游戏会自动关闭\n🔄 修改完成后请手动重新打开游戏\n💾 已自动备份存档，可放心使用";
-    info.font = [UIFont systemFontOfSize:11];
-    info.textColor = [UIColor darkGrayColor];
+    // 学习提示
+    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
+    info.text = @"🎮 资源仅供学习使用";
+    info.font = [UIFont systemFontOfSize:14];
+    info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
-    info.numberOfLines = 3;
     [self.contentView addSubview:info];
-    y += 65;
+    y += 30;
+    
+    // 免责声明
+    UITextView *disclaimer = [[UITextView alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 60)];
+    disclaimer.text = @"免责声明：本工具仅供技术研究与学习，严禁用于商业用途及非法途径。使用本工具修改游戏可能违反游戏服务条款，用户需自行承担一切风险和责任。严禁倒卖、传播或用于牟利，否则后果自负。继续使用即表示您已阅读并同意本声明。";
+    disclaimer.font = [UIFont systemFontOfSize:12];
+    disclaimer.textColor = [UIColor lightGrayColor];
+    disclaimer.backgroundColor = [UIColor colorWithWhite:0.97 alpha:1];
+    disclaimer.layer.cornerRadius = 8;
+    disclaimer.editable = NO;
+    disclaimer.scrollEnabled = NO;
+    [self.contentView addSubview:disclaimer];
+    y += 70;
+    
+    // 提示
+    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
+    tip.text = @"功能开启后重启游戏生效";
+    tip.font = [UIFont systemFontOfSize:12];
+    tip.textColor = [UIColor colorWithRed:1.0 green:0.6 blue:0 alpha:1];
+    tip.textAlignment = NSTextAlignmentCenter;
+    [self.contentView addSubview:tip];
+    y += 28;
     
     // 按钮
     UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金钱" tag:1];
-    btn1.frame = CGRectMake(20, y, contentWidth - 40, 40);
+    btn1.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn1];
-    y += 48;
+    y += 43;
     
     UIButton *btn2 = [self createButtonWithTitle:@"🏆 无限金条" tag:2];
-    btn2.frame = CGRectMake(20, y, contentWidth - 40, 40);
+    btn2.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn2];
-    y += 48;
+    y += 43;
     
     UIButton *btn3 = [self createButtonWithTitle:@"⚡ 无限体力" tag:3];
-    btn3.frame = CGRectMake(20, y, contentWidth - 40, 40);
+    btn3.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn3];
-    y += 48;
-    
-    UIButton *btn4 = [self createButtonWithTitle:@"🎯 无限积分" tag:4];
-    btn4.frame = CGRectMake(20, y, contentWidth - 40, 40);
-    [self.contentView addSubview:btn4];
-    y += 48;
+    y += 43;
     
     UIButton *btn5 = [self createButtonWithTitle:@"🎁 一键全开" tag:5];
-    btn5.frame = CGRectMake(20, y, contentWidth - 40, 40);
-    btn5.backgroundColor = [UIColor colorWithRed:1.0 green:0.6 blue:0 alpha:1];
+    btn5.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn5];
     y += 48;
-    
-    UIButton *btn6 = [self createButtonWithTitle:@"📋 查看日志" tag:6];
-    btn6.frame = CGRectMake(20, y, contentWidth - 40, 40);
-    btn6.backgroundColor = [UIColor colorWithRed:0.5 green:0.5 blue:0.5 alpha:1];
-    [self.contentView addSubview:btn6];
-    y += 55;
     
     // 版权
     UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
@@ -345,7 +353,7 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
     [btn setTitle:title forState:UIControlStateNormal];
     [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    btn.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
+    btn.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
     btn.backgroundColor = [UIColor colorWithRed:1.0 green:0.6 blue:0 alpha:1];
     btn.layer.cornerRadius = 12;
     btn.tag = tag;
@@ -354,21 +362,6 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
 }
 
 - (void)buttonTapped:(UIButton *)sender {
-    if (sender.tag == 6) {
-        // 查看日志
-        NSString *logPath = getLogPath();
-        NSString *logContent = [NSString stringWithContentsOfFile:logPath encoding:NSUTF8StringEncoding error:nil];
-        if (logContent) {
-            NSArray *lines = [logContent componentsSeparatedByString:@"\n"];
-            NSArray *lastLines = [lines subarrayWithRange:NSMakeRange(MAX(0, lines.count - 5), MIN(5, lines.count))];
-            [self showAlert:[NSString stringWithFormat:@"📋 日志文件位置：\n%@\n\n用Filza打开查看完整日志\n\n最后几行：\n%@", 
-                logPath, [lastLines componentsJoinedByString:@"\n"]]];
-        } else {
-            [self showAlert:[NSString stringWithFormat:@"日志文件：\n%@\n\n还没有日志，请先使用功能", logPath]];
-        }
-        return;
-    }
-    
     // 确认提示
     UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"⚠️ 确认修改" 
         message:@"点击确定后：\n1. 游戏会立即关闭\n2. 后台自动修改存档\n3. 请手动重新打开游戏查看效果\n\n确认继续？" 
@@ -500,6 +493,22 @@ static void handlePan(UIPanGestureRecognizer *pan) {
     [pan setTranslation:CGPointZero inView:keyWindow];
 }
 
+static void loadIconImage(void) {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSURL *url = [NSURL URLWithString:@"https://iosdk.cn/tu/2023/04/17/p9CjtUg1.png"];
+        NSData *data = [NSData dataWithContentsOfURL:url];
+        UIImage *image = [UIImage imageWithData:data];
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (image && g_floatButton) {
+                [g_floatButton setTitle:@"" forState:UIControlStateNormal];
+                [g_floatButton setBackgroundImage:image forState:UIControlStateNormal];
+                g_floatButton.clipsToBounds = YES;
+            }
+        });
+    });
+}
+
 static void setupFloatingButton(void) {
     if (g_floatButton) return;
     
@@ -514,8 +523,9 @@ static void setupFloatingButton(void) {
         g_floatButton.clipsToBounds = YES;
         g_floatButton.layer.zPosition = 9999;
         
-        [g_floatButton setTitle:@"💼" forState:UIControlStateNormal];
-        g_floatButton.titleLabel.font = [UIFont systemFontOfSize:24];
+        [g_floatButton setTitle:@"虎" forState:UIControlStateNormal];
+        [g_floatButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        g_floatButton.titleLabel.font = [UIFont boldSystemFontOfSize:22];
         
         [g_floatButton addTarget:[NSValue class] action:@selector(tx_showMenu) forControlEvents:UIControlEventTouchUpInside];
         
@@ -523,6 +533,8 @@ static void setupFloatingButton(void) {
         [g_floatButton addGestureRecognizer:pan];
         
         [keyWindow addSubview:g_floatButton];
+        
+        loadIconImage();
     });
 }
 
