@@ -150,6 +150,18 @@ static void modifyGameSaveData(void) {
         
         writeLog(@"✅ JSON解析成功");
         
+        // 添加详细的调试信息，列出所有键
+        writeLog(@"========== 调试：JSON中的所有键 ==========");
+        for (NSString *key in [saveDict allKeys]) {
+            id value = saveDict[key];
+            NSString *valueStr = [NSString stringWithFormat:@"%@", value];
+            if (valueStr.length > 200) {
+                valueStr = [[valueStr substringToIndex:200] stringByAppendingString:@"..."];
+            }
+            writeLog([NSString stringWithFormat:@"Key: %@ = %@", key, valueStr]);
+        }
+        writeLog(@"========== 调试结束 ==========");
+        
         // 修改游戏数据
         BOOL modified = NO;
         
