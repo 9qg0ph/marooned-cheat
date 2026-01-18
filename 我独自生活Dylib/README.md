@@ -44,6 +44,7 @@ clang -arch arm64 \
   -dynamiclib \
   -framework UIKit \
   -framework Foundation \
+  -framework CoreGraphics \
   -fobjc-arc \
   -o WoduziCheat.dylib \
   WoduziCheat.m
