@@ -125,16 +125,39 @@ static void modifyES3SaveData(void) {
     // 获取ES3存档数据
     NSString *es3Data = [defaults objectForKey:@"data0.es3"];
     if (!es3Data) {
-        writeLog(@"❌ 未找到ES3存档数据");
-        return;
+        writeLog(@"❌ 未找到ES3存档数据 (data0.es3)");
+        
+        // 尝试其他可能的ES3键名
+        NSArray *possibleKeys = @[@"data.es3", @"save.es3", @"gamedata.es3", @"es3data", @"savedata"];
+        for (NSString *key in possibleKeys) {
+            es3Data = [defaults objectForKey:key];
+            if (es3Data) {
+                writeLog([NSString stringWithFormat:@"✅ 找到ES3存档: %@", key]);
+                break;
+            }
+        }
+        
+        if (!es3Data) {
+            writeLog(@"❌ 未找到任何ES3存档数据");
+            return;
+        }
+    } else {
+        writeLog(@"✅ 找到ES3存档数据 (data0.es3)");
     }
     
-    writeLog([NSString stringWithFormat:@"✅ 找到ES3存档，长度: %lu", (unsigned long)es3Data.length]);
+    writeLog([NSString stringWithFormat:@"ES3存档长度: %lu", (unsigned long)es3Data.length]);
+    writeLog([NSString stringWithFormat:@"ES3数据预览: %@", [es3Data substringToIndex:MIN(100, es3Data.length)]]);
     
     // ES3数据是Base64编码的JSON
-    NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:es3Data options:0];
+    NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:es3Data options:NSDataBase64DecodingIgnoreUnknownCharacters];
     if (!decodedData) {
-        writeLog(@"❌ ES3数据Base64解码失败");
+        writeLog(@"❌ ES3数据Base64解码失败，尝试直接解析JSON");
+        // 可能不是Base64编码，直接尝试JSON解析
+        decodedData = [es3Data dataUsingEncoding:NSUTF8StringEncoding];
+    }
+    
+    if (!decodedData) {
+        writeLog(@"❌ ES3数据处理失败");
         return;
     }
     
@@ -150,16 +173,27 @@ static void modifyES3SaveData(void) {
     // 解析JSON
     NSError *error = nil;
     NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
-    NSMutableDictionary *saveDict = [NSJSONSerialization JSONObjectWithData:jsonData 
-        options:NSJSONReadingMutableContainers error:&error];
+    id jsonObject = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
     
-    if (error || !saveDict) {
-        writeLog([NSString stringWithFormat:@"❌ ES3 JSON解析失败: %@", error]);
+    if (error || !jsonObject) {
+        writeLog([NSString stringWithFormat:@"❌ ES3 JSON解析失败: %@", error.localizedDescription]);
         return;
     }
     
     writeLog(@"✅ ES3 JSON解析成功");
-    writeLog([NSString stringWithFormat:@"ES3存档包含 %lu 个对象", (unsigned long)saveDict.count]);
+    
+    NSMutableDictionary *saveDict = nil;
+    if ([jsonObject isKindOfClass:[NSDictionary class]]) {
+        saveDict = [jsonObject mutableCopy];
+        writeLog([NSString stringWithFormat:@"ES3存档包含 %lu 个对象", (unsigned long)saveDict.count]);
+    } else if ([jsonObject isKindOfClass:[NSArray class]]) {
+        writeLog(@"ES3存档是数组格式，尝试处理");
+        // 如果是数组，可能需要特殊处理
+        return;
+    } else {
+        writeLog(@"❌ ES3存档格式不支持");
+        return;
+    }
     
     // 列出所有键，寻找游戏数据
     for (NSString *key in saveDict) {
@@ -173,21 +207,47 @@ static void modifyES3SaveData(void) {
     
     // 尝试修改可能的游戏数据字段
     BOOL modified = NO;
+    
+    // 直接修改顶级字段
+    NSArray *moneyKeys = @[@"money", @"coin", @"coins", @"gold", @"currency", @"cash", @"金币", @"金钱", @"货币", @"Money", @"Coin", @"Gold"];
+    NSArray *diamondKeys = @[@"diamond", @"diamonds", @"gem", @"gems", @"crystal", @"premium", @"钻石", @"宝石", @"水晶", @"Diamond", @"Gem"];
+    NSArray *energyKeys = @[@"energy", @"stamina", @"power", @"hp", @"health", @"体力", @"能量", @"血量", @"Energy", @"Power", @"HP"];
+    
+    for (NSString *moneyKey in moneyKeys) {
+        if (saveDict[moneyKey]) {
+            saveDict[moneyKey] = @999999999;
+            modified = YES;
+            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", moneyKey]);
+        }
+    }
+    
+    for (NSString *diamondKey in diamondKeys) {
+        if (saveDict[diamondKey]) {
+            saveDict[diamondKey] = @999999999;
+            modified = YES;
+            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", diamondKey]);
+        }
+    }
+    
+    for (NSString *energyKey in energyKeys) {
+        if (saveDict[energyKey]) {
+            saveDict[energyKey] = @999999999;
+            modified = YES;
+            writeLog([NSString stringWithFormat:@"✅ 修改顶级字段 %@ = 999999999", energyKey]);
+        }
+    }
+    
+    // 递归修改嵌套对象
     for (NSString *key in saveDict) {
         id value = saveDict[key];
         if ([value isKindOfClass:[NSDictionary class]]) {
             NSMutableDictionary *objDict = [value mutableCopy];
             
-            // 查找并修改数值字段
-            NSArray *moneyKeys = @[@"money", @"coin", @"coins", @"gold", @"currency", @"cash", @"金币", @"金钱", @"货币"];
-            NSArray *diamondKeys = @[@"diamond", @"diamonds", @"gem", @"gems", @"crystal", @"premium", @"钻石", @"宝石", @"水晶"];
-            NSArray *energyKeys = @[@"energy", @"stamina", @"power", @"hp", @"health", @"体力", @"能量", @"血量"];
-            
             for (NSString *moneyKey in moneyKeys) {
                 if (objDict[moneyKey]) {
                     objDict[moneyKey] = @999999999;
                     modified = YES;
-                    writeLog([NSString stringWithFormat:@"✅ 修改 %@.%@ = 999999999", key, moneyKey]);
+                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, moneyKey]);
                 }
             }
             
@@ -195,7 +255,7 @@ static void modifyES3SaveData(void) {
                 if (objDict[diamondKey]) {
                     objDict[diamondKey] = @999999999;
                     modified = YES;
-                    writeLog([NSString stringWithFormat:@"✅ 修改 %@.%@ = 999999999", key, diamondKey]);
+                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, diamondKey]);
                 }
             }
             
@@ -203,13 +263,11 @@ static void modifyES3SaveData(void) {
                 if (objDict[energyKey]) {
                     objDict[energyKey] = @999999999;
                     modified = YES;
-                    writeLog([NSString stringWithFormat:@"✅ 修改 %@.%@ = 999999999", key, energyKey]);
+                    writeLog([NSString stringWithFormat:@"✅ 修改嵌套字段 %@.%@ = 999999999", key, energyKey]);
                 }
             }
             
-            if (modified) {
-                saveDict[key] = objDict;
-            }
+            saveDict[key] = objDict;
         }
     }
     
@@ -221,7 +279,7 @@ static void modifyES3SaveData(void) {
     // 重新编码为JSON
     NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:saveDict options:0 error:&error];
     if (error || !newJsonData) {
-        writeLog([NSString stringWithFormat:@"❌ ES3 JSON序列化失败: %@", error]);
+        writeLog([NSString stringWithFormat:@"❌ ES3 JSON序列化失败: %@", error.localizedDescription]);
         return;
     }
     
@@ -425,13 +483,14 @@ static void enableAllFeatures(void) {
     y += 70;
     
     // 提示
-    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    tip.text = @"功能开启后重启游戏生效";
+    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
+    tip.text = @"修改后进行一次消费来刷新数值\n⚠️ 请勿关闭游戏，否则修改失效";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:0.86 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
+    tip.numberOfLines = 2;
     [self.contentView addSubview:tip];
-    y += 28;
+    y += 48;
     
     // 按钮
     UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金币" tag:1];
@@ -483,7 +542,7 @@ static void enableAllFeatures(void) {
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
     UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"⚠️ 确认修改" 
-        message:@"点击确定后：\n1. 游戏会立即关闭\n2. 后台自动修改存档\n3. 请手动重新打开游戏查看效果\n\n确认继续？" 
+        message:@"修改后请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -507,34 +566,32 @@ static void enableAllFeatures(void) {
         case 1:
             writeLog(@"功能：无限金币");
             enableInfiniteMoney();
-            message = @"💰 无限金币开启成功！游戏将自动重启生效";
+            message = @"💰 无限金币开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
             break;
         case 2:
             writeLog(@"功能：无限钻石");
             enableInfiniteDiamond();
-            message = @"💎 无限钻石开启成功！游戏将自动重启生效";
+            message = @"💎 无限钻石开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
             break;
         case 3:
             writeLog(@"功能：无限体力");
             enableInfiniteEnergy();
-            message = @"⚡ 无限体力开启成功！游戏将自动重启生效";
+            message = @"⚡ 无限体力开启成功！\n\n请进行一次消费操作来刷新数值\n（如使用体力、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
             break;
         case 4:
             writeLog(@"功能：一键全开");
             enableAllFeatures();
-            message = @"🎁 一键全开成功！\n💰 金币: 999999999\n💎 钻石: 999999999\n⚡ 体力: 999999999\n🎯 等级: 100\n\n游戏将自动重启生效";
+            message = @"🎁 一键全开成功！\n💰 金币、💎 钻石、⚡ 体力已修改\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效";
             break;
     }
     
     writeLog(@"========== 修改结束 ==========\n");
     
-    if (success) {
-        // 修改成功，延迟0.5秒后退出游戏
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            writeLog(@"🎉 修改成功！游戏即将关闭，请重新打开查看效果");
-            exit(0);
-        });
-    }
+    // 显示成功提示，不关闭游戏
+    [self showAlert:message];
+    
+    // 关闭菜单
+    [self closeMenu];
 }
 
 - (void)showAlert:(NSString *)message {
