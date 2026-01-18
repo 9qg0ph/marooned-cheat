@@ -118,31 +118,134 @@ static void writeLog(NSString *message) {
 
 #pragma mark - 游戏数据修改
 
-// 调试：列出所有NSUserDefaults中的键值对
-static void debugListAllKeys(void) {
+// ES3存档修改 - 针对Unity Easy Save 3系统
+static void modifyES3SaveData(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    NSDictionary *allKeys = [defaults dictionaryRepresentation];
     
-    writeLog(@"========== 调试：所有存档键值对 ==========");
-    for (NSString *key in allKeys) {
-        id value = allKeys[key];
+    // 获取ES3存档数据
+    NSString *es3Data = [defaults objectForKey:@"data0.es3"];
+    if (!es3Data) {
+        writeLog(@"❌ 未找到ES3存档数据");
+        return;
+    }
+    
+    writeLog([NSString stringWithFormat:@"✅ 找到ES3存档，长度: %lu", (unsigned long)es3Data.length]);
+    
+    // ES3数据是Base64编码的JSON
+    NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:es3Data options:0];
+    if (!decodedData) {
+        writeLog(@"❌ ES3数据Base64解码失败");
+        return;
+    }
+    
+    NSString *jsonString = [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
+    if (!jsonString) {
+        writeLog(@"❌ ES3数据转换为字符串失败");
+        return;
+    }
+    
+    writeLog([NSString stringWithFormat:@"✅ ES3 JSON解码成功，长度: %lu", (unsigned long)jsonString.length]);
+    writeLog([NSString stringWithFormat:@"ES3内容预览: %@", [jsonString substringToIndex:MIN(200, jsonString.length)]]);
+    
+    // 解析JSON
+    NSError *error = nil;
+    NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+    NSMutableDictionary *saveDict = [NSJSONSerialization JSONObjectWithData:jsonData 
+        options:NSJSONReadingMutableContainers error:&error];
+    
+    if (error || !saveDict) {
+        writeLog([NSString stringWithFormat:@"❌ ES3 JSON解析失败: %@", error]);
+        return;
+    }
+    
+    writeLog(@"✅ ES3 JSON解析成功");
+    writeLog([NSString stringWithFormat:@"ES3存档包含 %lu 个对象", (unsigned long)saveDict.count]);
+    
+    // 列出所有键，寻找游戏数据
+    for (NSString *key in saveDict) {
+        id value = saveDict[key];
         NSString *valueStr = [NSString stringWithFormat:@"%@", value];
         if (valueStr.length > 100) {
             valueStr = [[valueStr substringToIndex:100] stringByAppendingString:@"..."];
         }
-        writeLog([NSString stringWithFormat:@"Key: %@ = %@", key, valueStr]);
+        writeLog([NSString stringWithFormat:@"ES3 Key: %@ = %@", key, valueStr]);
     }
-    writeLog(@"========== 调试结束 ==========");
+    
+    // 尝试修改可能的游戏数据字段
+    BOOL modified = NO;
+    for (NSString *key in saveDict) {
+        id value = saveDict[key];
+        if ([value isKindOfClass:[NSDictionary class]]) {
+            NSMutableDictionary *objDict = [value mutableCopy];
+            
+            // 查找并修改数值字段
+            NSArray *moneyKeys = @[@"money", @"coin", @"coins", @"gold", @"currency", @"cash", @"金币", @"金钱", @"货币"];
+            NSArray *diamondKeys = @[@"diamond", @"diamonds", @"gem", @"gems", @"crystal", @"premium", @"钻石", @"宝石", @"水晶"];
+            NSArray *energyKeys = @[@"energy", @"stamina", @"power", @"hp", @"health", @"体力", @"能量", @"血量"];
+            
+            for (NSString *moneyKey in moneyKeys) {
+                if (objDict[moneyKey]) {
+                    objDict[moneyKey] = @999999999;
+                    modified = YES;
+                    writeLog([NSString stringWithFormat:@"✅ 修改 %@.%@ = 999999999", key, moneyKey]);
+                }
+            }
+            
+            for (NSString *diamondKey in diamondKeys) {
+                if (objDict[diamondKey]) {
+                    objDict[diamondKey] = @999999999;
+                    modified = YES;
+                    writeLog([NSString stringWithFormat:@"✅ 修改 %@.%@ = 999999999", key, diamondKey]);
+                }
+            }
+            
+            for (NSString *energyKey in energyKeys) {
+                if (objDict[energyKey]) {
+                    objDict[energyKey] = @999999999;
+                    modified = YES;
+                    writeLog([NSString stringWithFormat:@"✅ 修改 %@.%@ = 999999999", key, energyKey]);
+                }
+            }
+            
+            if (modified) {
+                saveDict[key] = objDict;
+            }
+        }
+    }
+    
+    if (!modified) {
+        writeLog(@"❌ 未找到可修改的游戏数据字段");
+        return;
+    }
+    
+    // 重新编码为JSON
+    NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:saveDict options:0 error:&error];
+    if (error || !newJsonData) {
+        writeLog([NSString stringWithFormat:@"❌ ES3 JSON序列化失败: %@", error]);
+        return;
+    }
+    
+    NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
+    
+    // Base64编码
+    NSData *encodedData = [newJsonString dataUsingEncoding:NSUTF8StringEncoding];
+    NSString *newES3Data = [encodedData base64EncodedStringWithOptions:0];
+    
+    // 保存回NSUserDefaults
+    [defaults setObject:newES3Data forKey:@"data0.es3"];
+    [defaults synchronize];
+    
+    writeLog(@"🎉 ES3存档修改完成！");
 }
 
 // 无限金币功能
 static void enableInfiniteMoney(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // 先调试查看所有键
-    debugListAllKeys();
+    // 先尝试修改ES3存档
+    modifyES3SaveData();
     
-    // 常见的金币字段名
+    // 同时修改NSUserDefaults中的字段（作为备用）
     [defaults setInteger:999999999 forKey:@"money"];
     [defaults setInteger:999999999 forKey:@"coin"];
     [defaults setInteger:999999999 forKey:@"coins"];
@@ -171,7 +274,7 @@ static void enableInfiniteMoney(void) {
 static void enableInfiniteDiamond(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // 常见的钻石字段名
+    // ES3存档已在金币函数中处理，这里只处理NSUserDefaults
     [defaults setInteger:999999999 forKey:@"diamond"];
     [defaults setInteger:999999999 forKey:@"diamonds"];
     [defaults setInteger:999999999 forKey:@"gem"];
@@ -199,7 +302,7 @@ static void enableInfiniteDiamond(void) {
 static void enableInfiniteEnergy(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // 常见的体力字段名
+    // ES3存档已在金币函数中处理，这里只处理NSUserDefaults
     [defaults setInteger:999999999 forKey:@"energy"];
     [defaults setInteger:999999999 forKey:@"stamina"];
     [defaults setInteger:999999999 forKey:@"power"];
