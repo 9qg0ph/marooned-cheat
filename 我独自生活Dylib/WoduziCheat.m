@@ -14,6 +14,7 @@ static void showMenu(void);
 static void writeLog(NSString *message);
 static UIWindow* getKeyWindow(void);
 static BOOL searchAndModifyES3Data(NSMutableDictionary *es3Dict, NSUserDefaults *defaults);
+static BOOL searchDictionaryRecursively(NSMutableDictionary *dict, BOOL searchAttributes);
 
 #pragma mark - 版权保护
 
@@ -297,79 +298,205 @@ static void modifyGameSaveData(void) {
         } else {
             writeLog(@"❌ 未找到可修改的游戏数据字段");
         }
-    } else {
-        writeLog(@"❌ 存档数据格式不支持");
     }
+    
+    // 最后，搜索NSUserDefaults中所有可能的大数值字段
+    writeLog(@"========== 搜索NSUserDefaults中的所有大数值 ==========");
+    NSDictionary *allDefaults = [defaults dictionaryRepresentation];
+    BOOL foundAnyValue = NO;
+    
+    for (NSString *key in allDefaults) {
+        id value = allDefaults[key];
+        if ([value isKindOfClass:[NSNumber class]]) {
+            NSNumber *numValue = (NSNumber *)value;
+            NSInteger intVal = [numValue integerValue];
+            if (intVal >= 100 && intVal <= 50000000000) {  // 搜索可能的游戏数值
+                writeLog([NSString stringWithFormat:@"发现数值字段: %@ = %ld", key, (long)intVal]);
+                
+                // 如果数值在合理范围内，尝试修改
+                if (intVal >= 100 && intVal <= 1000000000) {
+                    if ([key containsString:@"现金"] || [key containsString:@"金钱"] || [key containsString:@"cash"] || [key containsString:@"money"] || [key containsString:@"Cash"] || [key containsString:@"Money"]) {
+                        [defaults setInteger:21000000000 forKey:key];
+                        writeLog([NSString stringWithFormat:@"✅ 修改现金字段 %@ = 21000000000", key]);
+                        foundAnyValue = YES;
+                    } else if ([key containsString:@"体力"] || [key containsString:@"energy"] || [key containsString:@"stamina"] || [key containsString:@"Energy"] || [key containsString:@"Stamina"]) {
+                        [defaults setInteger:21000000000 forKey:key];
+                        writeLog([NSString stringWithFormat:@"✅ 修改体力字段 %@ = 21000000000", key]);
+                        foundAnyValue = YES;
+                    } else if ([key containsString:@"健康"] || [key containsString:@"health"] || [key containsString:@"hp"] || [key containsString:@"Health"] || [key containsString:@"HP"]) {
+                        [defaults setInteger:1000000 forKey:key];
+                        writeLog([NSString stringWithFormat:@"✅ 修改健康字段 %@ = 1000000", key]);
+                        foundAnyValue = YES;
+                    } else if ([key containsString:@"心情"] || [key containsString:@"mood"] || [key containsString:@"happiness"] || [key containsString:@"Mood"] || [key containsString:@"Happiness"]) {
+                        [defaults setInteger:1000000 forKey:key];
+                        writeLog([NSString stringWithFormat:@"✅ 修改心情字段 %@ = 1000000", key]);
+                        foundAnyValue = YES;
+                    }
+                }
+            }
+        }
+    }
+    
+    // 如果没有找到明确的字段，尝试修改一些通用的可能字段
+    if (!foundAnyValue) {
+        writeLog(@"========== 尝试修改通用字段 ==========");
+        
+        // 尝试一些可能的字段名
+        NSArray *possibleCashKeys = @[@"playerCash", @"gameCash", @"userMoney", @"currentCash", @"totalCash", @"coin", @"coins"];
+        NSArray *possibleEnergyKeys = @[@"playerEnergy", @"gameEnergy", @"userEnergy", @"currentEnergy", @"totalEnergy", @"power"];
+        NSArray *possibleHealthKeys = @[@"playerHealth", @"gameHealth", @"userHealth", @"currentHealth", @"totalHealth", @"life"];
+        NSArray *possibleMoodKeys = @[@"playerMood", @"gameMood", @"userMood", @"currentMood", @"totalMood", @"spirit"];
+        
+        for (NSString *key in possibleCashKeys) {
+            [defaults setInteger:21000000000 forKey:key];
+            writeLog([NSString stringWithFormat:@"✅ 尝试设置现金字段 %@ = 21000000000", key]);
+        }
+        
+        for (NSString *key in possibleEnergyKeys) {
+            [defaults setInteger:21000000000 forKey:key];
+            writeLog([NSString stringWithFormat:@"✅ 尝试设置体力字段 %@ = 21000000000", key]);
+        }
+        
+        for (NSString *key in possibleHealthKeys) {
+            [defaults setInteger:1000000 forKey:key];
+            writeLog([NSString stringWithFormat:@"✅ 尝试设置健康字段 %@ = 1000000", key]);
+        }
+        
+        for (NSString *key in possibleMoodKeys) {
+            [defaults setInteger:1000000 forKey:key];
+            writeLog([NSString stringWithFormat:@"✅ 尝试设置心情字段 %@ = 1000000", key]);
+        }
+    }
+    
+    [defaults synchronize];
+    writeLog(@"========== NSUserDefaults搜索完成 ==========");
 }
 
 // 搜索并修改ES3数据中的玩家属性
 static BOOL searchAndModifyES3Data(NSMutableDictionary *es3Dict, NSUserDefaults *defaults) {
     BOOL modified = NO;
     
+    writeLog([NSString stringWithFormat:@"ES3存档包含 %lu 个对象", (unsigned long)[es3Dict count]]);
+    
     // 遍历ES3存档中的所有对象
     for (NSString *key in es3Dict) {
         id value = es3Dict[key];
+        writeLog([NSString stringWithFormat:@"ES3 Key: %@ = %@", key, [value class]]);
+        
         if ([value isKindOfClass:[NSDictionary class]]) {
             NSMutableDictionary *objDict = [value mutableCopy];
             
             // 检查是否有value数组（GameObject数组）
             if (objDict[@"value"] && [objDict[@"value"] isKindOfClass:[NSArray class]]) {
                 NSMutableArray *valueArray = [objDict[@"value"] mutableCopy];
+                writeLog([NSString stringWithFormat:@"找到value数组，包含 %lu 个GameObject", (unsigned long)valueArray.count]);
                 
                 for (int i = 0; i < valueArray.count; i++) {
                     id item = valueArray[i];
                     if ([item isKindOfClass:[NSDictionary class]]) {
                         NSMutableDictionary *itemDict = [item mutableCopy];
                         
-                        // 检查components数组
-                        if (itemDict[@"components"] && [itemDict[@"components"] isKindOfClass:[NSArray class]]) {
-                            NSMutableArray *components = [itemDict[@"components"] mutableCopy];
-                            
-                            for (int j = 0; j < components.count; j++) {
-                                id component = components[j];
-                                if ([component isKindOfClass:[NSDictionary class]]) {
-                                    NSMutableDictionary *compDict = [component mutableCopy];
-                                    
-                                    // 搜索玩家属性字段
-                                    for (NSString *compKey in [compDict allKeys]) {
-                                        if ([compKey containsString:@"现金"] || [compKey containsString:@"金钱"] || 
-                                            [compKey containsString:@"cash"] || [compKey containsString:@"money"]) {
-                                            compDict[compKey] = @21000000000;
-                                            modified = YES;
-                                            writeLog([NSString stringWithFormat:@"✅ ES3修改现金字段 %@ = 21000000000", compKey]);
-                                        } else if ([compKey containsString:@"体力"] || [compKey containsString:@"energy"] || 
-                                                  [compKey containsString:@"stamina"]) {
-                                            compDict[compKey] = @21000000000;
-                                            modified = YES;
-                                            writeLog([NSString stringWithFormat:@"✅ ES3修改体力字段 %@ = 21000000000", compKey]);
-                                        } else if ([compKey containsString:@"健康"] || [compKey containsString:@"health"] || 
-                                                  [compKey containsString:@"hp"]) {
-                                            compDict[compKey] = @1000000;
-                                            modified = YES;
-                                            writeLog([NSString stringWithFormat:@"✅ ES3修改健康字段 %@ = 1000000", compKey]);
-                                        } else if ([compKey containsString:@"心情"] || [compKey containsString:@"mood"] || 
-                                                  [compKey containsString:@"happiness"]) {
-                                            compDict[compKey] = @1000000;
-                                            modified = YES;
-                                            writeLog([NSString stringWithFormat:@"✅ ES3修改心情字段 %@ = 1000000", compKey]);
-                                        }
-                                    }
-                                    
-                                    components[j] = compDict;
-                                }
-                            }
-                            
-                            itemDict[@"components"] = components;
+                        // 递归搜索所有字段
+                        BOOL itemModified = searchDictionaryRecursively(itemDict, YES);
+                        if (itemModified) {
+                            modified = YES;
+                            valueArray[i] = itemDict;
                         }
-                        
-                        valueArray[i] = itemDict;
                     }
                 }
                 
-                objDict[@"value"] = valueArray;
+                if (modified) {
+                    objDict[@"value"] = valueArray;
+                    es3Dict[key] = objDict;
+                }
+            } else {
+                // 直接搜索字典
+                BOOL objModified = searchDictionaryRecursively(objDict, YES);
+                if (objModified) {
+                    modified = YES;
+                    es3Dict[key] = objDict;
+                }
+            }
+        }
+    }
+    
+    return modified;
+}
+
+// 递归搜索字典中的玩家属性
+static BOOL searchDictionaryRecursively(NSMutableDictionary *dict, BOOL searchAttributes) {
+    BOOL modified = NO;
+    
+    for (NSString *key in [dict allKeys]) {
+        id value = dict[key];
+        
+        // 如果是字典，递归搜索
+        if ([value isKindOfClass:[NSDictionary class]]) {
+            NSMutableDictionary *subDict = [value mutableCopy];
+            BOOL subModified = searchDictionaryRecursively(subDict, searchAttributes);
+            if (subModified) {
+                dict[key] = subDict;
+                modified = YES;
+            }
+        }
+        // 如果是数组，遍历数组元素
+        else if ([value isKindOfClass:[NSArray class]]) {
+            NSMutableArray *array = [value mutableCopy];
+            BOOL arrayModified = NO;
+            
+            for (int i = 0; i < array.count; i++) {
+                id arrayItem = array[i];
+                if ([arrayItem isKindOfClass:[NSDictionary class]]) {
+                    NSMutableDictionary *arrayDict = [arrayItem mutableCopy];
+                    BOOL itemModified = searchDictionaryRecursively(arrayDict, searchAttributes);
+                    if (itemModified) {
+                        array[i] = arrayDict;
+                        arrayModified = YES;
+                    }
+                }
             }
             
-            es3Dict[key] = objDict;
+            if (arrayModified) {
+                dict[key] = array;
+                modified = YES;
+            }
+        }
+        // 如果是数值，检查是否是玩家属性
+        else if ([value isKindOfClass:[NSNumber class]] && searchAttributes) {
+            NSNumber *numValue = (NSNumber *)value;
+            NSInteger intVal = [numValue integerValue];
+            
+            // 检查数值范围和键名，判断是否是玩家属性
+            if (intVal >= 100 && intVal <= 1000000000) {
+                NSString *lowerKey = [key lowercaseString];
+                
+                if ([lowerKey containsString:@"cash"] || [lowerKey containsString:@"money"] || 
+                    [lowerKey containsString:@"现金"] || [lowerKey containsString:@"金钱"] ||
+                    [lowerKey containsString:@"coin"]) {
+                    dict[key] = @21000000000;
+                    writeLog([NSString stringWithFormat:@"✅ ES3修改现金字段 %@ = 21000000000 (原值: %ld)", key, (long)intVal]);
+                    modified = YES;
+                } else if ([lowerKey containsString:@"energy"] || [lowerKey containsString:@"stamina"] || 
+                          [lowerKey containsString:@"体力"] || [lowerKey containsString:@"power"]) {
+                    dict[key] = @21000000000;
+                    writeLog([NSString stringWithFormat:@"✅ ES3修改体力字段 %@ = 21000000000 (原值: %ld)", key, (long)intVal]);
+                    modified = YES;
+                } else if ([lowerKey containsString:@"health"] || [lowerKey containsString:@"hp"] || 
+                          [lowerKey containsString:@"健康"] || [lowerKey containsString:@"life"]) {
+                    dict[key] = @1000000;
+                    writeLog([NSString stringWithFormat:@"✅ ES3修改健康字段 %@ = 1000000 (原值: %ld)", key, (long)intVal]);
+                    modified = YES;
+                } else if ([lowerKey containsString:@"mood"] || [lowerKey containsString:@"happiness"] || 
+                          [lowerKey containsString:@"心情"] || [lowerKey containsString:@"spirit"]) {
+                    dict[key] = @1000000;
+                    writeLog([NSString stringWithFormat:@"✅ ES3修改心情字段 %@ = 1000000 (原值: %ld)", key, (long)intVal]);
+                    modified = YES;
+                }
+                // 如果数值在特定范围内，可能是玩家属性，记录下来
+                else if (intVal >= 1000 && intVal <= 100000000) {
+                    writeLog([NSString stringWithFormat:@"🔍 发现可疑数值字段: %@ = %ld", key, (long)intVal]);
+                }
+            }
         }
     }
     
