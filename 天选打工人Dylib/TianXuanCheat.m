@@ -9,6 +9,28 @@
 static UIButton *g_floatButton = nil;
 static TXMenuView *g_menuView = nil;
 
+#pragma mark - 版权保护
+
+// 解密版权字符串（防止二进制修改）
+static NSString* getCopyrightText(void) {
+    // Base64编码: "© 2026  𝐈𝐎𝐒𝐃𝐊 科技虎"
+    const char *encoded = "wqkgMjAyNiAg8JCIiPCQjojwnIyD8JCMiiDnp5bmioDomY4=";
+    NSData *data = [[NSData alloc] initWithBase64EncodedString:[NSString stringWithUTF8String:encoded] options:0];
+    NSString *decoded = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    
+    // 动态拼接（增加混淆）
+    NSString *part1 = @"©";
+    NSString *part2 = @" 2026";
+    NSString *part3 = @"  𝐈𝐎𝐒𝐃𝐊";
+    NSString *part4 = @" 科技虎";
+    
+    // 验证解码是否成功，失败则使用拼接
+    if (decoded && decoded.length > 0) {
+        return decoded;
+    }
+    return [NSString stringWithFormat:@"%@%@%@%@", part1, part2, part3, part4];
+}
+
 #pragma mark - 存档修改
 
 // 获取存档路径
@@ -337,7 +359,7 @@ static BOOL modifyGameData(int32_t money, int32_t mine, int32_t power, int32_t m
     
     // 版权
     UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    copyright.text = @"© 2025  𝐈𝐎𝐒𝐃𝐊 科技虎";
+    copyright.text = getCopyrightText();
     copyright.font = [UIFont systemFontOfSize:12];
     copyright.textColor = [UIColor lightGrayColor];
     copyright.textAlignment = NSTextAlignmentCenter;
