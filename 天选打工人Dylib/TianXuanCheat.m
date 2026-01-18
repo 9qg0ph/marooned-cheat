@@ -23,6 +23,45 @@ static NSString* getCopyrightText(void) {
     return [NSString stringWithFormat:@"%@%@%@%@%@", part1, part2, part3, part4, part5];
 }
 
+#pragma mark - 免责声明管理
+
+// 检查是否已同意免责声明
+static BOOL hasAgreedToDisclaimer(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    return [defaults boolForKey:@"TXCheat_DisclaimerAgreed"];
+}
+
+// 保存免责声明同意状态
+static void setDisclaimerAgreed(BOOL agreed) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setBool:agreed forKey:@"TXCheat_DisclaimerAgreed"];
+    [defaults synchronize];
+}
+
+// 显示免责声明弹窗
+static void showDisclaimerAlert(void) {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"⚠️ 免责声明" 
+        message:@"本工具仅供技术研究与学习，严禁用于商业用途及非法途径。\n\n使用本工具修改游戏可能违反游戏服务条款，用户需自行承担一切风险和责任。\n\n严禁倒卖、传播或用于牟利，否则后果自负。\n\n继续使用即表示您已阅读并同意本声明。\n\n是否同意并继续使用？" 
+        preferredStyle:UIAlertControllerStyleAlert];
+    
+    [alert addAction:[UIAlertAction actionWithTitle:@"不同意" style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+        // 用户不同意，直接退出应用
+        writeLog(@"用户不同意免责声明，应用退出");
+        exit(0);
+    }]];
+    
+    [alert addAction:[UIAlertAction actionWithTitle:@"同意" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        // 用户同意，保存状态并显示功能菜单
+        setDisclaimerAgreed(YES);
+        writeLog(@"用户同意免责声明");
+        showMenu();
+    }]];
+    
+    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+    while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
+    [rootVC presentViewController:alert animated:YES completion:nil];
+}
+
 #pragma mark - 存档修改
 
 // 获取存档路径
@@ -490,6 +529,17 @@ static void showMenu(void) {
     [keyWindow addSubview:g_menuView];
 }
 
+// 处理悬浮按钮点击（首次检查免责声明）
+static void handleFloatButtonTap(void) {
+    if (!hasAgreedToDisclaimer()) {
+        // 首次使用，显示免责声明
+        showDisclaimerAlert();
+    } else {
+        // 已同意，直接显示功能菜单
+        showMenu();
+    }
+}
+
 static void handlePan(UIPanGestureRecognizer *pan) {
     UIWindow *keyWindow = getKeyWindow();
     if (!keyWindow || !g_floatButton) return;
@@ -575,7 +625,7 @@ static void setupFloatingButton(void) {
 }
 
 @implementation NSValue (TXCheat)
-+ (void)tx_showMenu { showMenu(); }
++ (void)tx_showMenu { handleFloatButtonTap(); }
 + (void)tx_handlePan:(UIPanGestureRecognizer *)pan { handlePan(pan); }
 @end
 
