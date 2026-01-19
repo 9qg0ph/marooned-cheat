@@ -209,7 +209,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                             NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
                             if (regex) {
                                 // 直接构建替换字符串
-                                NSString *fieldName = [[pattern componentsSeparatedByString:@"\""][1];
+                                NSArray *components = [pattern componentsSeparatedByString:@"\""];
+                                NSString *fieldName = [components objectAtIndex:1];
                                 NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)money];
                                 NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
                                     options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
@@ -234,7 +235,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                             NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
                             if (regex) {
                                 // 直接构建替换字符串
-                                NSString *fieldName = [[pattern componentsSeparatedByString:@"\""][1];
+                                NSArray *components = [pattern componentsSeparatedByString:@"\""];
+                                NSString *fieldName = [components objectAtIndex:1];
                                 NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)stamina];
                                 NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
                                     options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
@@ -258,7 +260,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                             NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
                             if (regex) {
                                 // 直接构建替换字符串
-                                NSString *fieldName = [[pattern componentsSeparatedByString:@"\""][1];
+                                NSArray *components = [pattern componentsSeparatedByString:@"\""];
+                                NSString *fieldName = [components objectAtIndex:1];
                                 NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)health];
                                 NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
                                     options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
