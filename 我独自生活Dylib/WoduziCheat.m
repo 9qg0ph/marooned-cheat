@@ -97,7 +97,7 @@ static void writeLog(NSString *message) {
 
 // 双重修改：NSUserDefaults直接字段 + ES3Save存档格式
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始双重修改 ==========");
+    writeLog(@"========== 开始修改 ==========");
     
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     BOOL directSuccess = NO;
@@ -172,87 +172,79 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         } else {
             writeLog(@"✅ Base64解码成功");
             
-            // 解析JSON - 先尝试修复转义序列问题
+            // 直接进行字符串替换修改（跳过JSON解析）
             NSString *jsonString = [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
             if (!jsonString) {
                 writeLog(@"❌ JSON字符串转换失败");
             } else {
-                // 修复常见的转义序列问题
-                jsonString = [jsonString stringByReplacingOccurrencesOfString:@"\\'" withString:@"'"];
-                jsonString = [jsonString stringByReplacingOccurrencesOfString:@"\\\"" withString:@"\""];
+                writeLog(@"🔍 开始字符串替换修改ES3数据");
+                writeLog([NSString stringWithFormat:@"JSON字符串长度: %lu", (unsigned long)jsonString.length]);
                 
-                // 重新转换为NSData
-                NSData *fixedJsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+                NSString *modifiedJsonString = jsonString;
+                BOOL stringModified = NO;
+                int replaceCount = 0;
                 
-                NSError *error = nil;
-                NSMutableDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:fixedJsonData 
-                    options:NSJSONReadingMutableContainers error:&error];
-                
-                if (error || !jsonDict) {
-                    writeLog([NSString stringWithFormat:@"❌ JSON解析失败: %@", error]);
+                if (money > 0) {
+                    writeLog(@"🔍 开始查找金钱相关字段");
+                    // 使用更宽泛的模式匹配金钱字段
+                    NSArray *moneyPatterns = @[
+                        @"\"金钱\"\\s*:\\s*\\d+",
+                        @"\"现金\"\\s*:\\s*\\d+", 
+                        @"\"玩家现金\"\\s*:\\s*\\d+",
+                        @"\"userCash\"\\s*:\\s*\\d+",
+                        @"\"当前现金\"\\s*:\\s*\\d+",
+                        @"\"Cash\"\\s*:\\s*\\d+"
+                    ];
                     
-                    // 如果还是失败，尝试直接字符串替换修改
-                    writeLog(@"尝试直接字符串替换修改ES3数据");
-                    writeLog([NSString stringWithFormat:@"JSON字符串长度: %lu", (unsigned long)jsonString.length]);
-                    NSString *modifiedJsonString = jsonString;
-                    BOOL stringModified = NO;
-                    
-                    if (money > 0) {
-                        writeLog(@"开始查找金钱相关字段");
-                        // 查找并替换金钱相关字段 - 使用更简单的模式
-                        NSArray *moneyPatterns = @[
-                            @"\"userCash\"\\s*:\\s*\\d+",
-                            @"\"金钱\"\\s*:\\s*\\d+", 
-                            @"\"玩家现金\"\\s*:\\s*\\d+",
-                            @"\"现金\"\\s*:\\s*\\d+"
-                        ];
+                    for (NSString *pattern in moneyPatterns) {
+                        NSError *regexError = nil;
+                        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
+                        if (regexError) {
+                            writeLog([NSString stringWithFormat:@"❌ 正则表达式创建失败: %@", regexError]);
+                            continue;
+                        }
                         
-                        for (NSString *pattern in moneyPatterns) {
-                            writeLog([NSString stringWithFormat:@"尝试匹配模式: %@", pattern]);
-                            NSError *regexError = nil;
-                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
-                            if (regexError) {
-                                writeLog([NSString stringWithFormat:@"❌ 正则表达式创建失败: %@", regexError]);
-                                continue;
-                            }
-                            
-                            // 先检查是否有匹配
-                            NSUInteger matchCount = [regex numberOfMatchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
-                            writeLog([NSString stringWithFormat:@"找到 %lu 个匹配", (unsigned long)matchCount]);
-                            
-                            if (matchCount > 0) {
-                                // 直接构建替换字符串
-                                NSArray *components = [pattern componentsSeparatedByString:@"\""];
-                                if (components.count > 1) {
-                                    NSString *fieldName = [components objectAtIndex:1];
-                                    NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)money];
-                                    writeLog([NSString stringWithFormat:@"替换为: %@", replacement]);
-                                    
-                                    NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
-                                        options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
-                                    if (![newString isEqualToString:modifiedJsonString]) {
-                                        modifiedJsonString = newString;
-                                        stringModified = YES;
-                                        writeLog([NSString stringWithFormat:@"✅ 字符串替换修改金钱字段: %@ -> %ld", fieldName, (long)money]);
-                                    }
+                        // 检查匹配数量
+                        NSUInteger matchCount = [regex numberOfMatchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
+                        writeLog([NSString stringWithFormat:@"🔍 模式 %@ 找到 %lu 个匹配", pattern, (unsigned long)matchCount]);
+                        
+                        if (matchCount > 0) {
+                            // 提取字段名并替换
+                            NSArray *components = [pattern componentsSeparatedByString:@"\""];
+                            if (components.count > 1) {
+                                NSString *fieldName = [components objectAtIndex:1];
+                                NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)money];
+                                
+                                NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
+                                    options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
+                                if (![newString isEqualToString:modifiedJsonString]) {
+                                    modifiedJsonString = newString;
+                                    stringModified = YES;
+                                    replaceCount++;
+                                    writeLog([NSString stringWithFormat:@"✅ 替换金钱字段 %@: %ld (%lu处)", fieldName, (long)money, (unsigned long)matchCount]);
                                 }
                             }
                         }
                     }
+                }
+                
+                if (stamina > 0) {
+                    writeLog(@"🔍 开始查找体力相关字段");
+                    NSArray *staminaPatterns = @[
+                        @"\"Stamina\"\\s*:\\s*\\d+",
+                        @"\"体力\"\\s*:\\s*\\d+",
+                        @"\"玩家体力\"\\s*:\\s*\\d+",
+                        @"\"当前体力\"\\s*:\\s*\\d+"
+                    ];
                     
-                    if (stamina > 0) {
-                        // 查找并替换体力相关字段
-                        NSArray *staminaPatterns = @[
-                            @"\"Stamina\"\\s*:\\s*\\d+",
-                            @"\"体力\"\\s*:\\s*\\d+",
-                            @"\"玩家体力\"\\s*:\\s*\\d+"
-                        ];
-                        
-                        for (NSString *pattern in staminaPatterns) {
-                            NSError *regexError = nil;
-                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
-                            if (regex) {
-                                // 直接构建替换字符串
+                    for (NSString *pattern in staminaPatterns) {
+                        NSError *regexError = nil;
+                        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
+                        if (regex) {
+                            NSUInteger matchCount = [regex numberOfMatchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
+                            writeLog([NSString stringWithFormat:@"🔍 模式 %@ 找到 %lu 个匹配", pattern, (unsigned long)matchCount]);
+                            
+                            if (matchCount > 0) {
                                 NSArray *components = [pattern componentsSeparatedByString:@"\""];
                                 if (components.count > 1) {
                                     NSString *fieldName = [components objectAtIndex:1];
@@ -262,25 +254,31 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                                     if (![newString isEqualToString:modifiedJsonString]) {
                                         modifiedJsonString = newString;
                                         stringModified = YES;
-                                        writeLog([NSString stringWithFormat:@"✅ 字符串替换修改体力字段: %@ -> %ld", fieldName, (long)stamina]);
+                                        replaceCount++;
+                                        writeLog([NSString stringWithFormat:@"✅ 替换体力字段 %@: %ld (%lu处)", fieldName, (long)stamina, (unsigned long)matchCount]);
                                     }
                                 }
                             }
                         }
                     }
+                }
+                
+                if (health > 0) {
+                    writeLog(@"🔍 开始查找健康相关字段");
+                    NSArray *healthPatterns = @[
+                        @"\"当前健康\"\\s*:\\s*\\d+",
+                        @"\"健康\"\\s*:\\s*\\d+",
+                        @"\"Health\"\\s*:\\s*\\d+"
+                    ];
                     
-                    if (health > 0) {
-                        // 查找并替换健康相关字段
-                        NSArray *healthPatterns = @[
-                            @"\"当前健康\"\\s*:\\s*\\d+",
-                            @"\"健康\"\\s*:\\s*\\d+"
-                        ];
-                        
-                        for (NSString *pattern in healthPatterns) {
-                            NSError *regexError = nil;
-                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
-                            if (regex) {
-                                // 直接构建替换字符串
+                    for (NSString *pattern in healthPatterns) {
+                        NSError *regexError = nil;
+                        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
+                        if (regex) {
+                            NSUInteger matchCount = [regex numberOfMatchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
+                            writeLog([NSString stringWithFormat:@"🔍 模式 %@ 找到 %lu 个匹配", pattern, (unsigned long)matchCount]);
+                            
+                            if (matchCount > 0) {
                                 NSArray *components = [pattern componentsSeparatedByString:@"\""];
                                 if (components.count > 1) {
                                     NSString *fieldName = [components objectAtIndex:1];
@@ -290,122 +288,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                                     if (![newString isEqualToString:modifiedJsonString]) {
                                         modifiedJsonString = newString;
                                         stringModified = YES;
-                                        writeLog([NSString stringWithFormat:@"✅ 字符串替换修改健康字段: %@ -> %ld", fieldName, (long)health]);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    if (stringModified) {
-                        // 重新Base64编码
-                        NSData *modifiedData = [modifiedJsonString dataUsingEncoding:NSUTF8StringEncoding];
-                        NSString *newES3Data = [modifiedData base64EncodedStringWithOptions:0];
-                        
-                        // 写回NSUserDefaults
-                        [defaults setObject:newES3Data forKey:@"data1.es3"];
-                        es3Success = [defaults synchronize];
-                        
-                        if (es3Success) {
-                            writeLog(@"✅ 字符串替换修改ES3存档成功！");
-                        } else {
-                            writeLog(@"❌ 字符串替换修改ES3存档失败");
-                        }
-                    }
-                } else {
-                writeLog(@"✅ JSON解析成功");
-                
-                // 遍历JSON结构，查找游戏数据
-                BOOL foundGameData = NO;
-                int modifiedCount = 0;
-                
-                // ES3Save的数据结构是嵌套的，需要深度遍历
-                for (NSString *key in jsonDict) {
-                    id value = jsonDict[key];
-                    if ([value isKindOfClass:[NSDictionary class]]) {
-                        NSDictionary *objectDict = (NSDictionary *)value;
-                        id valueArray = objectDict[@"value"];
-                        
-                        if ([valueArray isKindOfClass:[NSArray class]]) {
-                            NSArray *gameObjects = (NSArray *)valueArray;
-                            
-                            for (id gameObject in gameObjects) {
-                                if ([gameObject isKindOfClass:[NSDictionary class]]) {
-                                    NSMutableDictionary *gameObjectDict = (NSMutableDictionary *)gameObject;
-                                    NSArray *components = gameObjectDict[@"components"];
-                                    
-                                    if ([components isKindOfClass:[NSArray class]]) {
-                                        for (id component in components) {
-                                            if ([component isKindOfClass:[NSMutableDictionary class]]) {
-                                                NSMutableDictionary *componentDict = (NSMutableDictionary *)component;
-                                                
-                                                // 查找游戏管理器组件
-                                                NSString *type = componentDict[@"__type"];
-                                                if ([type containsString:@"GameObjectManager"] || [type containsString:@"Manager"]) {
-                                                    foundGameData = YES;
-                                                    
-                                                    // 修改金钱相关字段
-                                                    if (money > 0) {
-                                                        NSArray *es3MoneyKeys = @[@"金钱", @"现金", @"玩家现金", @"当前现金"];
-                                                        for (NSString *moneyKey in es3MoneyKeys) {
-                                                            if (componentDict[moneyKey]) {
-                                                                componentDict[moneyKey] = @(money);
-                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", moneyKey, (long)money]);
-                                                                modifiedCount++;
-                                                            }
-                                                        }
-                                                    }
-                                                    
-                                                    // 修改体力相关字段
-                                                    if (stamina > 0) {
-                                                        NSArray *es3StaminaKeys = @[@"体力", @"玩家体力", @"当前体力"];
-                                                        for (NSString *staminaKey in es3StaminaKeys) {
-                                                            if (componentDict[staminaKey]) {
-                                                                componentDict[staminaKey] = @(stamina);
-                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", staminaKey, (long)stamina]);
-                                                                modifiedCount++;
-                                                            }
-                                                        }
-                                                    }
-                                                    
-                                                    // 修改健康相关字段
-                                                    if (health > 0) {
-                                                        NSArray *es3HealthKeys = @[@"健康", @"当前健康"];
-                                                        for (NSString *healthKey in es3HealthKeys) {
-                                                            if (componentDict[healthKey]) {
-                                                                componentDict[healthKey] = @(health);
-                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", healthKey, (long)health]);
-                                                                modifiedCount++;
-                                                            }
-                                                        }
-                                                    }
-                                                    
-                                                    // 修改心情相关字段
-                                                    if (mood > 0) {
-                                                        NSArray *es3MoodKeys = @[@"心情", @"快乐", @"情绪"];
-                                                        for (NSString *moodKey in es3MoodKeys) {
-                                                            if (componentDict[moodKey]) {
-                                                                componentDict[moodKey] = @(mood);
-                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", moodKey, (long)mood]);
-                                                                modifiedCount++;
-                                                            }
-                                                        }
-                                                    }
-                                                    
-                                                    // 修改经验相关字段
-                                                    if (experience > 0) {
-                                                        NSArray *es3ExpKeys = @[@"经验", @"积分", @"等级"];
-                                                        for (NSString *expKey in es3ExpKeys) {
-                                                            if (componentDict[expKey]) {
-                                                                componentDict[expKey] = @(experience);
-                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", expKey, (long)experience]);
-                                                                modifiedCount++;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        replaceCount++;
+                                        writeLog([NSString stringWithFormat:@"✅ 替换健康字段 %@: %ld (%lu处)", fieldName, (long)health, (unsigned long)matchCount]);
                                     }
                                 }
                             }
@@ -413,31 +297,24 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     }
                 }
                 
-                if (!foundGameData) {
-                    writeLog(@"⚠️ 未找到ES3游戏数据结构");
-                } else if (modifiedCount == 0) {
-                    writeLog(@"⚠️ 未找到可修改的ES3字段");
-                } else {
-                    // 将修改后的JSON转回字符串
-                    NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:jsonDict options:0 error:&error];
-                    if (error || !newJsonData) {
-                        writeLog([NSString stringWithFormat:@"❌ JSON序列化失败: %@", error]);
+                writeLog([NSString stringWithFormat:@"📊 总共完成 %d 个字段替换", replaceCount]);
+                
+                if (stringModified) {
+                    // 重新Base64编码
+                    NSData *modifiedData = [modifiedJsonString dataUsingEncoding:NSUTF8StringEncoding];
+                    NSString *newES3Data = [modifiedData base64EncodedStringWithOptions:0];
+                    
+                    // 写回NSUserDefaults
+                    [defaults setObject:newES3Data forKey:@"data1.es3"];
+                    es3Success = [defaults synchronize];
+                    
+                    if (es3Success) {
+                        writeLog(@"✅ 字符串替换修改ES3存档成功！");
                     } else {
-                        // Base64编码
-                        NSString *newES3Data = [newJsonData base64EncodedStringWithOptions:0];
-                        
-                        // 写回NSUserDefaults
-                        [defaults setObject:newES3Data forKey:@"data1.es3"];
-                        es3Success = [defaults synchronize];
-                        
-                        if (es3Success) {
-                            writeLog([NSString stringWithFormat:@"✅ 成功修改ES3 %d 个字段", modifiedCount]);
-                            writeLog(@"🎉 ES3存档修改完成！");
-                        } else {
-                            writeLog(@"❌ ES3 NSUserDefaults保存失败");
-                        }
-                        }
+                        writeLog(@"❌ 字符串替换修改ES3存档失败");
                     }
+                } else {
+                    writeLog(@"⚠️ 未找到可替换的ES3字段");
                 }
             }
         }
@@ -458,7 +335,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         writeLog(@"❌ 双重修改都失败");
     }
     
-    writeLog(@"========== 双重修改结束 ==========\n");
+    writeLog(@"========== 修改结束 ==========");
     return overallSuccess;
 }
 
