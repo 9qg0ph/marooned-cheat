@@ -294,11 +294,12 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     y += 70;
     
     // 提示
-    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    tip.text = @"功能开启后重启游戏生效";
+    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
+    tip.text = @"修改成功后请进行一次消费操作来刷新数值\n（如购买物品、升级等）";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
+    tip.numberOfLines = 2;
     [self.contentView addSubview:tip];
     y += 28;
     
@@ -362,7 +363,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
     UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"⚠️ 确认修改" 
-        message:@"点击确定后：\n1. 游戏会立即关闭\n2. 后台自动修改存档\n3. 请手动重新打开游戏查看效果\n\n确认继续？" 
+        message:@"修改后请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -386,46 +387,42 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         case 1:
             writeLog(@"功能：无限金钱");
             success = modifyGameData(21000000000, 0, 0, 0, 0);
-            message = success ? @"💰 无限金钱开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"💰 无限金钱开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 2:
             writeLog(@"功能：无限体力");
             success = modifyGameData(0, 21000000000, 0, 0, 0);
-            message = success ? @"⚡ 无限体力开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"⚡ 无限体力开启成功！\n\n请进行一次消费操作来刷新数值\n（如使用体力、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 3:
             writeLog(@"功能：无限健康");
             success = modifyGameData(0, 0, 1000000, 0, 0);
-            message = success ? @"❤️ 无限健康开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"❤️ 无限健康开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 4:
             writeLog(@"功能：无限心情");
             success = modifyGameData(0, 0, 0, 1000000, 0);
-            message = success ? @"😊 无限心情开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"😊 无限心情开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 5:
             writeLog(@"功能：无限经验");
             success = modifyGameData(0, 0, 0, 0, 999999999);
-            message = success ? @"🎯 无限经验开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"🎯 无限经验开启成功！\n\n请进行一次消费操作来刷新数值\n（如升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 6:
             writeLog(@"功能：一键全开");
             success = modifyGameData(21000000000, 21000000000, 1000000, 1000000, 999999999);
-            message = success ? @"🎁 一键全开成功！\n💰 金钱: 21000000000\n⚡ 体力: 21000000000\n❤️ 健康: 1000000\n😊 心情: 1000000\n🎯 经验: 999999999\n\n游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"🎁 一键全开成功！\n💰 现金、⚡ 体力、❤️ 健康、😊 心情已修改\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
     }
     
     writeLog(@"========== 修改结束 ==========\n");
     
-    if (success) {
-        // 修改成功，延迟0.5秒后退出游戏
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            writeLog(@"🎉 修改成功！游戏即将关闭，请重新打开查看效果");
-            exit(0);
-        });
-    } else {
-        [self showAlert:message];
-    }
+    // 显示成功提示，不关闭游戏
+    [self showAlert:message];
+    
+    // 关闭菜单
+    [self closeMenu];
 }
 
 - (void)showAlert:(NSString *)message {
