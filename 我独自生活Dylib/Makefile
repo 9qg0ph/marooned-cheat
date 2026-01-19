@@ -3,10 +3,10 @@ TARGET = iphone:clang:latest:7.0
 
 include $(THEOS)/makefiles/common.mk
 
-LIBRARY_NAME = CheatStealer
-CheatStealer_FILES = CheatStealer.m
-CheatStealer_CFLAGS = -fobjc-arc
-CheatStealer_FRAMEWORKS = Foundation UIKit
+LIBRARY_NAME = WoduziCheat
+WoduziCheat_FILES = WoduziCheat.m
+WoduziCheat_CFLAGS = -fobjc-arc
+WoduziCheat_FRAMEWORKS = Foundation UIKit
 
 include $(THEOS)/makefiles/library.mk
 
