@@ -97,8 +97,12 @@ static BOOL modifyMemoryValue(vm_address_t address, int newValue) {
 static void smartModifyPlayerData(void) {
     memLog(@"开始智能搜索玩家数据...");
     
-    // 常见的游戏数值范围
-    NSArray *commonValues = @[@100, @200, @500, @1000, @2000, @5000, @10000, @20000, @50000];
+    // 常见的游戏数值范围（含大额货币数值）
+    NSArray *commonValues = @[@100, @200, @500, @1000, @2000, @5000, @10000, @20000, @50000,
+                              // 常见的大额货币：几千万 / 上亿 / 几十亿
+                              @1000000, @5000000, @10000000, @50000000,
+                              @100000000, @500000000,
+                              @1000000000, @1500000000, @2000000000, @2100000000];
     
     for (NSNumber *value in commonValues) {
         int targetValue = [value intValue];
@@ -133,7 +137,7 @@ static void smartModifyPlayerData(void) {
 static void bruteForceModify(void) {
     memLog(@"开始暴力修改模式...");
     
-    // 搜索更多可能的数值
+    // 第一轮：搜索中小数值（例如血量、体力、部分货币）
     for (int value = 50; value <= 100000; value += 50) {
         NSMutableArray *addresses = searchMemoryForValue(value);
         
@@ -143,12 +147,27 @@ static void bruteForceModify(void) {
                 
                 int newValue;
                 if (value < 1000) {
-                    newValue = 1000000;
+                    newValue = 1000000;          // 认为是血量/心情类
                 } else {
-                    newValue = 21000000000;
+                    newValue = 2100000000;       // 认为是货币/体力类（使用 21 亿，避免溢出）
                 }
                 
                 modifyMemoryValue(addr, newValue);
+            }
+        }
+    }
+    
+    // 第二轮：专门搜索超大货币数值（例如 20 亿左右）
+    for (int big = 1500000000; big <= 2200000000; big += 5000000) {
+        NSMutableArray *addresses = searchMemoryForValue(big);
+        
+        if (addresses.count > 0 && addresses.count <= 20) { // 大额结果一般较少
+            for (NSNumber *addrNum in addresses) {
+                vm_address_t addr = [addrNum unsignedLongValue];
+                
+                int newValue = 2100000000;       // 统一改成约 21 亿
+                modifyMemoryValue(addr, newValue);
+                memLog([NSString stringWithFormat:@"💰 大额货币暴力修改: 0x%lx (%d → %d)", addr, big, newValue]);
             }
         }
     }
