@@ -222,44 +222,48 @@ static void showDisclaimerAlert(void) {
 
 #pragma mark - 游戏数据修改
 
-// 修改游戏存档数据 - 针对特殊的JSON存档结构和ES3存档
+// 修改游戏存档数据 - 基于其他修改器的ES3存档修改方式
 static void modifyGameSaveData(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // 首先尝试修改ES3存档，因为玩家属性可能在那里
-    writeLog(@"========== 尝试修改ES3存档 ==========");
+    // 基于分析结果，其他修改器使用 data1.es3 而不是 data0.es3
+    writeLog(@"========== 使用ES3存档修改方式 ==========");
     
-    NSString *es3Data = [defaults objectForKey:@"data0.es3"];
+    // 尝试修改 data1.es3 存档（其他修改器使用的）
+    NSString *es3Data = [defaults objectForKey:@"data1.es3"];
     if (es3Data) {
-        writeLog(@"✅ 找到ES3存档数据");
+        writeLog(@"✅ 找到 data1.es3 存档数据");
+        writeLog([NSString stringWithFormat:@"ES3存档长度: %lu", (unsigned long)es3Data.length]);
         
-        // ES3数据是Base64编码的JSON
-        NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:es3Data options:NSDataBase64DecodingIgnoreUnknownCharacters];
-        if (decodedData) {
-            NSString *jsonString = [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
-            if (jsonString) {
-                NSError *error = nil;
-                NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
-                id jsonObject = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
-                
-                if (!error && [jsonObject isKindOfClass:[NSDictionary class]]) {
-                    NSMutableDictionary *es3Dict = [jsonObject mutableCopy];
-                    writeLog(@"✅ ES3 JSON解析成功");
-                    
-                    // 在ES3存档中搜索玩家属性
-                    BOOL es3Modified = searchAndModifyES3Data(es3Dict, defaults);
-                    
-                    if (es3Modified) {
-                        // 重新保存ES3存档
-                        NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:es3Dict options:0 error:&error];
-                        if (!error && newJsonData) {
-                            NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
-                            NSData *encodedData = [newJsonString dataUsingEncoding:NSUTF8StringEncoding];
-                            NSString *newES3Data = [encodedData base64EncodedStringWithOptions:0];
-                            
-                            [defaults setObject:newES3Data forKey:@"data0.es3"];
-                            [defaults synchronize];
-                            writeLog(@"🎉 ES3存档修改完成！");
+        if ([modifyES3SaveData:es3Data forKey:@"data1.es3" withDefaults:defaults]) {
+            writeLog(@"🎉 data1.es3 存档修改完成！");
+        }
+    }
+    
+    // 同时尝试 data0.es3（你原来的方法）
+    es3Data = [defaults objectForKey:@"data0.es3"];
+    if (es3Data) {
+        writeLog(@"✅ 找到 data0.es3 存档数据");
+        writeLog([NSString stringWithFormat:@"ES3存档长度: %lu", (unsigned long)es3Data.length]);
+        
+        if ([modifyES3SaveData:es3Data forKey:@"data0.es3" withDefaults:defaults]) {
+            writeLog(@"🎉 data0.es3 存档修改完成！");
+        }
+    }
+    
+    // 如果都没找到，尝试搜索所有可能的ES3存档
+    if (!es3Data) {
+        writeLog(@"========== 搜索所有ES3存档 ==========");
+        NSDictionary *allDefaults = [defaults dictionaryRepresentation];
+        for (NSString *key in allDefaults) {
+            if ([key containsString:@"es3"] || [key containsString:@"ES3"]) {
+                id value = allDefaults[key];
+                if ([value isKindOfClass:[NSString class]]) {
+                    NSString *dataStr = (NSString *)value;
+                    if (dataStr.length > 1000) {
+                        writeLog([NSString stringWithFormat:@"发现ES3存档: %@ (长度: %lu)", key, (unsigned long)dataStr.length]);
+                        if ([modifyES3SaveData:dataStr forKey:key withDefaults:defaults]) {
+                            writeLog([NSString stringWithFormat:@"🎉 %@ 存档修改完成！", key]);
                         }
                     }
                 }
@@ -474,6 +478,83 @@ static void modifyGameSaveData(void) {
     writeLog(@"========== NSUserDefaults搜索完成 ==========");
 }
 
+// 修改ES3存档数据 - 基于其他修改器的实现方式
+static BOOL modifyES3SaveData(NSString *es3Data, NSString *key, NSUserDefaults *defaults) {
+    writeLog([NSString stringWithFormat:@"开始修改ES3存档: %@", key]);
+    
+    // ES3数据是Base64编码的JSON
+    NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:es3Data options:NSDataBase64DecodingIgnoreUnknownCharacters];
+    if (!decodedData) {
+        writeLog(@"❌ Base64解码失败");
+        return NO;
+    }
+    
+    NSString *jsonString = [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
+    if (!jsonString) {
+        writeLog(@"❌ UTF8字符串转换失败");
+        return NO;
+    }
+    
+    writeLog([NSString stringWithFormat:@"✅ ES3 JSON解码成功，长度: %lu", (unsigned long)jsonString.length]);
+    writeLog([NSString stringWithFormat:@"ES3内容预览: %@", [jsonString substringToIndex:MIN(200, jsonString.length)]]);
+    
+    NSError *error = nil;
+    NSData *jsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
+    id jsonObject = [NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:&error];
+    
+    if (error || ![jsonObject isKindOfClass:[NSDictionary class]]) {
+        writeLog([NSString stringWithFormat:@"❌ JSON解析失败: %@", error.localizedDescription]);
+        return NO;
+    }
+    
+    NSMutableDictionary *es3Dict = [jsonObject mutableCopy];
+    writeLog(@"✅ ES3 JSON解析成功");
+    writeLog([NSString stringWithFormat:@"ES3存档包含 %lu 个对象", (unsigned long)[es3Dict count]]);
+    
+    // 显示ES3存档的结构
+    for (NSString *objKey in es3Dict) {
+        id value = es3Dict[objKey];
+        NSString *valueStr = [NSString stringWithFormat:@"%@", value];
+        if (valueStr.length > 200) {
+            valueStr = [[valueStr substringToIndex:200] stringByAppendingString:@"..."];
+        }
+        writeLog([NSString stringWithFormat:@"ES3 Key: %@ = %@", objKey, valueStr]);
+    }
+    
+    // 在ES3存档中搜索并修改玩家属性
+    BOOL es3Modified = searchAndModifyES3Data(es3Dict, defaults);
+    
+    if (es3Modified) {
+        // 重新保存ES3存档
+        NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:es3Dict options:0 error:&error];
+        if (error || !newJsonData) {
+            writeLog([NSString stringWithFormat:@"❌ JSON序列化失败: %@", error.localizedDescription]);
+            return NO;
+        }
+        
+        NSString *newJsonString = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
+        NSData *encodedData = [newJsonString dataUsingEncoding:NSUTF8StringEncoding];
+        NSString *newES3Data = [encodedData base64EncodedStringWithOptions:0];
+        
+        // 保存修改后的ES3存档
+        [defaults setObject:newES3Data forKey:key];
+        
+        // 更新时间戳（模仿其他修改器的做法）
+        NSString *timestampKey = [NSString stringWithFormat:@"timestamp_%@", key];
+        NSNumber *timestamp = @([[NSDate date] timeIntervalSince1970] * 1000000);
+        [defaults setObject:timestamp forKey:timestampKey];
+        
+        [defaults synchronize];
+        
+        writeLog([NSString stringWithFormat:@"🎉 %@ 存档修改并保存完成！", key]);
+        writeLog([NSString stringWithFormat:@"🕐 时间戳已更新: %@", timestampKey]);
+        return YES;
+    } else {
+        writeLog(@"❌ 未找到可修改的游戏数据字段");
+        return NO;
+    }
+}
+
 // 搜索并修改ES3数据中的玩家属性
 static BOOL searchAndModifyES3Data(NSMutableDictionary *es3Dict, NSUserDefaults *defaults) {
     BOOL modified = NO;
@@ -605,7 +686,7 @@ static BOOL searchDictionaryRecursively(NSMutableDictionary *dict, BOOL searchAt
     return modified;
 }
 
-// 无限现金功能
+// 无限现金功能 - 改进版，支持ES3存档修改
 static void enableInfiniteCash(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
@@ -613,14 +694,19 @@ static void enableInfiniteCash(void) {
     g_infiniteCashEnabled = YES;
     writeLog(@"🎯 启用现金实时Hook");
     
-    // 先尝试修改游戏存档
+    // 1. 修改ES3存档（主要方法，模仿其他修改器）
     modifyGameSaveData();
     
-    // 同时修改NSUserDefaults中的字段（作为备用）
+    // 2. 修改NSUserDefaults中的字段（备用方法）
     [defaults setInteger:21000000000 forKey:@"cash"];
     [defaults setInteger:21000000000 forKey:@"money"];
     [defaults setInteger:21000000000 forKey:@"现金"];
     [defaults setInteger:21000000000 forKey:@"金钱"];
+    [defaults setInteger:21000000000 forKey:@"金币"];
+    [defaults setInteger:21000000000 forKey:@"coin"];
+    [defaults setInteger:21000000000 forKey:@"coins"];
+    [defaults setInteger:21000000000 forKey:@"货币"];
+    [defaults setInteger:21000000000 forKey:@"currency"];
     
     // 尝试一些可能的字段名
     [defaults setInteger:21000000000 forKey:@"Cash"];
@@ -661,7 +747,7 @@ static void enableInfiniteHealth(void) {
     writeLog(@"无限健康已开启");
 }
 
-// 无限体力功能
+// 无限体力功能 - 改进版，支持ES3存档修改
 static void enableInfiniteEnergy(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
@@ -669,10 +755,12 @@ static void enableInfiniteEnergy(void) {
     g_infiniteEnergyEnabled = YES;
     writeLog(@"🎯 启用体力实时Hook");
     
-    // 游戏存档已在现金函数中处理，这里只处理NSUserDefaults
+    // ES3存档修改已在现金函数中处理，这里只处理NSUserDefaults
     [defaults setInteger:21000000000 forKey:@"energy"];
     [defaults setInteger:21000000000 forKey:@"stamina"];
     [defaults setInteger:21000000000 forKey:@"体力"];
+    [defaults setInteger:21000000000 forKey:@"power"];
+    [defaults setInteger:21000000000 forKey:@"能量"];
     
     // 尝试一些可能的字段名
     [defaults setInteger:21000000000 forKey:@"Energy"];
