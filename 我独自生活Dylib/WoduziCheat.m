@@ -12,9 +12,9 @@ static void stealerLog(NSString *message) {
         NSString *documentsPath = [paths firstObject];
         NSString *logPath = [documentsPath stringByAppendingPathComponent:@"cheat_stealer.log"];
         
-        NSString *timestamp = [[NSDateFormatter alloc] init];
-        timestamp.dateFormat = @"yyyy-MM-dd HH:mm:ss";
-        NSString *timeStr = [timestamp stringFromDate:[NSDate date]];
+        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+        formatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
+        NSString *timeStr = [formatter stringFromDate:[NSDate date]];
         NSString *logMessage = [NSString stringWithFormat:@"[%@] %@\n", timeStr, message];
         
         NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logPath];
