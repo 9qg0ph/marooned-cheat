@@ -1,6 +1,7 @@
 // 我独自生活修改器 - WoduziCheat.m
-// 专注于Unity游戏真实存档检测和修改
+// 动态内存搜索和修改版本
 #import <UIKit/UIKit.h>
+#import <mach/mach.h>
 
 #pragma mark - 全局变量
 
@@ -95,200 +96,122 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-// Unity游戏存档检测和修改
+// 动态搜索并修改游戏数据
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== Unity游戏存档分析开始 ==========");
+    writeLog(@"========== 开始动态内存搜索和修改 ==========");
     
-    BOOL fileSuccess = NO;
-    BOOL playerPrefsSuccess = NO;
+    BOOL success = NO;
     
-    // 第一步：全面扫描Documents目录
-    writeLog(@"🔍 开始全面扫描Documents目录");
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    NSString *documentsPath = [paths firstObject];
-    
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    NSArray *files = [fileManager contentsOfDirectoryAtPath:documentsPath error:nil];
-    
-    writeLog([NSString stringWithFormat:@"📁 Documents目录: %@", documentsPath]);
-    writeLog([NSString stringWithFormat:@"📄 文件总数: %lu", (unsigned long)files.count]);
-    
-    // 列出所有文件
-    for (NSString *file in files) {
-        NSString *filePath = [documentsPath stringByAppendingPathComponent:file];
-        NSDictionary *attributes = [fileManager attributesOfItemAtPath:filePath error:nil];
-        NSNumber *fileSize = [attributes objectForKey:NSFileSize];
-        BOOL isDirectory = [[attributes objectForKey:NSFileType] isEqualToString:NSFileTypeDirectory];
+    if (money > 0 || stamina > 0) {
+        writeLog(@"🧠 开始搜索游戏内存数据");
         
-        writeLog([NSString stringWithFormat:@"📋 %@%@ - %@ bytes", 
-                file, isDirectory ? @"/" : @"", fileSize ?: @"0"]);
+        // 获取当前进程的内存信息
+        task_t task = mach_task_self();
+        vm_address_t address = 0;
+        vm_size_t size = 0;
+        vm_region_basic_info_data_t info;
+        mach_msg_type_number_t count = VM_REGION_BASIC_INFO_COUNT;
+        mach_port_t object_name;
         
-        // 检查每个文件
-        if (!isDirectory && [fileSize longLongValue] > 0) {
-            NSData *fileData = [NSData dataWithContentsOfFile:filePath];
-            if (fileData) {
-                // 尝试读取为文本
-                NSString *textContent = [[NSString alloc] initWithData:fileData encoding:NSUTF8StringEncoding];
-                if (textContent && textContent.length > 0) {
-                    writeLog([NSString stringWithFormat:@"📝 %@ 是文本文件，长度: %lu", file, (unsigned long)textContent.length]);
+        writeLog(@"🔍 开始扫描进程内存区域");
+        
+        int foundAddresses = 0;
+        
+        // 扫描内存区域
+        while (vm_region(task, &address, &size, VM_REGION_BASIC_INFO, 
+                        (vm_region_info_t)&info, &count, &object_name) == KERN_SUCCESS) {
+            
+            // 只扫描可读写的内存区域
+            if ((info.protection & VM_PROT_READ) && (info.protection & VM_PROT_WRITE)) {
+                
+                // 读取内存数据
+                vm_offset_t data;
+                mach_msg_type_number_t dataCount;
+                
+                if (vm_read(task, address, size, &data, &dataCount) == KERN_SUCCESS) {
                     
-                    // 检查是否包含游戏数据
-                    BOOL hasGameData = NO;
-                    NSArray *gameKeywords = @[@"money", @"cash", @"coin", @"gold", @"level", @"score", @"player", 
-                                            @"金钱", @"现金", @"金币", @"等级", @"分数", @"玩家"];
+                    // 搜索金钱数值（假设当前金钱在100-999999范围内）
+                    uint32_t *intData = (uint32_t *)data;
+                    size_t intCount = dataCount / sizeof(uint32_t);
                     
-                    for (NSString *keyword in gameKeywords) {
-                        if ([textContent.lowercaseString containsString:keyword.lowercaseString]) {
-                            hasGameData = YES;
-                            writeLog([NSString stringWithFormat:@"🎯 %@ 包含关键词: %@", file, keyword]);
+                    for (size_t i = 0; i < intCount - 10; i++) { // 留出足够空间检查偏移
+                        uint32_t currentValue = intData[i];
+                        
+                        // 检查是否可能是金钱值（合理范围）
+                        if (currentValue >= 100 && currentValue <= 999999) {
+                            
+                            // 检查偏移+6个位置（24字节）是否有合理的体力值
+                            uint32_t possibleStamina = intData[i + 6];
+                            
+                            if (possibleStamina >= 0 && possibleStamina <= 9999) {
+                                
+                                vm_address_t moneyAddr = address + (i * sizeof(uint32_t));
+                                vm_address_t staminaAddr = moneyAddr + 24; // +24字节
+                                
+                                writeLog([NSString stringWithFormat:@"🎯 发现可能的数据结构:"]);
+                                writeLog([NSString stringWithFormat:@"   金钱地址: 0x%lx = %u", (unsigned long)moneyAddr, currentValue]);
+                                writeLog([NSString stringWithFormat:@"   体力地址: 0x%lx = %u", (unsigned long)staminaAddr, possibleStamina]);
+                                
+                                // 尝试修改数值
+                                BOOL modified = NO;
+                                
+                                if (money > 0) {
+                                    uint32_t newMoney = (uint32_t)money;
+                                    if (vm_write(task, moneyAddr, (vm_offset_t)&newMoney, sizeof(uint32_t)) == KERN_SUCCESS) {
+                                        writeLog([NSString stringWithFormat:@"✅ 成功修改金钱: %u -> %u", currentValue, newMoney]);
+                                        modified = YES;
+                                    }
+                                }
+                                
+                                if (stamina > 0) {
+                                    uint32_t newStamina = (uint32_t)stamina;
+                                    if (vm_write(task, staminaAddr, (vm_offset_t)&newStamina, sizeof(uint32_t)) == KERN_SUCCESS) {
+                                        writeLog([NSString stringWithFormat:@"✅ 成功修改体力: %u -> %u", possibleStamina, newStamina]);
+                                        modified = YES;
+                                    }
+                                }
+                                
+                                if (modified) {
+                                    success = YES;
+                                    foundAddresses++;
+                                    
+                                    // 限制修改数量，避免修改错误的地址
+                                    if (foundAddresses >= 3) {
+                                        writeLog(@"⚠️ 已修改3个可能的地址，停止搜索");
+                                        vm_deallocate(mach_task_self(), data, dataCount);
+                                        goto search_complete;
+                                    }
+                                }
+                            }
                         }
                     }
                     
-                    // 检查是否包含大数值（可能是游戏数据）
-                    NSRegularExpression *numberRegex = [NSRegularExpression regularExpressionWithPattern:@"\\b\\d{4,}\\b" options:0 error:nil];
-                    NSArray *matches = [numberRegex matchesInString:textContent options:0 range:NSMakeRange(0, textContent.length)];
-                    if (matches.count > 0) {
-                        hasGameData = YES;
-                        writeLog([NSString stringWithFormat:@"🔢 %@ 包含 %lu 个大数值", file, (unsigned long)matches.count]);
-                        
-                        // 显示前几个数值
-                        for (int i = 0; i < MIN(5, matches.count); i++) {
-                            NSTextCheckingResult *match = matches[i];
-                            NSString *number = [textContent substringWithRange:match.range];
-                            writeLog([NSString stringWithFormat:@"   数值: %@", number]);
-                        }
-                    }
-                    
-                    if (hasGameData && money > 0) {
-                        writeLog([NSString stringWithFormat:@"🛠️ 尝试修改文件: %@", file]);
-                        
-                        // 备份原文件
-                        NSString *backupPath = [filePath stringByAppendingString:@".backup"];
-                        [fileData writeToFile:backupPath atomically:YES];
-                        writeLog([NSString stringWithFormat:@"💾 已备份到: %@", backupPath]);
-                        
-                        // 替换大数值
-                        NSString *modifiedContent = textContent;
-                        NSString *replacement = [NSString stringWithFormat:@"%ld", (long)money];
-                        
-                        modifiedContent = [numberRegex stringByReplacingMatchesInString:modifiedContent 
-                            options:0 range:NSMakeRange(0, modifiedContent.length) withTemplate:replacement];
-                        
-                        // 写回文件
-                        NSData *modifiedData = [modifiedContent dataUsingEncoding:NSUTF8StringEncoding];
-                        if ([modifiedData writeToFile:filePath atomically:YES]) {
-                            writeLog([NSString stringWithFormat:@"✅ 成功修改文件: %@", file]);
-                            fileSuccess = YES;
-                        } else {
-                            writeLog([NSString stringWithFormat:@"❌ 修改文件失败: %@", file]);
-                        }
-                    }
-                } else {
-                    // 二进制文件
-                    writeLog([NSString stringWithFormat:@"🔒 %@ 是二进制文件", file]);
-                    
-                    // 显示文件头
-                    if (fileData.length >= 16) {
-                        const unsigned char *bytes = (const unsigned char *)[fileData bytes];
-                        NSMutableString *hexString = [NSMutableString string];
-                        for (int i = 0; i < 16; i++) {
-                            [hexString appendFormat:@"%02X ", bytes[i]];
-                        }
-                        writeLog([NSString stringWithFormat:@"🔢 文件头: %@", hexString]);
-                    }
+                    vm_deallocate(mach_task_self(), data, dataCount);
                 }
             }
-        }
-    }
-    
-    // 第二步：检查Unity PlayerPrefs（NSUserDefaults）
-    writeLog(@"🔍 开始检查Unity PlayerPrefs");
-    
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    NSDictionary *allDefaults = [defaults dictionaryRepresentation];
-    
-    writeLog([NSString stringWithFormat:@"📊 NSUserDefaults总键数: %lu", (unsigned long)allDefaults.count]);
-    
-    // 查找所有可能相关的键
-    NSMutableArray *suspiciousKeys = [NSMutableArray array];
-    
-    for (NSString *key in allDefaults.allKeys) {
-        id value = [allDefaults objectForKey:key];
-        
-        // 检查键名
-        BOOL keyMatch = NO;
-        NSArray *keyKeywords = @[@"unity", @"Unity", @"hezi", @"Hezi", @"project", @"Project", 
-                               @"money", @"cash", @"coin", @"gold", @"level", @"score", @"player",
-                               @"金钱", @"现金", @"金币", @"等级", @"分数", @"玩家"];
-        
-        for (NSString *keyword in keyKeywords) {
-            if ([key containsString:keyword]) {
-                keyMatch = YES;
-                break;
-            }
-        }
-        
-        // 检查数值
-        BOOL valueMatch = NO;
-        if ([value isKindOfClass:[NSNumber class]]) {
-            NSNumber *numValue = (NSNumber *)value;
-            if ([numValue longLongValue] >= 1000) {
-                valueMatch = YES;
-            }
-        }
-        
-        if (keyMatch || valueMatch) {
-            [suspiciousKeys addObject:key];
-            writeLog([NSString stringWithFormat:@"🔑 疑似游戏键: %@ = %@", key, value]);
-        }
-    }
-    
-    // 修改疑似的游戏数据
-    if (money > 0 && suspiciousKeys.count > 0) {
-        writeLog(@"🛠️ 开始修改疑似游戏数据");
-        
-        for (NSString *key in suspiciousKeys) {
-            id value = [allDefaults objectForKey:key];
             
-            if ([value isKindOfClass:[NSNumber class]]) {
-                NSNumber *oldValue = (NSNumber *)value;
-                [defaults setObject:@(money) forKey:key];
-                writeLog([NSString stringWithFormat:@"✅ 修改: %@ = %@ -> %ld", key, oldValue, (long)money]);
-                playerPrefsSuccess = YES;
-            }
+            address += size;
         }
         
-        if (playerPrefsSuccess) {
-            [defaults synchronize];
-            writeLog(@"💾 NSUserDefaults同步完成");
+        search_complete:
+        
+        if (success) {
+            writeLog([NSString stringWithFormat:@"🎉 内存修改完成！共修改了 %d 个地址", foundAddresses]);
+            writeLog(@"💡 修改提示：");
+            writeLog(@"1. 回到游戏查看数值是否改变");
+            writeLog(@"2. 如果没变化，可能需要触发一次游戏操作");
+            writeLog(@"3. 重启游戏后需要重新使用此功能");
+        } else {
+            writeLog(@"❌ 未找到合适的内存地址");
+            writeLog(@"💡 建议：");
+            writeLog(@"1. 确保游戏正在运行");
+            writeLog(@"2. 先在游戏中查看当前金钱和体力数值");
+            writeLog(@"3. 数值应该在合理范围内（金钱100-999999，体力0-9999）");
         }
     }
     
-    // 第三步：总结和建议
-    BOOL overallSuccess = fileSuccess || playerPrefsSuccess;
-    
-    writeLog(@"========== 修改结果总结 ==========");
-    if (overallSuccess) {
-        writeLog(@"🎉 找到并修改了疑似游戏数据！");
-        if (fileSuccess) writeLog(@"✅ 文件修改成功");
-        if (playerPrefsSuccess) writeLog(@"✅ PlayerPrefs修改成功");
-        
-        writeLog(@"💡 重要提示：");
-        writeLog(@"1. 请完全关闭游戏后重新打开");
-        writeLog(@"2. 进行一次游戏操作（如购买、升级）来刷新数据");
-        writeLog(@"3. 如果仍无效果，游戏可能使用服务器存档");
-        
-    } else {
-        writeLog(@"❌ 未找到明确的游戏存档数据");
-        writeLog(@"💡 可能的原因：");
-        writeLog(@"1. 游戏使用加密存档");
-        writeLog(@"2. 数据完全存储在服务器端");
-        writeLog(@"3. 使用特殊的存储格式");
-        writeLog(@"4. 建议使用内存修改工具（如GameGem）");
-    }
-    
-    writeLog(@"========== 分析结束 ==========");
-    return overallSuccess;
+    writeLog(@"========== 内存搜索结束 ==========");
+    return success;
 }
 
 #pragma mark - 菜单视图
@@ -336,7 +259,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v6.0";
+    title.text = @"🏠 我独自生活 v7.0";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -346,7 +269,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"🎮 Unity存档检测：文件+PlayerPrefs";
+    info.text = @"🧠 动态内存搜索修改器";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -368,7 +291,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"修改后请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值";
+    tip.text = @"自动搜索内存中的金钱和体力数据\n每次游戏重启后重新使用即可";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -387,24 +310,14 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     [self.contentView addSubview:btn2];
     y += 43;
     
-    UIButton *btn3 = [self createButtonWithTitle:@"❤️ 无限健康" tag:3];
+    UIButton *btn3 = [self createButtonWithTitle:@"💎 金钱+体力" tag:3];
     btn3.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn3];
     y += 43;
     
-    UIButton *btn4 = [self createButtonWithTitle:@"😊 无限心情" tag:4];
+    UIButton *btn4 = [self createButtonWithTitle:@"🔍 内存分析" tag:4];
     btn4.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn4];
-    y += 43;
-    
-    UIButton *btn5 = [self createButtonWithTitle:@"🎯 无限经验" tag:5];
-    btn5.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    [self.contentView addSubview:btn5];
-    y += 43;
-    
-    UIButton *btn6 = [self createButtonWithTitle:@"🔍 存档分析" tag:6];
-    btn6.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    [self.contentView addSubview:btn6];
     y += 48;
     
     // 版权
@@ -436,7 +349,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
     UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"⚠️ 确认修改" 
-        message:@"修改后请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 请勿在修改过程中关闭游戏\n\n确认继续？" 
+        message:@"将自动搜索内存并修改数值\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -458,33 +371,23 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     switch (tag) {
         case 1:
             writeLog(@"功能：无限金钱");
-            success = modifyGameData(21000000000, 0, 0, 0, 0);
-            message = success ? @"💰 无限金钱修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
+            success = modifyGameData(999999999, 0, 0, 0, 0);
+            message = success ? @"💰 无限金钱修改完成！\n\n已自动搜索并修改内存中的金钱数值\n\n⚠️ 如果没有变化，请触发一次游戏操作" : @"❌ 修改失败，请查看日志分析";
             break;
         case 2:
             writeLog(@"功能：无限体力");
-            success = modifyGameData(0, 21000000000, 0, 0, 0);
-            message = success ? @"⚡ 无限体力修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
+            success = modifyGameData(0, 999999, 0, 0, 0);
+            message = success ? @"⚡ 无限体力修改完成！\n\n已自动搜索并修改内存中的体力数值\n\n⚠️ 如果没有变化，请触发一次游戏操作" : @"❌ 修改失败，请查看日志分析";
             break;
         case 3:
-            writeLog(@"功能：无限健康");
-            success = modifyGameData(0, 0, 1000000, 0, 0);
-            message = success ? @"❤️ 无限健康修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
+            writeLog(@"功能：金钱+体力");
+            success = modifyGameData(999999999, 999999, 0, 0, 0);
+            message = success ? @"💎 金钱+体力修改完成！\n\n已自动搜索并修改内存数值\n\n⚠️ 如果没有变化，请触发一次游戏操作" : @"❌ 修改失败，请查看日志分析";
             break;
         case 4:
-            writeLog(@"功能：无限心情");
-            success = modifyGameData(0, 0, 0, 1000000, 0);
-            message = success ? @"😊 无限心情修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
-            break;
-        case 5:
-            writeLog(@"功能：无限经验");
-            success = modifyGameData(0, 0, 0, 0, 999999999);
-            message = success ? @"🎯 无限经验修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
-            break;
-        case 6:
-            writeLog(@"功能：存档分析");
+            writeLog(@"功能：内存分析");
             success = modifyGameData(0, 0, 0, 0, 0); // 只分析，不修改
-            message = @"🔍 存档分析完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含所有发现的文件和数据";
+            message = @"🔍 内存分析完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含内存搜索的详细信息";
             break;
     }
     
