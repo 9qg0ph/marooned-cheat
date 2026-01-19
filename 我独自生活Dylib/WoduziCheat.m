@@ -61,8 +61,7 @@ static void showDisclaimerAlert(void) {
         showMenu();
     }]];
     
-    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
+    UIViewController *rootVC = getRootViewController();
     [rootVC presentViewController:alert animated:YES completion:nil];
 }
 
@@ -177,8 +176,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                 writeLog(@"❌ JSON字符串转换失败");
             } else {
                 // 修复常见的转义序列问题
-                jsonString = [jsonString stringByReplacingOccurrencesOfString:@"\\'" with:@"'"];
-                jsonString = [jsonString stringByReplacingOccurrencesOfString:@"\\\"" with:@"\""];
+                jsonString = [jsonString stringByReplacingOccurrencesOfString:@"\\'" withString:@"'"];
+                jsonString = [jsonString stringByReplacingOccurrencesOfString:@"\\\"" withString:@"\""];
                 
                 // 重新转换为NSData
                 NSData *fixedJsonData = [jsonString dataUsingEncoding:NSUTF8StringEncoding];
@@ -584,8 +583,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         [self performModification:sender.tag];
     }]];
     
-    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
+    UIViewController *rootVC = getRootViewController();
     [rootVC presentViewController:confirmAlert animated:YES completion:nil];
 }
 
@@ -641,8 +639,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
 - (void)showAlert:(NSString *)message {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"提示" message:message preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
-    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
+    UIViewController *rootVC = getRootViewController();
     [rootVC presentViewController:alert animated:YES completion:nil];
 }
 
@@ -660,16 +657,30 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
 
 static UIWindow* getKeyWindow(void) {
     UIWindow *keyWindow = nil;
-    for (UIWindow *window in [UIApplication sharedApplication].windows) {
-        if (window.isKeyWindow) {
-            keyWindow = window;
-            break;
+    if (@available(iOS 13.0, *)) {
+        UIWindowScene *windowScene = (UIWindowScene *)[UIApplication sharedApplication].connectedScenes.anyObject;
+        keyWindow = windowScene.windows.firstObject;
+    } else {
+        for (UIWindow *window in [UIApplication sharedApplication].windows) {
+            if (window.isKeyWindow) {
+                keyWindow = window;
+                break;
+            }
+        }
+        if (!keyWindow) {
+            keyWindow = [UIApplication sharedApplication].windows.firstObject;
         }
     }
-    if (!keyWindow) {
-        keyWindow = [UIApplication sharedApplication].windows.firstObject;
-    }
     return keyWindow;
+}
+
+static UIViewController* getRootViewController(void) {
+    UIWindow *keyWindow = getKeyWindow();
+    UIViewController *rootVC = keyWindow.rootViewController;
+    while (rootVC.presentedViewController) {
+        rootVC = rootVC.presentedViewController;
+    }
+    return rootVC;
 }
 
 static void showMenu(void) {
