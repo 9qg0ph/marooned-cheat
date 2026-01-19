@@ -235,7 +235,7 @@ static void modifyGameSaveData(void) {
         writeLog(@"✅ 找到 data1.es3 存档数据");
         writeLog([NSString stringWithFormat:@"ES3存档长度: %lu", (unsigned long)es3Data.length]);
         
-        if ([modifyES3SaveData:es3Data forKey:@"data1.es3" withDefaults:defaults]) {
+        if (modifyES3SaveData(es3Data, @"data1.es3", defaults)) {
             writeLog(@"🎉 data1.es3 存档修改完成！");
         }
     }
@@ -246,7 +246,7 @@ static void modifyGameSaveData(void) {
         writeLog(@"✅ 找到 data0.es3 存档数据");
         writeLog([NSString stringWithFormat:@"ES3存档长度: %lu", (unsigned long)es3Data.length]);
         
-        if ([modifyES3SaveData:es3Data forKey:@"data0.es3" withDefaults:defaults]) {
+        if (modifyES3SaveData(es3Data, @"data0.es3", defaults)) {
             writeLog(@"🎉 data0.es3 存档修改完成！");
         }
     }
@@ -262,7 +262,7 @@ static void modifyGameSaveData(void) {
                     NSString *dataStr = (NSString *)value;
                     if (dataStr.length > 1000) {
                         writeLog([NSString stringWithFormat:@"发现ES3存档: %@ (长度: %lu)", key, (unsigned long)dataStr.length]);
-                        if ([modifyES3SaveData:dataStr forKey:key withDefaults:defaults]) {
+                        if (modifyES3SaveData(dataStr, key, defaults)) {
                             writeLog([NSString stringWithFormat:@"🎉 %@ 存档修改完成！", key]);
                         }
                     }
