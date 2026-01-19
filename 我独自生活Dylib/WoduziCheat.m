@@ -1155,12 +1155,32 @@ static void setupFloatingButton(void) {
 __attribute__((constructor))
 static void WDZCheatInit(void) {
     @autoreleasepool {
-        // 安装Hook
-        installHooks();
-        writeLog(@"🚀 我独自生活修改器已加载，Hook已安装");
-        
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            setupFloatingButton();
-        });
+        @try {
+            writeLog(@"🚀 我独自生活修改器开始加载...");
+            
+            // 延迟安装Hook，避免过早Hook导致闪退
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                @try {
+                    installHooks();
+                    writeLog(@"✅ Hook已延迟安装");
+                } @catch (NSException *exception) {
+                    writeLog([NSString stringWithFormat:@"❌ Hook安装失败: %@", exception.reason]);
+                }
+            });
+            
+            // 延迟设置悬浮按钮
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                @try {
+                    setupFloatingButton();
+                } @catch (NSException *exception) {
+                    writeLog([NSString stringWithFormat:@"❌ 悬浮按钮设置失败: %@", exception.reason]);
+                }
+            });
+            
+            writeLog(@"✅ 修改器加载完成（延迟初始化模式）");
+            
+        } @catch (NSException *exception) {
+            NSLog(@"[WDZ] 构造函数异常: %@", exception.reason);
+        }
     }
 }
