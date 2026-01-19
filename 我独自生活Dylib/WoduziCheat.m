@@ -200,6 +200,18 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     writeLog([NSString stringWithFormat:@"💰 找到'现金'字段上下文: %@", cashContext]);
                 }
                 
+                // 搜索可能的主要金钱字段
+                NSArray *mainMoneyFields = @[@"userCash", @"玩家现金", @"玩家金钱", @"当前金钱", @"总金钱", @"Cash", @"Money"];
+                for (NSString *field in mainMoneyFields) {
+                    NSRange fieldRange = [jsonString rangeOfString:field];
+                    if (fieldRange.location != NSNotFound) {
+                        NSInteger start = MAX(0, (NSInteger)fieldRange.location - 50);
+                        NSInteger length = MIN(150, (NSInteger)jsonString.length - start);
+                        NSString *fieldContext = [jsonString substringWithRange:NSMakeRange(start, length)];
+                        writeLog([NSString stringWithFormat:@"🎯 找到主要字段'%@'上下文: %@", field, fieldContext]);
+                    }
+                }
+                
                 NSString *modifiedJsonString = jsonString;
                 BOOL stringModified = NO;
                 int replaceCount = 0;
