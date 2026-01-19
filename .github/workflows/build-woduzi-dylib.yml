@@ -1,0 +1,51 @@
+name: Build 我独自生活 Dylib
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode command line tools
+        run: |
+          xcode-select -p
+          xcrun --sdk iphoneos --show-sdk-path
+
+      - name: Install ldid
+        run: |
+          brew update
+          brew install ldid || echo "ldid already installed"
+
+      - name: Build WoduziCheat.dylib
+        run: |
+          set -e
+          mkdir -p build
+
+          clang -arch arm64 \
+            -isysroot "$(xcrun --sdk iphoneos --show-sdk-path)" \
+            -miphoneos-version-min=14.0 \
+            -dynamiclib \
+            -framework UIKit \
+            -framework Foundation \
+            -framework CoreGraphics \
+            -fobjc-arc \
+            -o build/WoduziCheat.dylib \
+            "我独自生活Dylib/WoduziCheat.m"
+
+          ldid -S build/WoduziCheat.dylib
+
+      - name: Upload dylib artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoduziCheat-dylib
+          path: build/WoduziCheat.dylib
+
