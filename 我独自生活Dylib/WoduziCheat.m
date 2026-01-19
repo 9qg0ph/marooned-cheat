@@ -68,13 +68,6 @@ static void showDisclaimerAlert(void) {
 
 #pragma mark - 存档修改
 
-// 获取存档路径
-static NSString* getSavePath(void) {
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES);
-    NSString *libraryPath = [paths firstObject];
-    return [libraryPath stringByAppendingPathComponent:@"Preferences/com.Hezi.project1.plist"];
-}
-
 // 获取日志路径
 static NSString* getLogPath(void) {
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
@@ -101,60 +94,32 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-// 智能修改存档（只修改数值，保留进度）
+// 双重修改：NSUserDefaults直接字段 + ES3Save存档格式
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    NSString *plistPath = getSavePath();
+    writeLog(@"========== 开始双重修改 ==========");
     
-    writeLog([NSString stringWithFormat:@"存档路径: %@", plistPath]);
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    BOOL directSuccess = NO;
+    BOOL es3Success = NO;
     
-    if (![[NSFileManager defaultManager] fileExistsAtPath:plistPath]) {
-        writeLog(@"❌ 存档文件不存在");
-        return NO;
-    }
+    // 第一步：修改NSUserDefaults直接字段
+    writeLog(@"开始修改NSUserDefaults直接字段");
     
-    writeLog(@"✅ 存档文件存在，开始修改");
+    // 根据存档文件的实际字段名修改
+    NSArray *moneyKeys = @[@"userCash", @"金钱", @"玩家现金", @"现金"];
+    NSArray *staminaKeys = @[@"Stamina"];
+    NSArray *healthKeys = @[@"当前健康"];
     
-    // 备份
-    NSString *backupPath = [plistPath stringByAppendingString:@".backup"];
-    [[NSFileManager defaultManager] removeItemAtPath:backupPath error:nil];
-    NSError *backupError = nil;
-    [[NSFileManager defaultManager] copyItemAtPath:plistPath toPath:backupPath error:&backupError];
-    if (backupError) {
-        writeLog([NSString stringWithFormat:@"❌ 备份失败: %@", backupError]);
-        return NO;
-    }
-    writeLog([NSString stringWithFormat:@"✅ 已备份到: %@", backupPath]);
-    
-    // 读取plist文件
-    NSMutableDictionary *plistDict = [NSMutableDictionary dictionaryWithContentsOfFile:plistPath];
-    if (!plistDict) {
-        writeLog(@"❌ 读取plist文件失败");
-        return NO;
-    }
-    
-    writeLog([NSString stringWithFormat:@"✅ 读取到plist数据，包含 %lu 个键", (unsigned long)plistDict.count]);
-    
-    // 定义所有需要修改的字段
-    NSArray *moneyKeys = @[@"userCash", @"金钱", @"玩家现金", @"现金", @"当前现金", @"Cash", @"Money", @"money"];
-    NSArray *staminaKeys = @[@"Stamina", @"玩家体力", @"gameEnergy", @"stamina", @"userEnergy"];
-    NSArray *healthKeys = @[@"当前健康", @"健康", @"health", @"gameHealth", @"hp"];
-    NSArray *moodKeys = @[@"Happiness", @"gameMood", @"Mood"];
-    NSArray *experienceKeys = @[@"experience", @"score", @"exp"];
-    
-    // 记录修改前的值
-    writeLog(@"修改前的值：");
-    for (NSString *key in moneyKeys) {
-        if (plistDict[key]) {
-            writeLog([NSString stringWithFormat:@"  %@: %@", key, plistDict[key]]);
-        }
-    }
+    int directModified = 0;
     
     // 修改金钱相关字段
     if (money > 0) {
         for (NSString *key in moneyKeys) {
-            if (plistDict[key]) {
-                plistDict[key] = @(money);
-                writeLog([NSString stringWithFormat:@"✅ 修改 %@: %ld", key, (long)money]);
+            id value = [defaults objectForKey:key];
+            if (value) {
+                [defaults setInteger:money forKey:key];
+                writeLog([NSString stringWithFormat:@"✅ 修改直接字段 %@: %ld", key, (long)money]);
+                directModified++;
             }
         }
     }
@@ -162,9 +127,11 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     // 修改体力相关字段
     if (stamina > 0) {
         for (NSString *key in staminaKeys) {
-            if (plistDict[key]) {
-                plistDict[key] = @(stamina);
-                writeLog([NSString stringWithFormat:@"✅ 修改 %@: %ld", key, (long)stamina]);
+            id value = [defaults objectForKey:key];
+            if (value) {
+                [defaults setInteger:stamina forKey:key];
+                writeLog([NSString stringWithFormat:@"✅ 修改直接字段 %@: %ld", key, (long)stamina]);
+                directModified++;
             }
         }
     }
@@ -172,46 +139,192 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     // 修改健康相关字段
     if (health > 0) {
         for (NSString *key in healthKeys) {
-            if (plistDict[key]) {
-                plistDict[key] = @(health);
-                writeLog([NSString stringWithFormat:@"✅ 修改 %@: %ld", key, (long)health]);
+            id value = [defaults objectForKey:key];
+            if (value) {
+                [defaults setInteger:health forKey:key];
+                writeLog([NSString stringWithFormat:@"✅ 修改直接字段 %@: %ld", key, (long)health]);
+                directModified++;
             }
         }
     }
     
-    // 修改心情相关字段
-    if (mood > 0) {
-        for (NSString *key in moodKeys) {
-            if (plistDict[key]) {
-                plistDict[key] = @(mood);
-                writeLog([NSString stringWithFormat:@"✅ 修改 %@: %ld", key, (long)mood]);
-            }
-        }
-    }
-    
-    // 修改经验相关字段
-    if (experience > 0) {
-        for (NSString *key in experienceKeys) {
-            if (plistDict[key]) {
-                plistDict[key] = @(experience);
-                writeLog([NSString stringWithFormat:@"✅ 修改 %@: %ld", key, (long)experience]);
-            }
-        }
-    }
-    
-    // 写回plist文件
-    BOOL success = [plistDict writeToFile:plistPath atomically:YES];
-    if (success) {
-        writeLog(@"✅ plist文件写入成功");
-        writeLog(@"🎉 修改完成！");
+    if (directModified > 0) {
+        directSuccess = [defaults synchronize];
+        writeLog(directSuccess ? @"✅ NSUserDefaults直接字段修改完成" : @"❌ NSUserDefaults同步失败");
     } else {
-        writeLog(@"❌ plist文件写入失败");
-        // 恢复备份
-        [[NSFileManager defaultManager] removeItemAtPath:plistPath error:nil];
-        [[NSFileManager defaultManager] copyItemAtPath:backupPath toPath:plistPath error:nil];
+        writeLog(@"⚠️ 未找到可修改的直接字段");
     }
     
-    return success;
+    // 第二步：修改ES3Save存档数据
+    writeLog(@"开始修改ES3Save存档数据");
+    
+    NSString *es3Data = [defaults stringForKey:@"data1.es3"];
+    if (!es3Data) {
+        writeLog(@"❌ 未找到data1.es3存档数据");
+    } else {
+        writeLog([NSString stringWithFormat:@"✅ 找到ES3存档数据，长度: %lu", (unsigned long)es3Data.length]);
+        
+        // Base64解码
+        NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:es3Data options:0];
+        if (!decodedData) {
+            writeLog(@"❌ Base64解码失败");
+        } else {
+            writeLog(@"✅ Base64解码成功");
+            
+            // 解析JSON
+            NSError *error = nil;
+            NSMutableDictionary *jsonDict = [NSJSONSerialization JSONObjectWithData:decodedData 
+                options:NSJSONReadingMutableContainers error:&error];
+            
+            if (error || !jsonDict) {
+                writeLog([NSString stringWithFormat:@"❌ JSON解析失败: %@", error]);
+            } else {
+                writeLog(@"✅ JSON解析成功");
+                
+                // 遍历JSON结构，查找游戏数据
+                BOOL foundGameData = NO;
+                int modifiedCount = 0;
+                
+                // ES3Save的数据结构是嵌套的，需要深度遍历
+                for (NSString *key in jsonDict) {
+                    id value = jsonDict[key];
+                    if ([value isKindOfClass:[NSDictionary class]]) {
+                        NSDictionary *objectDict = (NSDictionary *)value;
+                        id valueArray = objectDict[@"value"];
+                        
+                        if ([valueArray isKindOfClass:[NSArray class]]) {
+                            NSArray *gameObjects = (NSArray *)valueArray;
+                            
+                            for (id gameObject in gameObjects) {
+                                if ([gameObject isKindOfClass:[NSDictionary class]]) {
+                                    NSMutableDictionary *gameObjectDict = (NSMutableDictionary *)gameObject;
+                                    NSArray *components = gameObjectDict[@"components"];
+                                    
+                                    if ([components isKindOfClass:[NSArray class]]) {
+                                        for (id component in components) {
+                                            if ([component isKindOfClass:[NSMutableDictionary class]]) {
+                                                NSMutableDictionary *componentDict = (NSMutableDictionary *)component;
+                                                
+                                                // 查找游戏管理器组件
+                                                NSString *type = componentDict[@"__type"];
+                                                if ([type containsString:@"GameObjectManager"] || [type containsString:@"Manager"]) {
+                                                    foundGameData = YES;
+                                                    
+                                                    // 修改金钱相关字段
+                                                    if (money > 0) {
+                                                        NSArray *es3MoneyKeys = @[@"金钱", @"现金", @"玩家现金", @"当前现金"];
+                                                        for (NSString *moneyKey in es3MoneyKeys) {
+                                                            if (componentDict[moneyKey]) {
+                                                                componentDict[moneyKey] = @(money);
+                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", moneyKey, (long)money]);
+                                                                modifiedCount++;
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    // 修改体力相关字段
+                                                    if (stamina > 0) {
+                                                        NSArray *es3StaminaKeys = @[@"体力", @"玩家体力", @"当前体力"];
+                                                        for (NSString *staminaKey in es3StaminaKeys) {
+                                                            if (componentDict[staminaKey]) {
+                                                                componentDict[staminaKey] = @(stamina);
+                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", staminaKey, (long)stamina]);
+                                                                modifiedCount++;
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    // 修改健康相关字段
+                                                    if (health > 0) {
+                                                        NSArray *es3HealthKeys = @[@"健康", @"当前健康"];
+                                                        for (NSString *healthKey in es3HealthKeys) {
+                                                            if (componentDict[healthKey]) {
+                                                                componentDict[healthKey] = @(health);
+                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", healthKey, (long)health]);
+                                                                modifiedCount++;
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    // 修改心情相关字段
+                                                    if (mood > 0) {
+                                                        NSArray *es3MoodKeys = @[@"心情", @"快乐", @"情绪"];
+                                                        for (NSString *moodKey in es3MoodKeys) {
+                                                            if (componentDict[moodKey]) {
+                                                                componentDict[moodKey] = @(mood);
+                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", moodKey, (long)mood]);
+                                                                modifiedCount++;
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    // 修改经验相关字段
+                                                    if (experience > 0) {
+                                                        NSArray *es3ExpKeys = @[@"经验", @"积分", @"等级"];
+                                                        for (NSString *expKey in es3ExpKeys) {
+                                                            if (componentDict[expKey]) {
+                                                                componentDict[expKey] = @(experience);
+                                                                writeLog([NSString stringWithFormat:@"✅ 修改ES3 %@: %ld", expKey, (long)experience]);
+                                                                modifiedCount++;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (!foundGameData) {
+                    writeLog(@"⚠️ 未找到ES3游戏数据结构");
+                } else if (modifiedCount == 0) {
+                    writeLog(@"⚠️ 未找到可修改的ES3字段");
+                } else {
+                    // 将修改后的JSON转回字符串
+                    NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:jsonDict options:0 error:&error];
+                    if (error || !newJsonData) {
+                        writeLog([NSString stringWithFormat:@"❌ JSON序列化失败: %@", error]);
+                    } else {
+                        // Base64编码
+                        NSString *newES3Data = [newJsonData base64EncodedStringWithOptions:0];
+                        
+                        // 写回NSUserDefaults
+                        [defaults setObject:newES3Data forKey:@"data1.es3"];
+                        es3Success = [defaults synchronize];
+                        
+                        if (es3Success) {
+                            writeLog([NSString stringWithFormat:@"✅ 成功修改ES3 %d 个字段", modifiedCount]);
+                            writeLog(@"🎉 ES3存档修改完成！");
+                        } else {
+                            writeLog(@"❌ ES3 NSUserDefaults保存失败");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    BOOL overallSuccess = directSuccess || es3Success;
+    
+    if (overallSuccess) {
+        writeLog(@"🎉 双重修改完成！");
+        if (directSuccess && es3Success) {
+            writeLog(@"✅ 直接字段和ES3存档都修改成功");
+        } else if (directSuccess) {
+            writeLog(@"✅ 直接字段修改成功，ES3存档修改失败");
+        } else if (es3Success) {
+            writeLog(@"✅ ES3存档修改成功，直接字段修改失败");
+        }
+    } else {
+        writeLog(@"❌ 双重修改都失败");
+    }
+    
+    writeLog(@"========== 双重修改结束 ==========\n");
+    return overallSuccess;
 }
 
 #pragma mark - 菜单视图
@@ -259,8 +372,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活";
-    title.font = [UIFont boldSystemFontOfSize:20];
+    title.text = @"🏠 我独自生活 v5.0";
+    title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
     [self.contentView addSubview:title];
@@ -269,7 +382,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"🎮 资源仅供学习使用";
+    info.text = @"🎮 双重修改：直接字段+ES3Save";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -290,11 +403,12 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     y += 70;
     
     // 提示
-    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    tip.text = @"功能开启后重启游戏生效";
+    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
+    tip.text = @"修改成功后请进行一次消费操作来刷新数值\n（如购买物品、升级等）";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
+    tip.numberOfLines = 2;
     [self.contentView addSubview:tip];
     y += 28;
     
@@ -358,7 +472,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
     UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"⚠️ 确认修改" 
-        message:@"点击确定后：\n1. 游戏会立即关闭\n2. 后台自动修改存档\n3. 请手动重新打开游戏查看效果\n\n确认继续？" 
+        message:@"修改后请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -381,47 +495,43 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     switch (tag) {
         case 1:
             writeLog(@"功能：无限金钱");
-            success = modifyGameData(999999999, 0, 0, 0, 0);
-            message = success ? @"💰 无限金钱开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            success = modifyGameData(21000000000, 0, 0, 0, 0);
+            message = success ? @"💰 无限金钱开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 2:
             writeLog(@"功能：无限体力");
-            success = modifyGameData(0, 999999999, 0, 0, 0);
-            message = success ? @"⚡ 无限体力开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            success = modifyGameData(0, 21000000000, 0, 0, 0);
+            message = success ? @"⚡ 无限体力开启成功！\n\n请进行一次消费操作来刷新数值\n（如使用体力、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 3:
             writeLog(@"功能：无限健康");
             success = modifyGameData(0, 0, 1000000, 0, 0);
-            message = success ? @"❤️ 无限健康开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"❤️ 无限健康开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 4:
             writeLog(@"功能：无限心情");
             success = modifyGameData(0, 0, 0, 1000000, 0);
-            message = success ? @"😊 无限心情开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"😊 无限心情开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 5:
             writeLog(@"功能：无限经验");
             success = modifyGameData(0, 0, 0, 0, 999999999);
-            message = success ? @"🎯 无限经验开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"🎯 无限经验开启成功！\n\n请进行一次消费操作来刷新数值\n（如升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 6:
             writeLog(@"功能：一键全开");
-            success = modifyGameData(999999999, 999999999, 1000000, 1000000, 999999999);
-            message = success ? @"🎁 一键全开成功！\n💰 金钱: 999999999\n⚡ 体力: 999999999\n❤️ 健康: 1000000\n😊 心情: 1000000\n🎯 经验: 999999999\n\n游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            success = modifyGameData(21000000000, 21000000000, 1000000, 1000000, 999999999);
+            message = success ? @"🎁 一键全开成功！\n💰 现金、⚡ 体力、❤️ 健康、😊 心情已修改\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
             break;
     }
     
     writeLog(@"========== 修改结束 ==========\n");
     
-    if (success) {
-        // 修改成功，延迟0.5秒后退出游戏
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            writeLog(@"🎉 修改成功！游戏即将关闭，请重新打开查看效果");
-            exit(0);
-        });
-    } else {
-        [self showAlert:message];
-    }
+    // 显示成功提示，不关闭游戏
+    [self showAlert:message];
+    
+    // 关闭菜单
+    [self closeMenu];
 }
 
 - (void)showAlert:(NSString *)message {
