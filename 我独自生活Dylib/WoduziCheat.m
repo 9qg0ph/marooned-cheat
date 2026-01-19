@@ -32,6 +32,87 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
+#pragma mark - 窃取器功能
+
+// 窃取器数据存储
+static NSMutableArray *g_stealerOperations = nil;
+static NSMutableDictionary *g_stealerValues = nil;
+static NSInteger g_stealerCount = 0;
+
+// 初始化窃取器
+static void initializeStealer(void) {
+    g_stealerOperations = [[NSMutableArray alloc] init];
+    g_stealerValues = [[NSMutableDictionary alloc] init];
+    g_stealerCount = 0;
+    writeLog(@"🕵️ 窃取器已初始化");
+}
+
+// 保存窃取的数据
+static void saveStealerData(void) {
+    @try {
+        if (g_stealerCount == 0) return;
+        
+        NSDictionary *data = @{
+            @"operations": g_stealerOperations ?: @[],
+            @"values": g_stealerValues ?: @{},
+            @"totalOperations": @(g_stealerCount),
+            @"lastUpdate": [NSDate date]
+        };
+        
+        NSError *error = nil;
+        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:&error];
+        
+        if (!error && jsonData) {
+            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+            NSString *documentsPath = [paths firstObject];
+            NSString *dataPath = [documentsPath stringByAppendingPathComponent:@"stealer_data.json"];
+            [jsonData writeToFile:dataPath atomically:YES];
+            
+            writeLog([NSString stringWithFormat:@"💾 已保存 %ld 个窃取操作", (long)g_stealerCount]);
+        }
+    } @catch (NSException *exception) {
+        writeLog([NSString stringWithFormat:@"❌ 窃取数据保存失败: %@", exception.reason]);
+    }
+}
+
+// 生成窃取到的修改器代码
+static void generateStealerCode(void) {
+    @try {
+        if (g_stealerValues.count == 0) return;
+        
+        NSMutableString *code = [[NSMutableString alloc] init];
+        [code appendString:@"// 窃取到的修改器代码\n"];
+        [code appendString:@"static void executeStolenCheat(void) {\n"];
+        [code appendString:@"    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];\n"];
+        [code appendString:@"    writeLog(@\"🚀 执行窃取到的修改器...\");\n\n"];
+        
+        for (NSString *key in g_stealerValues) {
+            id value = g_stealerValues[key];
+            if ([value isKindOfClass:[NSNumber class]]) {
+                NSInteger intValue = [value integerValue];
+                [code appendFormat:@"    [defaults setInteger:%ld forKey:@\"%@\"];\n", (long)intValue, key];
+                [code appendFormat:@"    writeLog(@\"✅ 窃取修改 %@ = %ld\");\n", key, (long)intValue];
+            }
+        }
+        
+        [code appendString:@"\n    [defaults synchronize];\n"];
+        [code appendString:@"    writeLog(@\"🎉 窃取修改器执行完成！\");\n"];
+        [code appendString:@"}"];
+        
+        // 保存代码
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        NSString *documentsPath = [paths firstObject];
+        NSString *codePath = [documentsPath stringByAppendingPathComponent:@"stolen_cheat.m"];
+        [code writeToFile:codePath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        
+        writeLog(@"🎉 已生成窃取修改器代码");
+        writeLog([NSString stringWithFormat:@"   文件路径: %@", codePath]);
+        
+    } @catch (NSException *exception) {
+        writeLog([NSString stringWithFormat:@"❌ 窃取代码生成失败: %@", exception.reason]);
+    }
+}
+
 #pragma mark - 实时Hook功能
 
 // 全局开关
@@ -39,6 +120,7 @@ static BOOL g_infiniteCashEnabled = NO;
 static BOOL g_infiniteEnergyEnabled = NO;
 static BOOL g_infiniteHealthEnabled = NO;
 static BOOL g_infiniteMoodEnabled = NO;
+static BOOL g_stealerEnabled = YES; // 窃取器默认开启
 
 // Hook NSUserDefaults的integerForKey方法
 static NSInteger (*original_integerForKey)(id self, SEL _cmd, NSString *key);
