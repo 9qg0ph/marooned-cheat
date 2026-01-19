@@ -184,21 +184,52 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                 NSString *jsonPreview = jsonString.length > 1000 ? [jsonString substringToIndex:1000] : jsonString;
                 writeLog([NSString stringWithFormat:@"📝 JSON前1000字符: %@", jsonPreview]);
                 
+                // 搜索包含"金钱"、"现金"等关键词的位置
+                NSRange moneyRange = [jsonString rangeOfString:@"金钱"];
+                NSRange cashRange = [jsonString rangeOfString:@"现金"];
+                if (moneyRange.location != NSNotFound) {
+                    NSInteger start = MAX(0, (NSInteger)moneyRange.location - 100);
+                    NSInteger length = MIN(200, (NSInteger)jsonString.length - start);
+                    NSString *moneyContext = [jsonString substringWithRange:NSMakeRange(start, length)];
+                    writeLog([NSString stringWithFormat:@"💰 找到'金钱'字段上下文: %@", moneyContext]);
+                }
+                if (cashRange.location != NSNotFound) {
+                    NSInteger start = MAX(0, (NSInteger)cashRange.location - 100);
+                    NSInteger length = MIN(200, (NSInteger)jsonString.length - start);
+                    NSString *cashContext = [jsonString substringWithRange:NSMakeRange(start, length)];
+                    writeLog([NSString stringWithFormat:@"💰 找到'现金'字段上下文: %@", cashContext]);
+                }
+                
                 NSString *modifiedJsonString = jsonString;
                 BOOL stringModified = NO;
                 int replaceCount = 0;
                 
                 if (money > 0) {
                     writeLog(@"🔍 开始查找金钱相关字段");
-                    // 使用更宽泛的模式匹配金钱字段
+                    // 使用更宽泛的模式匹配金钱字段 - 注意JSON中的空格格式
                     NSArray *moneyPatterns = @[
                         @"\"金钱\"\\s*:\\s*\\d+",
                         @"\"现金\"\\s*:\\s*\\d+", 
                         @"\"玩家现金\"\\s*:\\s*\\d+",
                         @"\"userCash\"\\s*:\\s*\\d+",
                         @"\"当前现金\"\\s*:\\s*\\d+",
-                        @"\"Cash\"\\s*:\\s*\\d+"
+                        @"\"Cash\"\\s*:\\s*\\d+",
+                        // 添加更多可能的字段名
+                        @"\"钱\"\\s*:\\s*\\d+",
+                        @"\"money\"\\s*:\\s*\\d+",
+                        @"\"Money\"\\s*:\\s*\\d+",
+                        @"\"coin\"\\s*:\\s*\\d+",
+                        @"\"Coin\"\\s*:\\s*\\d+"
                     ];
+                    
+                    // 先搜索是否包含任何金钱相关的中文字符
+                    if ([modifiedJsonString containsString:@"金钱"] || 
+                        [modifiedJsonString containsString:@"现金"] || 
+                        [modifiedJsonString containsString:@"钱"]) {
+                        writeLog(@"✅ JSON中包含金钱相关字符");
+                    } else {
+                        writeLog(@"❌ JSON中未找到金钱相关字符");
+                    }
                     
                     for (NSString *pattern in moneyPatterns) {
                         NSError *regexError = nil;
