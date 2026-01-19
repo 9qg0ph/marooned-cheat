@@ -7,7 +7,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
-#import <substrate.h>
+// #import <substrate.h>  // 注释掉，使用标准的 runtime 方法
 
 // 目标数值
 static const NSInteger TARGET_CASH = 21000000000;
