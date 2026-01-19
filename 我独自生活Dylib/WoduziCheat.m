@@ -145,6 +145,7 @@ static void showMenu(void);
 static UIWindow* getKeyWindow(void);
 static BOOL searchAndModifyES3Data(NSMutableDictionary *es3Dict, NSUserDefaults *defaults);
 static BOOL searchDictionaryRecursively(NSMutableDictionary *dict, BOOL searchAttributes);
+static BOOL modifyES3SaveData(NSString *es3Data, NSString *key, NSUserDefaults *defaults);
 
 #pragma mark - 版权保护
 
