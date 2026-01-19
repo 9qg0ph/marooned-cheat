@@ -180,9 +180,9 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                 writeLog(@"🔍 开始字符串替换修改ES3数据");
                 writeLog([NSString stringWithFormat:@"JSON字符串长度: %lu", (unsigned long)jsonString.length]);
                 
-                // 输出JSON前1000个字符用于调试
-                NSString *jsonPreview = jsonString.length > 1000 ? [jsonString substringToIndex:1000] : jsonString;
-                writeLog([NSString stringWithFormat:@"📝 JSON前1000字符: %@", jsonPreview]);
+                // 输出JSON前5000个字符用于调试
+                NSString *jsonPreview = jsonString.length > 5000 ? [jsonString substringToIndex:5000] : jsonString;
+                writeLog([NSString stringWithFormat:@"📝 JSON前5000字符: %@", jsonPreview]);
                 
                 // 搜索包含"金钱"、"现金"等关键词的位置
                 NSRange moneyRange = [jsonString rangeOfString:@"金钱"];
@@ -220,6 +220,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     writeLog(@"🔍 开始查找金钱相关字段");
                     // 使用更宽泛的模式匹配包含金钱关键词的字段
                     NSArray *moneyPatterns = @[
+                        @"\"[^\"]*Money[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"Money"的字段
                         @"\"[^\"]*金钱[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"金钱"的字段
                         @"\"[^\"]*现金[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"现金"的字段
                         @"\"[^\"]*钱[^\"]*\"\\s*:\\s*\\d+",    // 匹配任何包含"钱"的字段
@@ -236,7 +237,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     if ([modifiedJsonString containsString:@"金钱"] || 
                         [modifiedJsonString containsString:@"现金"] || 
                         [modifiedJsonString containsString:@"金额"] ||
-                        [modifiedJsonString containsString:@"钱"]) {
+                        [modifiedJsonString containsString:@"钱"] ||
+                        [modifiedJsonString containsString:@"Money"]) {
                         writeLog(@"✅ JSON中包含金钱相关字符");
                     } else {
                         writeLog(@"❌ JSON中未找到金钱相关字符");
