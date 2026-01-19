@@ -109,10 +109,6 @@ static void writeLog(NSString *message) {
 static uintptr_t g_moneyBaseAddress = 0;
 static BOOL g_isModificationActive = NO;
 
-// 全局变量存储找到的基地址
-static uintptr_t g_moneyBaseAddress = 0;
-static BOOL g_isModificationActive = NO;
-
 // 精准内存搜索（基于已知偏移）
 static NSArray* preciseMemorySearch(NSInteger targetValue) {
     NSMutableArray *results = [NSMutableArray array];
