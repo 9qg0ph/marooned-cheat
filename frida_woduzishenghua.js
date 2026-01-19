@@ -1,7 +1,9 @@
 // 我独自生活 Frida Hook脚本
 // 用于动态分析和修改游戏数值
+// 当前现金数值: 2099999100
 
 console.log("🚀 我独自生活 Frida Hook脚本已加载");
+console.log("🎯 目标现金数值: 2099999100");
 
 // 全局变量
 var isHookEnabled = true;
@@ -12,9 +14,44 @@ var targetValues = {
     mood: 1000000
 };
 
+// 已知的游戏数值
+var knownValues = {
+    currentCash: 2099999100  // 当前现金数值
+};
+
 // 工具函数
 function log(msg) {
     console.log("[WDZ] " + msg);
+}
+
+// 检查是否是目标数值
+function isTargetValue(value, key) {
+    var lowerKey = key.toLowerCase();
+    
+    // 精确匹配当前现金数值
+    if (value === knownValues.currentCash) {
+        log("🎯 发现当前现金数值: " + value);
+        return { type: 'cash', newValue: targetValues.cash };
+    }
+    
+    // 范围匹配
+    if (value >= 1000000 && value <= 10000000000) {
+        if (lowerKey.includes('cash') || lowerKey.includes('money') || lowerKey.includes('现金') || lowerKey.includes('金钱')) {
+            return { type: 'cash', newValue: targetValues.cash };
+        } else if (lowerKey.includes('energy') || lowerKey.includes('stamina') || lowerKey.includes('体力')) {
+            return { type: 'energy', newValue: targetValues.energy };
+        }
+    }
+    
+    if (value >= 1 && value <= 1000000) {
+        if (lowerKey.includes('health') || lowerKey.includes('hp') || lowerKey.includes('健康')) {
+            return { type: 'health', newValue: targetValues.health };
+        } else if (lowerKey.includes('mood') || lowerKey.includes('happiness') || lowerKey.includes('心情')) {
+            return { type: 'mood', newValue: targetValues.mood };
+        }
+    }
+    
+    return null;
 }
 
 function hookNSUserDefaults() {
@@ -32,22 +69,15 @@ function hookNSUserDefaults() {
                 onLeave: function(retval) {
                     if (!isHookEnabled) return;
                     
-                    var key = this.key.toLowerCase();
                     var originalValue = retval.toInt32();
+                    var result = isTargetValue(originalValue, this.key);
                     
-                    // 检查是否是我们要修改的字段
-                    if (key.includes('cash') || key.includes('money') || key.includes('现金') || key.includes('金钱')) {
-                        log("🎯 拦截现金字段: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.cash + ")");
+                    if (result) {
+                        log("🎯 拦截" + result.type + "字段: " + this.key + " (原值: " + originalValue + " → 新值: " + result.newValue + ")");
+                        retval.replace(result.newValue);
+                    } else if (originalValue === knownValues.currentCash) {
+                        log("🎯 精确拦截现金: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.cash + ")");
                         retval.replace(targetValues.cash);
-                    } else if (key.includes('energy') || key.includes('stamina') || key.includes('体力')) {
-                        log("🎯 拦截体力字段: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.energy + ")");
-                        retval.replace(targetValues.energy);
-                    } else if (key.includes('health') || key.includes('hp') || key.includes('健康')) {
-                        log("🎯 拦截健康字段: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.health + ")");
-                        retval.replace(targetValues.health);
-                    } else if (key.includes('mood') || key.includes('happiness') || key.includes('心情')) {
-                        log("🎯 拦截心情字段: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.mood + ")");
-                        retval.replace(targetValues.mood);
                     }
                 }
             });
@@ -66,21 +96,19 @@ function hookNSUserDefaults() {
                     if (!retval.isNull()) {
                         var obj = ObjC.Object(retval);
                         if (obj.isKindOfClass_(ObjC.classes.NSNumber)) {
-                            var key = this.key.toLowerCase();
                             var originalValue = obj.intValue();
+                            var result = isTargetValue(originalValue, this.key);
                             
-                            if (key.includes('cash') || key.includes('money') || key.includes('现金') || key.includes('金钱')) {
-                                log("🎯 拦截现金对象: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.cash + ")");
+                            if (result) {
+                                log("🎯 拦截" + result.type + "对象: " + this.key + " (原值: " + originalValue + " → 新值: " + result.newValue + ")");
+                                if (result.type === 'cash' || result.type === 'energy') {
+                                    retval.replace(ObjC.classes.NSNumber.numberWithLongLong_(result.newValue));
+                                } else {
+                                    retval.replace(ObjC.classes.NSNumber.numberWithInt_(result.newValue));
+                                }
+                            } else if (originalValue === knownValues.currentCash) {
+                                log("🎯 精确拦截现金对象: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.cash + ")");
                                 retval.replace(ObjC.classes.NSNumber.numberWithLongLong_(targetValues.cash));
-                            } else if (key.includes('energy') || key.includes('stamina') || key.includes('体力')) {
-                                log("🎯 拦截体力对象: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.energy + ")");
-                                retval.replace(ObjC.classes.NSNumber.numberWithLongLong_(targetValues.energy));
-                            } else if (key.includes('health') || key.includes('hp') || key.includes('健康')) {
-                                log("🎯 拦截健康对象: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.health + ")");
-                                retval.replace(ObjC.classes.NSNumber.numberWithInt_(targetValues.health));
-                            } else if (key.includes('mood') || key.includes('happiness') || key.includes('心情')) {
-                                log("🎯 拦截心情对象: " + this.key + " (原值: " + originalValue + " → 新值: " + targetValues.mood + ")");
-                                retval.replace(ObjC.classes.NSNumber.numberWithInt_(targetValues.mood));
                             }
                         }
                     }
@@ -252,6 +280,36 @@ global.setHealth = function(value) {
 global.setMood = function(value) {
     targetValues.mood = value;
     log("心情目标值设置为: " + value);
+};
+
+// 新增：更新当前数值
+global.updateCurrentCash = function(value) {
+    knownValues.currentCash = value;
+    log("更新当前现金数值为: " + value);
+};
+
+// 新增：监控所有数值读取
+global.enableMonitor = function() {
+    log("开启数值监控模式...");
+    
+    // Hook所有可能的数值获取方法
+    var NSNumber = ObjC.classes.NSNumber;
+    if (NSNumber) {
+        var intValue = NSNumber['- intValue'];
+        if (intValue) {
+            Interceptor.attach(intValue.implementation, {
+                onLeave: function(retval) {
+                    var value = retval.toInt32();
+                    // 只记录可能的游戏数值
+                    if (value >= 1000 && value <= 10000000000) {
+                        log("📊 监控到数值: " + value);
+                    }
+                }
+            });
+        }
+    }
+    
+    log("✅ 数值监控已启用");
 };
 
 // 启动
