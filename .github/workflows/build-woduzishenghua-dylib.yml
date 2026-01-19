@@ -22,7 +22,7 @@ jobs:
       with:
         xcode-version: latest-stable
     
-    - name: Build WoduziShenghua Dylib (Simple Version)
+    - name: Build WoduziShenghua Dylib (Safe Version)
       run: |
         cd 我独自生活Dylib
         clang -arch arm64 \
@@ -33,41 +33,16 @@ jobs:
           -framework Foundation \
           -framework CoreGraphics \
           -fobjc-arc \
-          -o WoduziCheat_Simple.dylib \
-          WoduziCheat_Simple.m
+          -o WoduziCheat.dylib \
+          WoduziCheat.m
         
         # Verify the build
-        file WoduziCheat_Simple.dylib
-        ls -la WoduziCheat_Simple.dylib
-    
-    - name: Build WoduziShenghua Dylib (RealTime Version)
-      run: |
-        cd 我独自生活Dylib
-        clang -arch arm64 \
-          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
-          -miphoneos-version-min=14.0 \
-          -dynamiclib \
-          -framework UIKit \
-          -framework Foundation \
-          -framework CoreGraphics \
-          -fobjc-arc \
-          -o WoduziCheat_RealTime.dylib \
-          WoduziCheat_RealTime.m
-        
-        # Verify the build
-        file WoduziCheat_RealTime.dylib
-        ls -la WoduziCheat_RealTime.dylib
+        file WoduziCheat.dylib
+        ls -la WoduziCheat.dylib
     
     - name: Upload Dylib
       uses: actions/upload-artifact@v4
       with:
-        name: WoduziShenghua-Simple-Dylib
-        path: 我独自生活Dylib/WoduziCheat_Simple.dylib
-        retention-days: 30
-    
-    - name: Upload RealTime Dylib
-      uses: actions/upload-artifact@v4
-      with:
-        name: WoduziShenghua-RealTime-Dylib
-        path: 我独自生活Dylib/WoduziCheat_RealTime.dylib
+        name: WoduziShenghua-Safe-Dylib
+        path: 我独自生活Dylib/WoduziCheat.dylib
         retention-days: 30
