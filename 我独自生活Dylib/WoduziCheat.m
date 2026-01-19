@@ -193,11 +193,13 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     
                     // 如果还是失败，尝试直接字符串替换修改
                     writeLog(@"尝试直接字符串替换修改ES3数据");
+                    writeLog([NSString stringWithFormat:@"JSON字符串长度: %lu", (unsigned long)jsonString.length]);
                     NSString *modifiedJsonString = jsonString;
                     BOOL stringModified = NO;
                     
                     if (money > 0) {
-                        // 查找并替换金钱相关字段
+                        writeLog(@"开始查找金钱相关字段");
+                        // 查找并替换金钱相关字段 - 使用更简单的模式
                         NSArray *moneyPatterns = @[
                             @"\"userCash\"\\s*:\\s*\\d+",
                             @"\"金钱\"\\s*:\\s*\\d+", 
@@ -206,19 +208,35 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                         ];
                         
                         for (NSString *pattern in moneyPatterns) {
-                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
-                            if (regex) {
+                            writeLog([NSString stringWithFormat:@"尝试匹配模式: %@", pattern]);
+                            NSError *regexError = nil;
+                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
+                            if (regexError) {
+                                writeLog([NSString stringWithFormat:@"❌ 正则表达式创建失败: %@", regexError]);
+                                continue;
+                            }
+                            
+                            // 先检查是否有匹配
+                            NSUInteger matchCount = [regex numberOfMatchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
+                            writeLog([NSString stringWithFormat:@"找到 %lu 个匹配", (unsigned long)matchCount]);
+                            
+                            if (matchCount > 0) {
                                 // 直接构建替换字符串
                                 NSArray *components = [pattern componentsSeparatedByString:@"\""];
-                                NSString *fieldName = [components objectAtIndex:1];
-                                NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)money];
-                                NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
-                                    options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
-                                if (![newString isEqualToString:modifiedJsonString]) {
-                                    modifiedJsonString = newString;
-                                    stringModified = YES;
-                                    writeLog([NSString stringWithFormat:@"✅ 字符串替换修改金钱字段: %@ -> %ld", fieldName, (long)money]);
+                                if (components.count > 1) {
+                                    NSString *fieldName = [components objectAtIndex:1];
+                                    NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)money];
+                                    writeLog([NSString stringWithFormat:@"替换为: %@", replacement]);
+                                    
+                                    NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
+                                        options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
+                                    if (![newString isEqualToString:modifiedJsonString]) {
+                                        modifiedJsonString = newString;
+                                        stringModified = YES;
+                                        writeLog([NSString stringWithFormat:@"✅ 字符串替换修改金钱字段: %@ -> %ld", fieldName, (long)money]);
+                                    }
                                 }
+                            }
                             }
                         }
                     }
