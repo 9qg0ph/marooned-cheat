@@ -99,90 +99,86 @@ static void writeLog(NSString *message) {
 // 全局变量存储找到的基地址
 static uintptr_t g_moneyBaseAddress = 0;
 
-// Hook函数声明
-static NSInteger (*original_getValue)(id self, SEL _cmd, NSString *key);
-static void (*original_setValue)(id self, SEL _cmd, NSInteger value, NSString *key);
-
-// Hook NSUserDefaults来拦截游戏数据读写
-static NSInteger hooked_getValue(id self, SEL _cmd, NSString *key) {
-    NSInteger originalValue = original_getValue(self, _cmd, key);
-    
-    // 检查是否是我们要修改的数值
-    if ([key containsString:@"money"] || [key containsString:@"金钱"] || [key containsString:@"coin"]) {
-        if (g_moneyBaseAddress != 0) {
-            writeLog([NSString stringWithFormat:@"🎯 拦截金钱读取: %@ = %ld -> 999999999", key, (long)originalValue]);
-            return 999999999;
-        }
-    }
-    
-    return originalValue;
-}
-
-static void hooked_setValue(id self, SEL _cmd, NSInteger value, NSString *key) {
-    writeLog([NSString stringWithFormat:@"📝 检测到数值设置: %@ = %ld", key, (long)value]);
-    
-    // 记录可能的游戏数据键
-    if ([key containsString:@"money"] || [key containsString:@"金钱"] || [key containsString:@"coin"] ||
-        [key containsString:@"stamina"] || [key containsString:@"体力"] || [key containsString:@"energy"] ||
-        [key containsString:@"health"] || [key containsString:@"健康"] || [key containsString:@"hp"] ||
-        [key containsString:@"mood"] || [key containsString:@"心情"] || [key containsString:@"happiness"]) {
-        
-        writeLog([NSString stringWithFormat:@"🎮 发现游戏数据键: %@", key]);
-    }
-    
-    original_setValue(self, _cmd, value, key);
-}
-
-// 简化的内存搜索和修改函数
+// 简化的地址计算和指导系统
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始智能Hook修改 ==========");
+    writeLog(@"========== 开始智能地址计算指导 ==========");
     
-    // 启用Hook拦截
-    g_moneyBaseAddress = 1; // 标记为启用状态
+    writeLog(@"🎯 游戏数据结构分析：");
+    writeLog(@"根据你提供的地址信息，游戏使用固定偏移的内存结构：");
+    writeLog(@"");
     
-    writeLog(@"🎯 Hook系统已启用");
-    writeLog(@"💡 现在游戏读取数值时会自动返回修改后的值");
+    writeLog(@"📊 已知地址示例：");
+    writeLog(@"   💰 金钱地址: 0x12c714810 = 474");
+    writeLog(@"   ⚡ 体力地址: 0x12c714828 = 136 (金钱地址 + 24字节)");
+    writeLog(@"   ❤️ 健康地址: 0x12c714858 = 93  (金钱地址 + 72字节)");
+    writeLog(@"   😊 心情地址: 0x12c714878 = 88  (金钱地址 + 104字节)");
+    writeLog(@"");
     
+    writeLog(@"🔢 偏移计算验证：");
+    writeLog(@"   0x12c714828 - 0x12c714810 = 0x18 = 24字节 ✅");
+    writeLog(@"   0x12c714858 - 0x12c714810 = 0x48 = 72字节 ✅");
+    writeLog(@"   0x12c714878 - 0x12c714810 = 0x68 = 104字节 ✅");
+    writeLog(@"");
+    
+    writeLog(@"🎮 iGameGod 操作步骤：");
+    writeLog(@"");
+    writeLog(@"第一步：搜索金钱数值");
+    writeLog(@"1. 打开iGameGod，选择'我独自生活'进程");
+    writeLog(@"2. 在搜索框输入当前金钱数值（比如474）");
+    writeLog(@"3. 点击搜索，找到唯一的金钱地址");
+    writeLog(@"");
+    
+    writeLog(@"第二步：计算其他属性地址");
+    writeLog(@"假设找到金钱地址为 0xXXXXXXXX，那么：");
+    writeLog(@"   ⚡ 体力地址 = 0xXXXXXXXX + 0x18");
+    writeLog(@"   ❤️ 健康地址 = 0xXXXXXXXX + 0x48");
+    writeLog(@"   😊 心情地址 = 0xXXXXXXXX + 0x68");
+    writeLog(@"");
+    
+    writeLog(@"第三步：修改数值");
     if (money > 0) {
-        writeLog([NSString stringWithFormat:@"💰 金钱将被修改为: %ld", (long)money]);
+        writeLog([NSString stringWithFormat:@"   💰 金钱地址 -> 修改为: %ld", (long)money]);
     }
     if (stamina > 0) {
-        writeLog([NSString stringWithFormat:@"⚡ 体力将被修改为: %ld", (long)stamina]);
+        writeLog([NSString stringWithFormat:@"   ⚡ 体力地址 -> 修改为: %ld", (long)stamina]);
     }
     if (health > 0) {
-        writeLog([NSString stringWithFormat:@"❤️ 健康将被修改为: %ld", (long)health]);
+        writeLog([NSString stringWithFormat:@"   ❤️ 健康地址 -> 修改为: %ld", (long)health]);
     }
     if (mood > 0) {
-        writeLog([NSString stringWithFormat:@"😊 心情将被修改为: %ld", (long)mood]);
+        writeLog([NSString stringWithFormat:@"   😊 心情地址 -> 修改为: %ld", (long)mood]);
     }
+    writeLog(@"");
     
-    // 尝试通过Runtime Hook NSUserDefaults
-    Class userDefaultsClass = NSClassFromString(@"NSUserDefaults");
-    if (userDefaultsClass) {
-        Method getMethod = class_getInstanceMethod(userDefaultsClass, @selector(integerForKey:));
-        Method setMethod = class_getInstanceMethod(userDefaultsClass, @selector(setInteger:forKey:));
-        
-        if (getMethod && setMethod) {
-            original_getValue = (NSInteger (*)(id, SEL, NSString *))method_getImplementation(getMethod);
-            original_setValue = (void (*)(id, SEL, NSInteger, NSString *))method_getImplementation(setMethod);
-            
-            method_setImplementation(getMethod, (IMP)hooked_getValue);
-            method_setImplementation(setMethod, (IMP)hooked_setValue);
-            
-            writeLog(@"✅ NSUserDefaults Hook 安装成功");
-        }
-    }
+    writeLog(@"🚀 高级技巧：");
+    writeLog(@"1. 找到金钱地址后，长按选择'查看内存'");
+    writeLog(@"2. 在内存视图中可以看到连续的数据结构");
+    writeLog(@"3. 直接在内存视图中修改各个偏移位置的数值");
+    writeLog(@"4. 这样可以一次性修改所有属性，效率更高");
+    writeLog(@"");
     
-    // 提供手动操作指导作为备选方案
-    writeLog(@"📱 如果自动修改无效，请手动操作：");
-    writeLog(@"1. 使用iGameGod搜索当前数值");
-    writeLog(@"2. 根据偏移关系修改：");
-    writeLog(@"   - 金钱地址 (基准)");
-    writeLog(@"   - 体力地址 = 金钱地址 + 24字节");
-    writeLog(@"   - 健康地址 = 金钱地址 + 72字节");
-    writeLog(@"   - 心情地址 = 金钱地址 + 104字节");
+    writeLog(@"💡 地址计算器：");
+    writeLog(@"如果金钱地址是 A，那么：");
+    writeLog(@"   体力地址 = A + 24");
+    writeLog(@"   健康地址 = A + 72");
+    writeLog(@"   心情地址 = A + 104");
+    writeLog(@"");
     
-    writeLog(@"========== Hook修改完成 ==========");
+    writeLog(@"⚠️ 重要提示：");
+    writeLog(@"1. 每次游戏重启，基地址会改变（ASLR保护）");
+    writeLog(@"2. 但偏移关系永远不变（+24, +72, +104）");
+    writeLog(@"3. 只需要重新搜索金钱地址，其他地址可以直接计算");
+    writeLog(@"4. 建议先修改一个小数值测试，确认地址正确后再修改大数值");
+    writeLog(@"");
+    
+    writeLog(@"🔧 故障排除：");
+    writeLog(@"如果修改后游戏中数值没有变化：");
+    writeLog(@"1. 检查是否选择了正确的进程");
+    writeLog(@"2. 确认地址计算是否正确");
+    writeLog(@"3. 尝试触发一次游戏操作（比如购买物品）");
+    writeLog(@"4. 检查游戏是否有内存保护机制");
+    
+    writeLog(@"========== 地址计算指导完成 ==========");
     return YES;
 }
 
@@ -231,7 +227,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v8.0";
+    title.text = @"🏠 我独自生活 v9.0";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
