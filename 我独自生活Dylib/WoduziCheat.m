@@ -12,6 +12,8 @@ static WDZMenuView *g_menuView = nil;
 
 static void showMenu(void);
 static void writeLog(NSString *message);
+static UIWindow* getKeyWindow(void);
+static UIViewController* getRootViewController(void);
 
 #pragma mark - 版权保护
 
@@ -404,6 +406,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                             writeLog(@"🎉 ES3存档修改完成！");
                         } else {
                             writeLog(@"❌ ES3 NSUserDefaults保存失败");
+                        }
                         }
                     }
                 }
