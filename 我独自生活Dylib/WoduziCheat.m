@@ -1,5 +1,5 @@
 // 我独自生活修改器 - WoduziCheat.m
-// 基于天选打工人修改器改进，适配plist格式存档
+// 专注于Unity游戏真实存档检测和修改
 #import <UIKit/UIKit.h>
 
 #pragma mark - 全局变量
@@ -95,348 +95,199 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-// Unity游戏存档修改：PlayerPrefs + 文件存储 + 内存Hook
+// Unity游戏存档检测和修改
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始Unity游戏存档分析 ==========");
+    writeLog(@"========== Unity游戏存档分析开始 ==========");
     
-    BOOL playerPrefsSuccess = NO;
     BOOL fileSuccess = NO;
-    BOOL memorySuccess = NO;
+    BOOL playerPrefsSuccess = NO;
     
-    // 第一步：扫描所有可能的存档文件
-    writeLog(@"🔍 开始扫描游戏存档文件");
+    // 第一步：全面扫描Documents目录
+    writeLog(@"🔍 开始全面扫描Documents目录");
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     NSString *documentsPath = [paths firstObject];
-    
-    // Unity常见的存档文件扩展名和名称
-    NSArray *unityExtensions = @[@".dat", @".sav", @".save", @".json", @".db", @".sqlite", @".sqlite3", @".unity3d", @".bytes"];
-    NSArray *unityNames = @[@"save", @"data", @"game", @"player", @"progress", @"profile", @"user", @"config"];
     
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSArray *files = [fileManager contentsOfDirectoryAtPath:documentsPath error:nil];
     
-    writeLog([NSString stringWithFormat:@"📁 Documents目录文件数量: %lu", (unsigned long)files.count]);
+    writeLog([NSString stringWithFormat:@"📁 Documents目录: %@", documentsPath]);
+    writeLog([NSString stringWithFormat:@"📄 文件总数: %lu", (unsigned long)files.count]);
     
+    // 列出所有文件
     for (NSString *file in files) {
-        BOOL isUnityFile = NO;
+        NSString *filePath = [documentsPath stringByAppendingPathComponent:file];
+        NSDictionary *attributes = [fileManager attributesOfItemAtPath:filePath error:nil];
+        NSNumber *fileSize = [attributes objectForKey:NSFileSize];
+        BOOL isDirectory = [[attributes objectForKey:NSFileType] isEqualToString:NSFileTypeDirectory];
         
-        // 检查扩展名
-        for (NSString *ext in unityExtensions) {
-            if ([file.lowercaseString hasSuffix:ext]) {
-                isUnityFile = YES;
-                break;
-            }
-        }
+        writeLog([NSString stringWithFormat:@"📋 %@%@ - %@ bytes", 
+                file, isDirectory ? @"/" : @"", fileSize ?: @"0"]);
         
-        // 检查文件名关键词
-        if (!isUnityFile) {
-            for (NSString *name in unityNames) {
-                if ([file.lowercaseString containsString:name]) {
-                    isUnityFile = YES;
-                    break;
-                }
-            }
-        }
-        
-        if (isUnityFile) {
-            NSString *filePath = [documentsPath stringByAppendingPathComponent:file];
-            writeLog([NSString stringWithFormat:@"🎯 发现可能的Unity存档: %@", file]);
-            
-            // 获取文件大小
-            NSDictionary *attributes = [fileManager attributesOfItemAtPath:filePath error:nil];
-            NSNumber *fileSize = [attributes objectForKey:NSFileSize];
-            writeLog([NSString stringWithFormat:@"📏 文件大小: %@ bytes", fileSize]);
-            
-            // 尝试读取文件内容
+        // 检查每个文件
+        if (!isDirectory && [fileSize longLongValue] > 0) {
             NSData *fileData = [NSData dataWithContentsOfFile:filePath];
-            if (fileData && fileData.length > 0) {
-                // 尝试作为文本读取
+            if (fileData) {
+                // 尝试读取为文本
                 NSString *textContent = [[NSString alloc] initWithData:fileData encoding:NSUTF8StringEncoding];
                 if (textContent && textContent.length > 0) {
-                    writeLog([NSString stringWithFormat:@"📄 文本内容前500字符: %@", 
-                            textContent.length > 500 ? [textContent substringToIndex:500] : textContent]);
+                    writeLog([NSString stringWithFormat:@"📝 %@ 是文本文件，长度: %lu", file, (unsigned long)textContent.length]);
                     
-                    // 检查是否包含金钱相关数据
-                    if ([textContent containsString:@"money"] || [textContent containsString:@"cash"] ||
-                        [textContent containsString:@"金钱"] || [textContent containsString:@"现金"] ||
-                        [textContent containsString:@"coin"] || [textContent containsString:@"gold"] ||
-                        [textContent rangeOfString:@"\\d{6,}" options:NSRegularExpressionSearch].location != NSNotFound) {
-                        writeLog([NSString stringWithFormat:@"✅ 文件 %@ 包含疑似游戏数据", file]);
+                    // 检查是否包含游戏数据
+                    BOOL hasGameData = NO;
+                    NSArray *gameKeywords = @[@"money", @"cash", @"coin", @"gold", @"level", @"score", @"player", 
+                                            @"金钱", @"现金", @"金币", @"等级", @"分数", @"玩家"];
+                    
+                    for (NSString *keyword in gameKeywords) {
+                        if ([textContent.lowercaseString containsString:keyword.lowercaseString]) {
+                            hasGameData = YES;
+                            writeLog([NSString stringWithFormat:@"🎯 %@ 包含关键词: %@", file, keyword]);
+                        }
+                    }
+                    
+                    // 检查是否包含大数值（可能是游戏数据）
+                    NSRegularExpression *numberRegex = [NSRegularExpression regularExpressionWithPattern:@"\\b\\d{4,}\\b" options:0 error:nil];
+                    NSArray *matches = [numberRegex matchesInString:textContent options:0 range:NSMakeRange(0, textContent.length)];
+                    if (matches.count > 0) {
+                        hasGameData = YES;
+                        writeLog([NSString stringWithFormat:@"🔢 %@ 包含 %lu 个大数值", file, (unsigned long)matches.count]);
                         
-                        // 尝试修改这个文件
-                        if (money > 0) {
-                            NSString *modifiedContent = textContent;
-                            
-                            // 使用正则表达式替换大数值（可能是金钱）
-                            NSError *regexError = nil;
-                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"\\b\\d{6,}\\b" options:0 error:&regexError];
-                            if (regex) {
-                                NSString *replacement = [NSString stringWithFormat:@"%ld", (long)money];
-                                modifiedContent = [regex stringByReplacingMatchesInString:modifiedContent 
-                                    options:0 range:NSMakeRange(0, modifiedContent.length) withTemplate:replacement];
-                                
-                                // 写回文件
-                                NSData *modifiedData = [modifiedContent dataUsingEncoding:NSUTF8StringEncoding];
-                                if ([modifiedData writeToFile:filePath atomically:YES]) {
-                                    writeLog([NSString stringWithFormat:@"✅ 成功修改文件: %@", file]);
-                                    fileSuccess = YES;
-                                } else {
-                                    writeLog([NSString stringWithFormat:@"❌ 修改文件失败: %@", file]);
-                                }
-                            }
+                        // 显示前几个数值
+                        for (int i = 0; i < MIN(5, matches.count); i++) {
+                            NSTextCheckingResult *match = matches[i];
+                            NSString *number = [textContent substringWithRange:match.range];
+                            writeLog([NSString stringWithFormat:@"   数值: %@", number]);
+                        }
+                    }
+                    
+                    if (hasGameData && money > 0) {
+                        writeLog([NSString stringWithFormat:@"🛠️ 尝试修改文件: %@", file]);
+                        
+                        // 备份原文件
+                        NSString *backupPath = [filePath stringByAppendingString:@".backup"];
+                        [fileData writeToFile:backupPath atomically:YES];
+                        writeLog([NSString stringWithFormat:@"💾 已备份到: %@", backupPath]);
+                        
+                        // 替换大数值
+                        NSString *modifiedContent = textContent;
+                        NSString *replacement = [NSString stringWithFormat:@"%ld", (long)money];
+                        
+                        modifiedContent = [numberRegex stringByReplacingMatchesInString:modifiedContent 
+                            options:0 range:NSMakeRange(0, modifiedContent.length) withTemplate:replacement];
+                        
+                        // 写回文件
+                        NSData *modifiedData = [modifiedContent dataUsingEncoding:NSUTF8StringEncoding];
+                        if ([modifiedData writeToFile:filePath atomically:YES]) {
+                            writeLog([NSString stringWithFormat:@"✅ 成功修改文件: %@", file]);
+                            fileSuccess = YES;
+                        } else {
+                            writeLog([NSString stringWithFormat:@"❌ 修改文件失败: %@", file]);
                         }
                     }
                 } else {
                     // 二进制文件
-                    writeLog([NSString stringWithFormat:@"🔒 二进制文件: %@", file]);
+                    writeLog([NSString stringWithFormat:@"🔒 %@ 是二进制文件", file]);
                     
-                    // 检查是否是Unity的二进制存档格式
-                    const unsigned char *bytes = (const unsigned char *)[fileData bytes];
-                    if (fileData.length >= 4) {
-                        writeLog([NSString stringWithFormat:@"🔢 文件头: %02X %02X %02X %02X", bytes[0], bytes[1], bytes[2], bytes[3]]);
-                    }
-                }
-            }
-        }
-    }
-                
-                if (money > 0) {
-                    writeLog(@"🔍 开始查找金钱相关字段");
-                    // 使用更宽泛的模式匹配包含金钱关键词的字段
-                    NSArray *moneyPatterns = @[
-                        @"\"[^\"]*Money[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"Money"的字段
-                        @"\"[^\"]*金钱[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"金钱"的字段
-                        @"\"[^\"]*现金[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"现金"的字段
-                        @"\"[^\"]*钱[^\"]*\"\\s*:\\s*\\d+",    // 匹配任何包含"钱"的字段
-                        @"\"[^\"]*金额[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"金额"的字段
-                        @"\"userCash\"\\s*:\\s*\\d+",
-                        @"\"Cash\"\\s*:\\s*\\d+",
-                        @"\"money\"\\s*:\\s*\\d+",
-                        @"\"Money\"\\s*:\\s*\\d+",
-                        @"\"coin\"\\s*:\\s*\\d+",
-                        @"\"Coin\"\\s*:\\s*\\d+"
-                    ];
-                    
-                    // 先搜索是否包含任何金钱相关的中文字符
-                    if ([modifiedJsonString containsString:@"金钱"] || 
-                        [modifiedJsonString containsString:@"现金"] || 
-                        [modifiedJsonString containsString:@"金额"] ||
-                        [modifiedJsonString containsString:@"钱"] ||
-                        [modifiedJsonString containsString:@"Money"]) {
-                        writeLog(@"✅ JSON中包含金钱相关字符");
-                    } else {
-                        writeLog(@"❌ JSON中未找到金钱相关字符");
-                    }
-                    
-                    for (NSString *pattern in moneyPatterns) {
-                        NSError *regexError = nil;
-                        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
-                        if (regexError) {
-                            writeLog([NSString stringWithFormat:@"❌ 正则表达式创建失败: %@", regexError]);
-                            continue;
+                    // 显示文件头
+                    if (fileData.length >= 16) {
+                        const unsigned char *bytes = (const unsigned char *)[fileData bytes];
+                        NSMutableString *hexString = [NSMutableString string];
+                        for (int i = 0; i < 16; i++) {
+                            [hexString appendFormat:@"%02X ", bytes[i]];
                         }
-                        
-                        // 检查匹配数量
-                        NSUInteger matchCount = [regex numberOfMatchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
-                        writeLog([NSString stringWithFormat:@"🔍 模式 %@ 找到 %lu 个匹配", pattern, (unsigned long)matchCount]);
-                        
-                        if (matchCount > 0) {
-                            // 获取所有匹配并替换
-                            NSArray *matches = [regex matchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
-                            
-                            // 从后往前替换，避免位置偏移
-                            for (NSInteger i = matches.count - 1; i >= 0; i--) {
-                                NSTextCheckingResult *match = [matches objectAtIndex:i];
-                                NSString *matchedString = [modifiedJsonString substringWithRange:match.range];
-                                writeLog([NSString stringWithFormat:@"🎯 找到匹配: %@", matchedString]);
-                                
-                                // 提取字段名
-                                NSRange colonRange = [matchedString rangeOfString:@":"];
-                                if (colonRange.location != NSNotFound) {
-                                    NSString *fieldPart = [matchedString substringToIndex:colonRange.location];
-                                    NSString *replacement = [NSString stringWithFormat:@"%@ : %ld", fieldPart, (long)money];
-                                    
-                                    modifiedJsonString = [modifiedJsonString stringByReplacingCharactersInRange:match.range withString:replacement];
-                                    stringModified = YES;
-                                    replaceCount++;
-                                    writeLog([NSString stringWithFormat:@"✅ 替换字段: %@ -> %ld", fieldPart, (long)money]);
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                if (stamina > 0) {
-                    writeLog(@"🔍 开始查找体力相关字段");
-                    NSArray *staminaPatterns = @[
-                        @"\"Stamina\"\\s*:\\s*\\d+",
-                        @"\"体力\"\\s*:\\s*\\d+",
-                        @"\"玩家体力\"\\s*:\\s*\\d+",
-                        @"\"当前体力\"\\s*:\\s*\\d+"
-                    ];
-                    
-                    for (NSString *pattern in staminaPatterns) {
-                        NSError *regexError = nil;
-                        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
-                        if (regex) {
-                            NSUInteger matchCount = [regex numberOfMatchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
-                            writeLog([NSString stringWithFormat:@"🔍 模式 %@ 找到 %lu 个匹配", pattern, (unsigned long)matchCount]);
-                            
-                            if (matchCount > 0) {
-                                NSArray *components = [pattern componentsSeparatedByString:@"\""];
-                                if (components.count > 1) {
-                                    NSString *fieldName = [components objectAtIndex:1];
-                                    NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)stamina];
-                                    NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
-                                        options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
-                                    if (![newString isEqualToString:modifiedJsonString]) {
-                                        modifiedJsonString = newString;
-                                        stringModified = YES;
-                                        replaceCount++;
-                                        writeLog([NSString stringWithFormat:@"✅ 替换体力字段 %@: %ld (%lu处)", fieldName, (long)stamina, (unsigned long)matchCount]);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                if (health > 0) {
-                    writeLog(@"🔍 开始查找健康相关字段");
-                    NSArray *healthPatterns = @[
-                        @"\"当前健康\"\\s*:\\s*\\d+",
-                        @"\"健康\"\\s*:\\s*\\d+",
-                        @"\"Health\"\\s*:\\s*\\d+"
-                    ];
-                    
-                    for (NSString *pattern in healthPatterns) {
-                        NSError *regexError = nil;
-                        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
-                        if (regex) {
-                            NSUInteger matchCount = [regex numberOfMatchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
-                            writeLog([NSString stringWithFormat:@"🔍 模式 %@ 找到 %lu 个匹配", pattern, (unsigned long)matchCount]);
-                            
-                            if (matchCount > 0) {
-                                NSArray *components = [pattern componentsSeparatedByString:@"\""];
-                                if (components.count > 1) {
-                                    NSString *fieldName = [components objectAtIndex:1];
-                                    NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)health];
-                                    NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
-                                        options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
-                                    if (![newString isEqualToString:modifiedJsonString]) {
-                                        modifiedJsonString = newString;
-                                        stringModified = YES;
-                                        replaceCount++;
-                                        writeLog([NSString stringWithFormat:@"✅ 替换健康字段 %@: %ld (%lu处)", fieldName, (long)health, (unsigned long)matchCount]);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                writeLog([NSString stringWithFormat:@"📊 总共完成 %d 个字段替换", replaceCount]);
-                
-                if (stringModified) {
-                    // 重新Base64编码
-                    NSData *modifiedData = [modifiedJsonString dataUsingEncoding:NSUTF8StringEncoding];
-                    NSString *newES3Data = [modifiedData base64EncodedStringWithOptions:0];
-                    
-                    // 写回NSUserDefaults
-                    [defaults setObject:newES3Data forKey:@"data1.es3"];
-                    es3Success = [defaults synchronize];
-                    
-                    if (es3Success) {
-                        writeLog(@"✅ 字符串替换修改ES3存档成功！");
-                    } else {
-                        writeLog(@"❌ 字符串替换修改ES3存档失败");
-                    }
-                } else {
-                    writeLog(@"⚠️ 未找到可替换的ES3字段");
-                }
-            }
-        }
-    }
-    
-    // 第四步：查找并修改SQLite数据库
-    writeLog(@"开始查找SQLite数据库");
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-    NSString *documentsPath = [paths firstObject];
-    
-    // 查找可能的数据库文件
-    NSArray *dbExtensions = @[@".db", @".sqlite", @".sqlite3", @".dat"];
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    NSArray *files = [fileManager contentsOfDirectoryAtPath:documentsPath error:nil];
-    
-    for (NSString *file in files) {
-        for (NSString *ext in dbExtensions) {
-            if ([file.lowercaseString hasSuffix:ext]) {
-                NSString *dbPath = [documentsPath stringByAppendingPathComponent:file];
-                writeLog([NSString stringWithFormat:@"🔍 找到数据库文件: %@", file]);
-                writeLog([NSString stringWithFormat:@"📁 数据库路径: %@", dbPath]);
-            }
-        }
-    }
-    
-    // 第五步：查找其他可能的存档文件
-    writeLog(@"开始查找其他存档文件");
-    NSArray *saveExtensions = @[@".sav", @".save", @".data", @".json", @".plist", @".txt"];
-    
-    for (NSString *file in files) {
-        for (NSString *ext in saveExtensions) {
-            if ([file.lowercaseString hasSuffix:ext] || [file.lowercaseString containsString:@"save"] || 
-                [file.lowercaseString containsString:@"data"] || [file.lowercaseString containsString:@"game"]) {
-                NSString *filePath = [documentsPath stringByAppendingPathComponent:file];
-                writeLog([NSString stringWithFormat:@"🔍 找到可能的存档文件: %@", file]);
-                
-                // 尝试读取文件内容
-                NSData *fileData = [NSData dataWithContentsOfFile:filePath];
-                if (fileData && fileData.length > 0) {
-                    NSString *fileContent = [[NSString alloc] initWithData:fileData encoding:NSUTF8StringEncoding];
-                    if (fileContent && fileContent.length > 0) {
-                        writeLog([NSString stringWithFormat:@"📄 文件内容前200字符: %@", 
-                                fileContent.length > 200 ? [fileContent substringToIndex:200] : fileContent]);
-                        
-                        // 检查是否包含金钱相关字段
-                        if ([fileContent containsString:@"money"] || [fileContent containsString:@"cash"] ||
-                            [fileContent containsString:@"金钱"] || [fileContent containsString:@"现金"] ||
-                            [fileContent containsString:@"coin"] || [fileContent containsString:@"gold"]) {
-                            writeLog([NSString stringWithFormat:@"✅ 文件 %@ 包含金钱相关数据", file]);
-                        }
+                        writeLog([NSString stringWithFormat:@"🔢 文件头: %@", hexString]);
                     }
                 }
             }
         }
     }
     
-    BOOL overallSuccess = directSuccess || es3Success || sqliteSuccess || fileSuccess;
+    // 第二步：检查Unity PlayerPrefs（NSUserDefaults）
+    writeLog(@"🔍 开始检查Unity PlayerPrefs");
     
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSDictionary *allDefaults = [defaults dictionaryRepresentation];
+    
+    writeLog([NSString stringWithFormat:@"📊 NSUserDefaults总键数: %lu", (unsigned long)allDefaults.count]);
+    
+    // 查找所有可能相关的键
+    NSMutableArray *suspiciousKeys = [NSMutableArray array];
+    
+    for (NSString *key in allDefaults.allKeys) {
+        id value = [allDefaults objectForKey:key];
+        
+        // 检查键名
+        BOOL keyMatch = NO;
+        NSArray *keyKeywords = @[@"unity", @"Unity", @"hezi", @"Hezi", @"project", @"Project", 
+                               @"money", @"cash", @"coin", @"gold", @"level", @"score", @"player",
+                               @"金钱", @"现金", @"金币", @"等级", @"分数", @"玩家"];
+        
+        for (NSString *keyword in keyKeywords) {
+            if ([key containsString:keyword]) {
+                keyMatch = YES;
+                break;
+            }
+        }
+        
+        // 检查数值
+        BOOL valueMatch = NO;
+        if ([value isKindOfClass:[NSNumber class]]) {
+            NSNumber *numValue = (NSNumber *)value;
+            if ([numValue longLongValue] >= 1000) {
+                valueMatch = YES;
+            }
+        }
+        
+        if (keyMatch || valueMatch) {
+            [suspiciousKeys addObject:key];
+            writeLog([NSString stringWithFormat:@"🔑 疑似游戏键: %@ = %@", key, value]);
+        }
+    }
+    
+    // 修改疑似的游戏数据
+    if (money > 0 && suspiciousKeys.count > 0) {
+        writeLog(@"🛠️ 开始修改疑似游戏数据");
+        
+        for (NSString *key in suspiciousKeys) {
+            id value = [allDefaults objectForKey:key];
+            
+            if ([value isKindOfClass:[NSNumber class]]) {
+                NSNumber *oldValue = (NSNumber *)value;
+                [defaults setObject:@(money) forKey:key];
+                writeLog([NSString stringWithFormat:@"✅ 修改: %@ = %@ -> %ld", key, oldValue, (long)money]);
+                playerPrefsSuccess = YES;
+            }
+        }
+        
+        if (playerPrefsSuccess) {
+            [defaults synchronize];
+            writeLog(@"💾 NSUserDefaults同步完成");
+        }
+    }
+    
+    // 第三步：总结和建议
+    BOOL overallSuccess = fileSuccess || playerPrefsSuccess;
+    
+    writeLog(@"========== 修改结果总结 ==========");
     if (overallSuccess) {
-        writeLog(@"🎉 多重修改完成！");
-        if (directSuccess) writeLog(@"✅ NSUserDefaults直接字段修改成功");
-        if (es3Success) writeLog(@"✅ ES3Save存档修改成功");
-        if (sqliteSuccess) writeLog(@"✅ SQLite数据库修改成功");
-        if (fileSuccess) writeLog(@"✅ 存档文件修改成功");
+        writeLog(@"🎉 找到并修改了疑似游戏数据！");
+        if (fileSuccess) writeLog(@"✅ 文件修改成功");
+        if (playerPrefsSuccess) writeLog(@"✅ PlayerPrefs修改成功");
         
-        // 强制同步所有修改
-        [defaults synchronize];
-        writeLog(@"🔄 强制同步NSUserDefaults完成");
-        
-        // 建议用户操作
-        writeLog(@"💡 建议操作：");
-        writeLog(@"1. 进行一次消费操作（如购买物品）");
-        writeLog(@"2. 如果仍无效果，请完全关闭游戏后重新打开");
-        writeLog(@"3. 检查游戏是否有网络同步功能");
+        writeLog(@"💡 重要提示：");
+        writeLog(@"1. 请完全关闭游戏后重新打开");
+        writeLog(@"2. 进行一次游戏操作（如购买、升级）来刷新数据");
+        writeLog(@"3. 如果仍无效果，游戏可能使用服务器存档");
         
     } else {
-        writeLog(@"❌ 所有修改方式都失败");
-        writeLog(@"💡 可能原因：");
-        writeLog(@"1. 游戏使用服务器存档同步");
-        writeLog(@"2. 游戏有数据完整性校验");
-        writeLog(@"3. 需要特定的解锁条件");
+        writeLog(@"❌ 未找到明确的游戏存档数据");
+        writeLog(@"💡 可能的原因：");
+        writeLog(@"1. 游戏使用加密存档");
+        writeLog(@"2. 数据完全存储在服务器端");
+        writeLog(@"3. 使用特殊的存储格式");
+        writeLog(@"4. 建议使用内存修改工具（如GameGem）");
     }
     
-    writeLog(@"========== 修改结束 ==========");
+    writeLog(@"========== 分析结束 ==========");
     return overallSuccess;
 }
 
@@ -485,7 +336,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v5.0";
+    title.text = @"🏠 我独自生活 v6.0";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -495,7 +346,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"🎮 双重修改：直接字段+ES3Save";
+    info.text = @"🎮 Unity存档检测：文件+PlayerPrefs";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -510,14 +361,14 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     disclaimer.backgroundColor = [UIColor colorWithWhite:0.97 alpha:1];
     disclaimer.layer.cornerRadius = 8;
     disclaimer.editable = NO;
-    disclaimer.scrollEnabled = YES;  // 启用滚动
-    disclaimer.showsVerticalScrollIndicator = YES;  // 显示滚动条
+    disclaimer.scrollEnabled = YES;
+    disclaimer.showsVerticalScrollIndicator = YES;
     [self.contentView addSubview:disclaimer];
     y += 70;
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"修改成功后请进行一次消费操作来刷新数值\n（如购买物品、升级等）";
+    tip.text = @"修改后请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -551,7 +402,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     [self.contentView addSubview:btn5];
     y += 43;
     
-    UIButton *btn6 = [self createButtonWithTitle:@"🎁 一键全开" tag:6];
+    UIButton *btn6 = [self createButtonWithTitle:@"🔍 存档分析" tag:6];
     btn6.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn6];
     y += 48;
@@ -585,7 +436,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
     UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"⚠️ 确认修改" 
-        message:@"修改后请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效\n\n确认继续？" 
+        message:@"修改后请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 请勿在修改过程中关闭游戏\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -608,38 +459,38 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         case 1:
             writeLog(@"功能：无限金钱");
             success = modifyGameData(21000000000, 0, 0, 0, 0);
-            message = success ? @"💰 无限金钱开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"💰 无限金钱修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 2:
             writeLog(@"功能：无限体力");
             success = modifyGameData(0, 21000000000, 0, 0, 0);
-            message = success ? @"⚡ 无限体力开启成功！\n\n请进行一次消费操作来刷新数值\n（如使用体力、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"⚡ 无限体力修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 3:
             writeLog(@"功能：无限健康");
             success = modifyGameData(0, 0, 1000000, 0, 0);
-            message = success ? @"❤️ 无限健康开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"❤️ 无限健康修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 4:
             writeLog(@"功能：无限心情");
             success = modifyGameData(0, 0, 0, 1000000, 0);
-            message = success ? @"😊 无限心情开启成功！\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"😊 无限心情修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 5:
             writeLog(@"功能：无限经验");
             success = modifyGameData(0, 0, 0, 0, 999999999);
-            message = success ? @"🎯 无限经验开启成功！\n\n请进行一次消费操作来刷新数值\n（如升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
+            message = success ? @"🎯 无限经验修改完成！\n\n请完全关闭游戏重新打开\n然后进行一次消费操作来刷新数值\n\n⚠️ 如仍无效果，请查看日志分析" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 6:
-            writeLog(@"功能：一键全开");
-            success = modifyGameData(21000000000, 21000000000, 1000000, 1000000, 999999999);
-            message = success ? @"🎁 一键全开成功！\n💰 现金、⚡ 体力、❤️ 健康、😊 心情已修改\n\n请进行一次消费操作来刷新数值\n（如购买物品、升级等）\n\n⚠️ 请勿关闭游戏，否则修改会失效" : @"❌ 修改失败，请用Filza查看日志";
+            writeLog(@"功能：存档分析");
+            success = modifyGameData(0, 0, 0, 0, 0); // 只分析，不修改
+            message = @"🔍 存档分析完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含所有发现的文件和数据";
             break;
     }
     
     writeLog(@"========== 修改结束 ==========\n");
     
-    // 显示成功提示，不关闭游戏
+    // 显示结果提示
     [self showAlert:message];
     
     // 关闭菜单
