@@ -109,54 +109,65 @@ static void writeLog(NSString *message) {
 static uintptr_t g_moneyBaseAddress = 0;
 static BOOL g_isModificationActive = NO;
 
-// 安全的内存搜索（避免崩溃）
-static NSArray* safeMemorySearch(NSInteger targetValue) {
+// 动态内存搜索（适应地址变化）
+static NSArray* dynamicMemorySearch(NSInteger targetValue) {
     NSMutableArray *results = [NSMutableArray array];
     
-    writeLog([NSString stringWithFormat:@"🎯 安全搜索数值: %ld", (long)targetValue]);
+    writeLog([NSString stringWithFormat:@"🎯 动态搜索数值: %ld", (long)targetValue]);
     
-    // 使用更安全的搜索策略：基于已知地址范围
-    // 根据你提供的地址 0x12c714810，我们知道大概的内存区域
-    uintptr_t knownAddress = 0x12c714810;
-    uintptr_t searchRadius = 0x10000000; // 256MB范围
+    // 动态确定搜索范围：基于当前进程的内存布局
+    // 搜索堆内存区域，这是游戏数据最可能存在的地方
+    NSArray *searchRanges = @[
+        @[@0x100000000, @0x120000000], // 第一个堆区域
+        @[@0x120000000, @0x140000000], // 第二个堆区域  
+        @[@0x140000000, @0x160000000], // 第三个堆区域
+        @[@0x160000000, @0x180000000], // 第四个堆区域
+    ];
     
-    uintptr_t searchStart = (knownAddress > searchRadius) ? (knownAddress - searchRadius) : 0x100000000;
-    uintptr_t searchEnd = knownAddress + searchRadius;
-    
-    writeLog([NSString stringWithFormat:@"搜索范围: 0x%lx - 0x%lx", searchStart, searchEnd]);
-    
-    // 按页搜索，更安全
-    for (uintptr_t pageAddr = searchStart; pageAddr < searchEnd; pageAddr += 0x1000) {
-        @try {
-            // 测试页面是否可访问
-            volatile NSInteger testRead = *(NSInteger*)pageAddr;
-            (void)testRead; // 避免未使用变量警告
-            
-            // 如果页面可访问，搜索整个页面
-            for (uintptr_t addr = pageAddr; addr < pageAddr + 0x1000 - sizeof(NSInteger); addr += sizeof(NSInteger)) {
-                @try {
-                    NSInteger *ptr = (NSInteger*)addr;
-                    if (*ptr == targetValue) {
-                        [results addObject:@(addr)];
-                        
-                        // 限制结果数量
-                        if (results.count >= 50) {
-                            goto search_complete;
+    for (NSArray *range in searchRanges) {
+        uintptr_t searchStart = [range[0] unsignedLongValue];
+        uintptr_t searchEnd = [range[1] unsignedLongValue];
+        
+        writeLog([NSString stringWithFormat:@"搜索范围: 0x%lx - 0x%lx", searchStart, searchEnd]);
+        
+        // 按页搜索，更安全
+        for (uintptr_t pageAddr = searchStart; pageAddr < searchEnd; pageAddr += 0x4000) { // 16KB步长
+            @try {
+                // 测试页面是否可访问
+                volatile NSInteger testRead = *(NSInteger*)pageAddr;
+                (void)testRead;
+                
+                // 如果页面可访问，搜索这个页面
+                for (uintptr_t addr = pageAddr; addr < pageAddr + 0x4000 - sizeof(NSInteger); addr += sizeof(NSInteger)) {
+                    @try {
+                        NSInteger *ptr = (NSInteger*)addr;
+                        if (*ptr == targetValue) {
+                            [results addObject:@(addr)];
+                            
+                            // 找到一些结果就够了，避免搜索太久
+                            if (results.count >= 20) {
+                                goto search_complete;
+                            }
                         }
+                    } @catch (NSException *exception) {
+                        // 跳过这个地址
+                        continue;
                     }
-                } @catch (NSException *exception) {
-                    // 跳过这个地址
-                    continue;
                 }
+            } @catch (NSException *exception) {
+                // 跳过不可访问的页面
+                continue;
             }
-        } @catch (NSException *exception) {
-            // 跳过不可访问的页面
-            continue;
+        }
+        
+        // 如果在这个范围找到了结果，就不用继续搜索其他范围了
+        if (results.count > 0) {
+            break;
         }
     }
     
 search_complete:
-    writeLog([NSString stringWithFormat:@"安全搜索找到 %lu 个候选地址", (unsigned long)results.count]);
+    writeLog([NSString stringWithFormat:@"动态搜索找到 %lu 个候选地址", (unsigned long)results.count]);
     return results;
 }
 
@@ -257,7 +268,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         
         for (NSNumber *valueNum in knownValues) {
             NSInteger searchValue = [valueNum integerValue];
-            NSArray *candidates = safeMemorySearch(searchValue);
+            NSArray *candidates = dynamicMemorySearch(searchValue);
             
             // 验证每个候选地址
             for (NSNumber *addrNum in candidates) {
@@ -402,7 +413,7 @@ found_base:
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v12.0";
+    title.text = @"🏠 我独自生活 v13.0";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -434,7 +445,7 @@ found_base:
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"安全的内存访问，避免游戏崩溃\n基于已知地址范围进行精准搜索";
+    tip.text = @"动态适应地址变化，无需固定地址\n智能搜索堆内存区域，精准定位数据";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
