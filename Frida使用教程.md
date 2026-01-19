@@ -10,6 +10,7 @@ pip install frida-tools
 # 在iOS设备上安装Frida (需要越狱)
 # 通过Cydia安装Frida
 ```
+Frida安装到这个路径"C:\Users\Administrator\AppData\Roaming\Python\Python38\Scripts\frida.exe" --version
 
 ### 2. 确认设备连接
 ```bash
