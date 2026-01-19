@@ -95,152 +95,110 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-// 多重修改：NSUserDefaults + ES3Save + SQLite + 文件存储
+// Unity游戏存档修改：PlayerPrefs + 文件存储 + 内存Hook
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始修改 ==========");
+    writeLog(@"========== 开始Unity游戏存档分析 ==========");
     
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    BOOL directSuccess = NO;
-    BOOL es3Success = NO;
-    BOOL sqliteSuccess = NO;
+    BOOL playerPrefsSuccess = NO;
     BOOL fileSuccess = NO;
+    BOOL memorySuccess = NO;
     
-    // 第一步：备份原始数据
-    writeLog(@"开始备份原始数据");
-    NSString *originalES3Data = [defaults stringForKey:@"data1.es3"];
-    if (originalES3Data) {
-        writeLog([NSString stringWithFormat:@"✅ 备份ES3数据，长度: %lu", (unsigned long)originalES3Data.length]);
-    }
+    // 第一步：扫描所有可能的存档文件
+    writeLog(@"🔍 开始扫描游戏存档文件");
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *documentsPath = [paths firstObject];
     
-    // 第二步：修改NSUserDefaults直接字段
-    writeLog(@"开始修改NSUserDefaults直接字段");
+    // Unity常见的存档文件扩展名和名称
+    NSArray *unityExtensions = @[@".dat", @".sav", @".save", @".json", @".db", @".sqlite", @".sqlite3", @".unity3d", @".bytes"];
+    NSArray *unityNames = @[@"save", @"data", @"game", @"player", @"progress", @"profile", @"user", @"config"];
     
-    // 根据存档文件的实际字段名修改
-    NSArray *moneyKeys = @[@"userCash", @"金钱", @"玩家现金", @"现金"];
-    NSArray *staminaKeys = @[@"Stamina"];
-    NSArray *healthKeys = @[@"当前健康"];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSArray *files = [fileManager contentsOfDirectoryAtPath:documentsPath error:nil];
     
-    int directModified = 0;
+    writeLog([NSString stringWithFormat:@"📁 Documents目录文件数量: %lu", (unsigned long)files.count]);
     
-    // 修改金钱相关字段
-    if (money > 0) {
-        for (NSString *key in moneyKeys) {
-            id value = [defaults objectForKey:key];
-            if (value) {
-                [defaults setInteger:money forKey:key];
-                writeLog([NSString stringWithFormat:@"✅ 修改直接字段 %@: %ld", key, (long)money]);
-                directModified++;
-            }
-        }
-    }
-    
-    // 修改体力相关字段
-    if (stamina > 0) {
-        for (NSString *key in staminaKeys) {
-            id value = [defaults objectForKey:key];
-            if (value) {
-                [defaults setInteger:stamina forKey:key];
-                writeLog([NSString stringWithFormat:@"✅ 修改直接字段 %@: %ld", key, (long)stamina]);
-                directModified++;
-            }
-        }
-    }
-    
-    // 修改健康相关字段
-    if (health > 0) {
-        for (NSString *key in healthKeys) {
-            id value = [defaults objectForKey:key];
-            if (value) {
-                [defaults setInteger:health forKey:key];
-                writeLog([NSString stringWithFormat:@"✅ 修改直接字段 %@: %ld", key, (long)health]);
-                directModified++;
-            }
-        }
-    }
-    
-    if (directModified > 0) {
-        directSuccess = [defaults synchronize];
-        writeLog(directSuccess ? @"✅ NSUserDefaults直接字段修改完成" : @"❌ NSUserDefaults同步失败");
-    } else {
-        writeLog(@"⚠️ 未找到可修改的直接字段");
-    }
-    
-    // 第三步：修改ES3Save存档数据
-    writeLog(@"开始修改ES3Save存档数据");
-    
-    NSString *es3Data = [defaults stringForKey:@"data1.es3"];
-    if (!es3Data) {
-        writeLog(@"❌ 未找到data1.es3存档数据");
-    } else {
-        writeLog([NSString stringWithFormat:@"✅ 找到ES3存档数据，长度: %lu", (unsigned long)es3Data.length]);
+    for (NSString *file in files) {
+        BOOL isUnityFile = NO;
         
-        // Base64解码
-        NSData *decodedData = [[NSData alloc] initWithBase64EncodedString:es3Data options:0];
-        if (!decodedData) {
-            writeLog(@"❌ Base64解码失败");
-        } else {
-            writeLog(@"✅ Base64解码成功");
+        // 检查扩展名
+        for (NSString *ext in unityExtensions) {
+            if ([file.lowercaseString hasSuffix:ext]) {
+                isUnityFile = YES;
+                break;
+            }
+        }
+        
+        // 检查文件名关键词
+        if (!isUnityFile) {
+            for (NSString *name in unityNames) {
+                if ([file.lowercaseString containsString:name]) {
+                    isUnityFile = YES;
+                    break;
+                }
+            }
+        }
+        
+        if (isUnityFile) {
+            NSString *filePath = [documentsPath stringByAppendingPathComponent:file];
+            writeLog([NSString stringWithFormat:@"🎯 发现可能的Unity存档: %@", file]);
             
-            // 直接进行字符串替换修改（跳过JSON解析）
-            NSString *jsonString = [[NSString alloc] initWithData:decodedData encoding:NSUTF8StringEncoding];
-            if (!jsonString) {
-                writeLog(@"❌ JSON字符串转换失败");
-            } else {
-                writeLog(@"🔍 开始字符串替换修改ES3数据");
-                writeLog([NSString stringWithFormat:@"JSON字符串长度: %lu", (unsigned long)jsonString.length]);
-                
-                // 输出JSON前10000个字符用于调试，寻找更多金钱字段
-                NSString *jsonPreview = jsonString.length > 10000 ? [jsonString substringToIndex:10000] : jsonString;
-                writeLog([NSString stringWithFormat:@"📝 JSON前10000字符: %@", jsonPreview]);
-                
-                // 搜索所有可能的金钱相关字段
-                NSArray *searchTerms = @[@"money", @"Money", @"MONEY", @"cash", @"Cash", @"CASH", 
-                                       @"coin", @"Coin", @"COIN", @"gold", @"Gold", @"GOLD",
-                                       @"currency", @"Currency", @"CURRENCY", @"balance", @"Balance",
-                                       @"wallet", @"Wallet", @"fund", @"Fund", @"asset", @"Asset",
-                                       @"金", @"钱", @"币", @"元", @"资", @"财", @"款", @"费"];
-                
-                for (NSString *term in searchTerms) {
-                    NSRange range = [jsonString rangeOfString:term options:NSCaseInsensitiveSearch];
-                    if (range.location != NSNotFound) {
-                        NSInteger start = MAX(0, (NSInteger)range.location - 50);
-                        NSInteger length = MIN(100, (NSInteger)jsonString.length - start);
-                        NSString *context = [jsonString substringWithRange:NSMakeRange(start, length)];
-                        writeLog([NSString stringWithFormat:@"🔍 找到关键词'%@'上下文: %@", term, context]);
+            // 获取文件大小
+            NSDictionary *attributes = [fileManager attributesOfItemAtPath:filePath error:nil];
+            NSNumber *fileSize = [attributes objectForKey:NSFileSize];
+            writeLog([NSString stringWithFormat:@"📏 文件大小: %@ bytes", fileSize]);
+            
+            // 尝试读取文件内容
+            NSData *fileData = [NSData dataWithContentsOfFile:filePath];
+            if (fileData && fileData.length > 0) {
+                // 尝试作为文本读取
+                NSString *textContent = [[NSString alloc] initWithData:fileData encoding:NSUTF8StringEncoding];
+                if (textContent && textContent.length > 0) {
+                    writeLog([NSString stringWithFormat:@"📄 文本内容前500字符: %@", 
+                            textContent.length > 500 ? [textContent substringToIndex:500] : textContent]);
+                    
+                    // 检查是否包含金钱相关数据
+                    if ([textContent containsString:@"money"] || [textContent containsString:@"cash"] ||
+                        [textContent containsString:@"金钱"] || [textContent containsString:@"现金"] ||
+                        [textContent containsString:@"coin"] || [textContent containsString:@"gold"] ||
+                        [textContent rangeOfString:@"\\d{6,}" options:NSRegularExpressionSearch].location != NSNotFound) {
+                        writeLog([NSString stringWithFormat:@"✅ 文件 %@ 包含疑似游戏数据", file]);
+                        
+                        // 尝试修改这个文件
+                        if (money > 0) {
+                            NSString *modifiedContent = textContent;
+                            
+                            // 使用正则表达式替换大数值（可能是金钱）
+                            NSError *regexError = nil;
+                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"\\b\\d{6,}\\b" options:0 error:&regexError];
+                            if (regex) {
+                                NSString *replacement = [NSString stringWithFormat:@"%ld", (long)money];
+                                modifiedContent = [regex stringByReplacingMatchesInString:modifiedContent 
+                                    options:0 range:NSMakeRange(0, modifiedContent.length) withTemplate:replacement];
+                                
+                                // 写回文件
+                                NSData *modifiedData = [modifiedContent dataUsingEncoding:NSUTF8StringEncoding];
+                                if ([modifiedData writeToFile:filePath atomically:YES]) {
+                                    writeLog([NSString stringWithFormat:@"✅ 成功修改文件: %@", file]);
+                                    fileSuccess = YES;
+                                } else {
+                                    writeLog([NSString stringWithFormat:@"❌ 修改文件失败: %@", file]);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // 二进制文件
+                    writeLog([NSString stringWithFormat:@"🔒 二进制文件: %@", file]);
+                    
+                    // 检查是否是Unity的二进制存档格式
+                    const unsigned char *bytes = (const unsigned char *)[fileData bytes];
+                    if (fileData.length >= 4) {
+                        writeLog([NSString stringWithFormat:@"🔢 文件头: %02X %02X %02X %02X", bytes[0], bytes[1], bytes[2], bytes[3]]);
                     }
                 }
-                
-                // 搜索包含"金钱"、"现金"等关键词的位置
-                NSRange moneyRange = [jsonString rangeOfString:@"金钱"];
-                NSRange cashRange = [jsonString rangeOfString:@"现金"];
-                if (moneyRange.location != NSNotFound) {
-                    NSInteger start = MAX(0, (NSInteger)moneyRange.location - 100);
-                    NSInteger length = MIN(200, (NSInteger)jsonString.length - start);
-                    NSString *moneyContext = [jsonString substringWithRange:NSMakeRange(start, length)];
-                    writeLog([NSString stringWithFormat:@"💰 找到'金钱'字段上下文: %@", moneyContext]);
-                }
-                if (cashRange.location != NSNotFound) {
-                    NSInteger start = MAX(0, (NSInteger)cashRange.location - 100);
-                    NSInteger length = MIN(200, (NSInteger)jsonString.length - start);
-                    NSString *cashContext = [jsonString substringWithRange:NSMakeRange(start, length)];
-                    writeLog([NSString stringWithFormat:@"💰 找到'现金'字段上下文: %@", cashContext]);
-                }
-                
-                // 搜索可能的主要金钱字段
-                NSArray *mainMoneyFields = @[@"userCash", @"玩家现金", @"玩家金钱", @"当前金钱", @"总金钱", @"Cash", @"Money"];
-                for (NSString *field in mainMoneyFields) {
-                    NSRange fieldRange = [jsonString rangeOfString:field];
-                    if (fieldRange.location != NSNotFound) {
-                        NSInteger start = MAX(0, (NSInteger)fieldRange.location - 50);
-                        NSInteger length = MIN(150, (NSInteger)jsonString.length - start);
-                        NSString *fieldContext = [jsonString substringWithRange:NSMakeRange(start, length)];
-                        writeLog([NSString stringWithFormat:@"🎯 找到主要字段'%@'上下文: %@", field, fieldContext]);
-                    }
-                }
-                
-                NSString *modifiedJsonString = jsonString;
-                BOOL stringModified = NO;
-                int replaceCount = 0;
+            }
+        }
+    }
                 
                 if (money > 0) {
                     writeLog(@"🔍 开始查找金钱相关字段");
