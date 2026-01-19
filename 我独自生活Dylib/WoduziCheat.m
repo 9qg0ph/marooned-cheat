@@ -237,7 +237,6 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                                     }
                                 }
                             }
-                            }
                         }
                     }
                     
@@ -250,18 +249,21 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                         ];
                         
                         for (NSString *pattern in staminaPatterns) {
-                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
+                            NSError *regexError = nil;
+                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
                             if (regex) {
                                 // 直接构建替换字符串
                                 NSArray *components = [pattern componentsSeparatedByString:@"\""];
-                                NSString *fieldName = [components objectAtIndex:1];
-                                NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)stamina];
-                                NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
-                                    options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
-                                if (![newString isEqualToString:modifiedJsonString]) {
-                                    modifiedJsonString = newString;
-                                    stringModified = YES;
-                                    writeLog([NSString stringWithFormat:@"✅ 字符串替换修改体力字段: %@ -> %ld", fieldName, (long)stamina]);
+                                if (components.count > 1) {
+                                    NSString *fieldName = [components objectAtIndex:1];
+                                    NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)stamina];
+                                    NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
+                                        options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
+                                    if (![newString isEqualToString:modifiedJsonString]) {
+                                        modifiedJsonString = newString;
+                                        stringModified = YES;
+                                        writeLog([NSString stringWithFormat:@"✅ 字符串替换修改体力字段: %@ -> %ld", fieldName, (long)stamina]);
+                                    }
                                 }
                             }
                         }
@@ -275,18 +277,21 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                         ];
                         
                         for (NSString *pattern in healthPatterns) {
-                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
+                            NSError *regexError = nil;
+                            NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:&regexError];
                             if (regex) {
                                 // 直接构建替换字符串
                                 NSArray *components = [pattern componentsSeparatedByString:@"\""];
-                                NSString *fieldName = [components objectAtIndex:1];
-                                NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)health];
-                                NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
-                                    options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
-                                if (![newString isEqualToString:modifiedJsonString]) {
-                                    modifiedJsonString = newString;
-                                    stringModified = YES;
-                                    writeLog([NSString stringWithFormat:@"✅ 字符串替换修改健康字段: %@ -> %ld", fieldName, (long)health]);
+                                if (components.count > 1) {
+                                    NSString *fieldName = [components objectAtIndex:1];
+                                    NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)health];
+                                    NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
+                                        options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
+                                    if (![newString isEqualToString:modifiedJsonString]) {
+                                        modifiedJsonString = newString;
+                                        stringModified = YES;
+                                        writeLog([NSString stringWithFormat:@"✅ 字符串替换修改健康字段: %@ -> %ld", fieldName, (long)health]);
+                                    }
                                 }
                             }
                         }
