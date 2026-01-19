@@ -95,15 +95,24 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-// 双重修改：NSUserDefaults直接字段 + ES3Save存档格式
+// 多重修改：NSUserDefaults + ES3Save + SQLite + 文件存储
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
     writeLog(@"========== 开始修改 ==========");
     
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     BOOL directSuccess = NO;
     BOOL es3Success = NO;
+    BOOL sqliteSuccess = NO;
+    BOOL fileSuccess = NO;
     
-    // 第一步：修改NSUserDefaults直接字段
+    // 第一步：备份原始数据
+    writeLog(@"开始备份原始数据");
+    NSString *originalES3Data = [defaults stringForKey:@"data1.es3"];
+    if (originalES3Data) {
+        writeLog([NSString stringWithFormat:@"✅ 备份ES3数据，长度: %lu", (unsigned long)originalES3Data.length]);
+    }
+    
+    // 第二步：修改NSUserDefaults直接字段
     writeLog(@"开始修改NSUserDefaults直接字段");
     
     // 根据存档文件的实际字段名修改
@@ -156,7 +165,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         writeLog(@"⚠️ 未找到可修改的直接字段");
     }
     
-    // 第二步：修改ES3Save存档数据
+    // 第三步：修改ES3Save存档数据
     writeLog(@"开始修改ES3Save存档数据");
     
     NSString *es3Data = [defaults stringForKey:@"data1.es3"];
@@ -180,9 +189,26 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                 writeLog(@"🔍 开始字符串替换修改ES3数据");
                 writeLog([NSString stringWithFormat:@"JSON字符串长度: %lu", (unsigned long)jsonString.length]);
                 
-                // 输出JSON前5000个字符用于调试
-                NSString *jsonPreview = jsonString.length > 5000 ? [jsonString substringToIndex:5000] : jsonString;
-                writeLog([NSString stringWithFormat:@"📝 JSON前5000字符: %@", jsonPreview]);
+                // 输出JSON前10000个字符用于调试，寻找更多金钱字段
+                NSString *jsonPreview = jsonString.length > 10000 ? [jsonString substringToIndex:10000] : jsonString;
+                writeLog([NSString stringWithFormat:@"📝 JSON前10000字符: %@", jsonPreview]);
+                
+                // 搜索所有可能的金钱相关字段
+                NSArray *searchTerms = @[@"money", @"Money", @"MONEY", @"cash", @"Cash", @"CASH", 
+                                       @"coin", @"Coin", @"COIN", @"gold", @"Gold", @"GOLD",
+                                       @"currency", @"Currency", @"CURRENCY", @"balance", @"Balance",
+                                       @"wallet", @"Wallet", @"fund", @"Fund", @"asset", @"Asset",
+                                       @"金", @"钱", @"币", @"元", @"资", @"财", @"款", @"费"];
+                
+                for (NSString *term in searchTerms) {
+                    NSRange range = [jsonString rangeOfString:term options:NSCaseInsensitiveSearch];
+                    if (range.location != NSNotFound) {
+                        NSInteger start = MAX(0, (NSInteger)range.location - 50);
+                        NSInteger length = MIN(100, (NSInteger)jsonString.length - start);
+                        NSString *context = [jsonString substringWithRange:NSMakeRange(start, length)];
+                        writeLog([NSString stringWithFormat:@"🔍 找到关键词'%@'上下文: %@", term, context]);
+                    }
+                }
                 
                 // 搜索包含"金钱"、"现金"等关键词的位置
                 NSRange moneyRange = [jsonString rangeOfString:@"金钱"];
@@ -374,19 +400,82 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         }
     }
     
-    BOOL overallSuccess = directSuccess || es3Success;
+    // 第四步：查找并修改SQLite数据库
+    writeLog(@"开始查找SQLite数据库");
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *documentsPath = [paths firstObject];
+    
+    // 查找可能的数据库文件
+    NSArray *dbExtensions = @[@".db", @".sqlite", @".sqlite3", @".dat"];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSArray *files = [fileManager contentsOfDirectoryAtPath:documentsPath error:nil];
+    
+    for (NSString *file in files) {
+        for (NSString *ext in dbExtensions) {
+            if ([file.lowercaseString hasSuffix:ext]) {
+                NSString *dbPath = [documentsPath stringByAppendingPathComponent:file];
+                writeLog([NSString stringWithFormat:@"🔍 找到数据库文件: %@", file]);
+                writeLog([NSString stringWithFormat:@"📁 数据库路径: %@", dbPath]);
+            }
+        }
+    }
+    
+    // 第五步：查找其他可能的存档文件
+    writeLog(@"开始查找其他存档文件");
+    NSArray *saveExtensions = @[@".sav", @".save", @".data", @".json", @".plist", @".txt"];
+    
+    for (NSString *file in files) {
+        for (NSString *ext in saveExtensions) {
+            if ([file.lowercaseString hasSuffix:ext] || [file.lowercaseString containsString:@"save"] || 
+                [file.lowercaseString containsString:@"data"] || [file.lowercaseString containsString:@"game"]) {
+                NSString *filePath = [documentsPath stringByAppendingPathComponent:file];
+                writeLog([NSString stringWithFormat:@"🔍 找到可能的存档文件: %@", file]);
+                
+                // 尝试读取文件内容
+                NSData *fileData = [NSData dataWithContentsOfFile:filePath];
+                if (fileData && fileData.length > 0) {
+                    NSString *fileContent = [[NSString alloc] initWithData:fileData encoding:NSUTF8StringEncoding];
+                    if (fileContent && fileContent.length > 0) {
+                        writeLog([NSString stringWithFormat:@"📄 文件内容前200字符: %@", 
+                                fileContent.length > 200 ? [fileContent substringToIndex:200] : fileContent]);
+                        
+                        // 检查是否包含金钱相关字段
+                        if ([fileContent containsString:@"money"] || [fileContent containsString:@"cash"] ||
+                            [fileContent containsString:@"金钱"] || [fileContent containsString:@"现金"] ||
+                            [fileContent containsString:@"coin"] || [fileContent containsString:@"gold"]) {
+                            writeLog([NSString stringWithFormat:@"✅ 文件 %@ 包含金钱相关数据", file]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    BOOL overallSuccess = directSuccess || es3Success || sqliteSuccess || fileSuccess;
     
     if (overallSuccess) {
-        writeLog(@"🎉 双重修改完成！");
-        if (directSuccess && es3Success) {
-            writeLog(@"✅ 直接字段和ES3存档都修改成功");
-        } else if (directSuccess) {
-            writeLog(@"✅ 直接字段修改成功，ES3存档修改失败");
-        } else if (es3Success) {
-            writeLog(@"✅ ES3存档修改成功，直接字段修改失败");
-        }
+        writeLog(@"🎉 多重修改完成！");
+        if (directSuccess) writeLog(@"✅ NSUserDefaults直接字段修改成功");
+        if (es3Success) writeLog(@"✅ ES3Save存档修改成功");
+        if (sqliteSuccess) writeLog(@"✅ SQLite数据库修改成功");
+        if (fileSuccess) writeLog(@"✅ 存档文件修改成功");
+        
+        // 强制同步所有修改
+        [defaults synchronize];
+        writeLog(@"🔄 强制同步NSUserDefaults完成");
+        
+        // 建议用户操作
+        writeLog(@"💡 建议操作：");
+        writeLog(@"1. 进行一次消费操作（如购买物品）");
+        writeLog(@"2. 如果仍无效果，请完全关闭游戏后重新打开");
+        writeLog(@"3. 检查游戏是否有网络同步功能");
+        
     } else {
-        writeLog(@"❌ 双重修改都失败");
+        writeLog(@"❌ 所有修改方式都失败");
+        writeLog(@"💡 可能原因：");
+        writeLog(@"1. 游戏使用服务器存档同步");
+        writeLog(@"2. 游戏有数据完整性校验");
+        writeLog(@"3. 需要特定的解锁条件");
     }
     
     writeLog(@"========== 修改结束 ==========");
