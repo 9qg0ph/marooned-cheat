@@ -180,6 +180,10 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                 writeLog(@"🔍 开始字符串替换修改ES3数据");
                 writeLog([NSString stringWithFormat:@"JSON字符串长度: %lu", (unsigned long)jsonString.length]);
                 
+                // 输出JSON前1000个字符用于调试
+                NSString *jsonPreview = jsonString.length > 1000 ? [jsonString substringToIndex:1000] : jsonString;
+                writeLog([NSString stringWithFormat:@"📝 JSON前1000字符: %@", jsonPreview]);
+                
                 NSString *modifiedJsonString = jsonString;
                 BOOL stringModified = NO;
                 int replaceCount = 0;
