@@ -1,9 +1,16 @@
 // 我独自生活修改器 - WoduziCheat.m
-// 自动内存修改系统
+// 混合内存修改系统
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
-#import <mach/mach.h>
+
+// 动态加载mach函数（避免链接错误）
+typedef int (*vm_region_func_t)(void*, void*, void*, int, void*, void*, void*);
+typedef int (*task_for_pid_func_t)(int, int, void*);
+
+static vm_region_func_t vm_region_ptr = NULL;
+static task_for_pid_func_t task_for_pid_ptr = NULL;
+static BOOL mach_available = NO;
 
 #pragma mark - 全局变量
 
@@ -102,152 +109,134 @@ static void writeLog(NSString *message) {
 static uintptr_t g_moneyBaseAddress = 0;
 static BOOL g_isModificationActive = NO;
 
-// 内存搜索和修改函数
-static NSArray* searchMemoryForValue(NSInteger targetValue) {
+// 全局变量存储找到的基地址
+static uintptr_t g_moneyBaseAddress = 0;
+static BOOL g_isModificationActive = NO;
+
+// 精准内存搜索（基于已知偏移）
+static NSArray* preciseMemorySearch(NSInteger targetValue) {
     NSMutableArray *results = [NSMutableArray array];
     
-    // 获取当前进程的内存区域
-    task_t task = mach_task_self();
-    vm_address_t address = 0;
-    vm_size_t size = 0;
+    writeLog([NSString stringWithFormat:@"🎯 精准搜索数值: %ld", (long)targetValue]);
     
-    while (address < 0x200000000) { // 搜索范围限制
-        vm_region_basic_info_data_t info;
-        mach_msg_type_number_t count = VM_REGION_BASIC_INFO_COUNT;
-        mach_port_t object_name;
-        
-        kern_return_t result = vm_region(task, &address, &size, VM_REGION_BASIC_INFO, 
-                                       (vm_region_info_t)&info, &count, &object_name);
-        
-        if (result != KERN_SUCCESS) {
-            address += 0x1000; // 跳过4KB
-            continue;
-        }
-        
-        // 只搜索可读写的内存区域
-        if ((info.protection & VM_PROT_READ) && (info.protection & VM_PROT_WRITE)) {
-            
-            // 直接在内存中搜索
-            for (vm_address_t addr = address; addr < address + size - sizeof(NSInteger); addr += sizeof(NSInteger)) {
-                @try {
-                    NSInteger *ptr = (NSInteger*)addr;
-                    if (*ptr == targetValue) {
-                        [results addObject:@(addr)];
-                        
-                        // 限制结果数量
-                        if (results.count >= 100) {
-                            goto search_complete;
-                        }
-                    }
-                } @catch (NSException *exception) {
-                    // 忽略内存访问异常
+    // 搜索范围：iOS应用的典型内存区域
+    uintptr_t searchStart = 0x100000000;
+    uintptr_t searchEnd = 0x200000000;
+    uintptr_t step = sizeof(NSInteger);
+    
+    for (uintptr_t addr = searchStart; addr < searchEnd; addr += step) {
+        @try {
+            NSInteger *ptr = (NSInteger*)addr;
+            if (*ptr == targetValue) {
+                [results addObject:@(addr)];
+                
+                // 限制结果数量，避免过多
+                if (results.count >= 200) {
                     break;
                 }
             }
+        } @catch (NSException *exception) {
+            // 跳过无法访问的内存页
+            addr = (addr & ~0xFFF) + 0x1000 - step; // 对齐到下一页
         }
-        
-        address += size;
     }
     
-search_complete:
+    writeLog([NSString stringWithFormat:@"找到 %lu 个候选地址", (unsigned long)results.count]);
     return results;
 }
 
-// 验证地址是否为游戏数据结构
+// 验证地址是否为游戏数据结构（基于已知偏移）
 static BOOL verifyGameDataStructure(uintptr_t baseAddress) {
     @try {
-        NSInteger *moneyPtr = (NSInteger*)baseAddress;
-        NSInteger *staminaPtr = (NSInteger*)(baseAddress + 24);
-        NSInteger *healthPtr = (NSInteger*)(baseAddress + 72);
-        NSInteger *moodPtr = (NSInteger*)(baseAddress + 104);
+        // 读取四个偏移位置的数值
+        NSInteger money = *(NSInteger*)baseAddress;
+        NSInteger stamina = *(NSInteger*)(baseAddress + 24);  // +0x18
+        NSInteger health = *(NSInteger*)(baseAddress + 72);   // +0x48  
+        NSInteger mood = *(NSInteger*)(baseAddress + 104);    // +0x68
         
-        NSInteger money = *moneyPtr;
-        NSInteger stamina = *staminaPtr;
-        NSInteger health = *healthPtr;
-        NSInteger mood = *moodPtr;
+        writeLog([NSString stringWithFormat:@"验证地址 0x%lx:", baseAddress]);
+        writeLog([NSString stringWithFormat:@"  💰=%ld ⚡=%ld ❤️=%ld 😊=%ld", 
+                 (long)money, (long)stamina, (long)health, (long)mood]);
         
-        writeLog([NSString stringWithFormat:@"验证地址 0x%lx: 金钱=%ld, 体力=%ld, 健康=%ld, 心情=%ld", 
-                 baseAddress, (long)money, (long)stamina, (long)health, (long)mood]);
+        // 验证数值是否在合理的游戏范围内
+        BOOL moneyValid = (money >= 0 && money <= 999999999);
+        BOOL staminaValid = (stamina >= 0 && stamina <= 999999);
+        BOOL healthValid = (health >= 0 && health <= 999);
+        BOOL moodValid = (mood >= 0 && mood <= 999);
         
-        // 验证数值是否在合理范围内
-        if (money >= 0 && money <= 999999999 && 
-            stamina >= 0 && stamina <= 999999 && 
-            health >= 0 && health <= 999 && 
-            mood >= 0 && mood <= 999) {
+        if (moneyValid && staminaValid && healthValid && moodValid) {
+            writeLog(@"✅ 数据结构验证通过！");
             return YES;
+        } else {
+            writeLog(@"❌ 数值超出合理范围");
         }
     } @catch (NSException *exception) {
-        writeLog([NSString stringWithFormat:@"验证地址异常: %@", exception.reason]);
+        writeLog([NSString stringWithFormat:@"❌ 验证异常: %@", exception.reason]);
     }
     
     return NO;
 }
 
-// 修改内存中的数值
-static BOOL writeMemoryValue(uintptr_t address, NSInteger value) {
+// 直接修改内存数值
+static BOOL writeMemoryValue(uintptr_t address, NSInteger value, NSString *name) {
     @try {
         NSInteger *ptr = (NSInteger*)address;
+        NSInteger oldValue = *ptr;
         *ptr = value;
-        writeLog([NSString stringWithFormat:@"✅ 成功修改地址 0x%lx = %ld", address, (long)value]);
+        
+        writeLog([NSString stringWithFormat:@"✅ %@ 修改成功: %ld -> %ld (地址: 0x%lx)", 
+                 name, (long)oldValue, (long)value, address]);
         return YES;
     } @catch (NSException *exception) {
-        writeLog([NSString stringWithFormat:@"❌ 修改失败 0x%lx: %@", address, exception.reason]);
+        writeLog([NSString stringWithFormat:@"❌ %@ 修改失败: %@", name, exception.reason]);
         return NO;
     }
 }
 
-// 自动搜索并修改游戏数据
+// 核心修改函数：精准定位并修改
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始自动内存修改 ==========");
+    writeLog(@"========== 开始精准内存修改 ==========");
     
-    BOOL success = NO;
     uintptr_t baseAddress = 0;
     
-    // 如果有缓存的基地址，先尝试验证
+    // 第一步：验证缓存地址
     if (g_moneyBaseAddress != 0) {
-        writeLog([NSString stringWithFormat:@"🔄 验证缓存的基地址: 0x%lx", g_moneyBaseAddress]);
-        
+        writeLog([NSString stringWithFormat:@"🔄 验证缓存地址: 0x%lx", g_moneyBaseAddress]);
         if (verifyGameDataStructure(g_moneyBaseAddress)) {
             baseAddress = g_moneyBaseAddress;
-            writeLog(@"✅ 缓存地址仍然有效");
+            writeLog(@"✅ 缓存地址有效，直接使用");
         } else {
-            writeLog(@"❌ 缓存地址已失效，需要重新搜索");
+            writeLog(@"❌ 缓存地址失效，重新搜索");
             g_moneyBaseAddress = 0;
         }
     }
     
-    // 如果没有有效的基地址，进行搜索
+    // 第二步：如果没有有效地址，进行精准搜索
     if (baseAddress == 0) {
-        writeLog(@"🔍 开始搜索游戏数据结构...");
+        writeLog(@"🔍 开始精准搜索游戏数据...");
         
-        // 搜索一些常见的游戏数值
-        NSArray *searchValues = @[@474, @136, @93, @88, @100, @200, @500, @1000, @50, @25];
+        // 基于你提供的实际数值进行搜索
+        NSArray *knownValues = @[@474, @136, @93, @88];  // 金钱、体力、健康、心情的已知值
         
-        for (NSNumber *valueNum in searchValues) {
+        for (NSNumber *valueNum in knownValues) {
             NSInteger searchValue = [valueNum integerValue];
-            writeLog([NSString stringWithFormat:@"🎯 搜索数值: %ld", (long)searchValue]);
+            NSArray *candidates = preciseMemorySearch(searchValue);
             
-            NSArray *results = searchMemoryForValue(searchValue);
-            writeLog([NSString stringWithFormat:@"找到 %lu 个匹配地址", (unsigned long)results.count]);
-            
-            // 验证每个找到的地址
-            for (NSNumber *addressNum in results) {
-                uintptr_t address = [addressNum unsignedLongValue];
+            // 验证每个候选地址
+            for (NSNumber *addrNum in candidates) {
+                uintptr_t candidateAddr = [addrNum unsignedLongValue];
                 
-                // 尝试将此地址作为基地址验证
-                if (verifyGameDataStructure(address)) {
-                    baseAddress = address;
+                // 尝试作为基地址验证
+                if (verifyGameDataStructure(candidateAddr)) {
+                    baseAddress = candidateAddr;
                     g_moneyBaseAddress = baseAddress;
-                    writeLog([NSString stringWithFormat:@"🎉 找到有效的游戏数据结构！基地址: 0x%lx", baseAddress]);
+                    writeLog([NSString stringWithFormat:@"🎉 找到基地址: 0x%lx", baseAddress]);
                     goto found_base;
                 }
                 
-                // 也尝试将此地址作为偏移地址反推基地址
-                uintptr_t possibleBase;
-                
-                // 如果是体力地址 (基地址 + 24)
-                if (address >= 24) {
-                    possibleBase = address - 24;
+                // 尝试作为偏移地址反推基地址
+                if (searchValue == 136 && candidateAddr >= 24) { // 体力
+                    uintptr_t possibleBase = candidateAddr - 24;
                     if (verifyGameDataStructure(possibleBase)) {
                         baseAddress = possibleBase;
                         g_moneyBaseAddress = baseAddress;
@@ -256,9 +245,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     }
                 }
                 
-                // 如果是健康地址 (基地址 + 72)
-                if (address >= 72) {
-                    possibleBase = address - 72;
+                if (searchValue == 93 && candidateAddr >= 72) { // 健康
+                    uintptr_t possibleBase = candidateAddr - 72;
                     if (verifyGameDataStructure(possibleBase)) {
                         baseAddress = possibleBase;
                         g_moneyBaseAddress = baseAddress;
@@ -267,9 +255,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     }
                 }
                 
-                // 如果是心情地址 (基地址 + 104)
-                if (address >= 104) {
-                    possibleBase = address - 104;
+                if (searchValue == 88 && candidateAddr >= 104) { // 心情
+                    uintptr_t possibleBase = candidateAddr - 104;
                     if (verifyGameDataStructure(possibleBase)) {
                         baseAddress = possibleBase;
                         g_moneyBaseAddress = baseAddress;
@@ -285,61 +272,51 @@ found_base:
     
     if (baseAddress == 0) {
         writeLog(@"❌ 未能找到游戏数据结构");
-        writeLog(@"💡 请确保游戏正在运行，并且已经进入游戏界面");
+        writeLog(@"💡 请确保游戏正在运行且数值显示正常");
         return NO;
     }
     
-    // 开始修改数值
+    // 第三步：执行精准修改
     writeLog(@"🚀 开始修改游戏数值...");
+    writeLog([NSString stringWithFormat:@"📍 基地址: 0x%lx", baseAddress]);
     
-    BOOL allSuccess = YES;
+    BOOL success = YES;
     
     if (money > 0) {
-        if (writeMemoryValue(baseAddress, money)) {
-            writeLog([NSString stringWithFormat:@"💰 金钱修改成功: %ld", (long)money]);
-        } else {
-            allSuccess = NO;
+        if (!writeMemoryValue(baseAddress, money, @"💰金钱")) {
+            success = NO;
         }
     }
     
     if (stamina > 0) {
-        if (writeMemoryValue(baseAddress + 24, stamina)) {
-            writeLog([NSString stringWithFormat:@"⚡ 体力修改成功: %ld", (long)stamina]);
-        } else {
-            allSuccess = NO;
+        if (!writeMemoryValue(baseAddress + 24, stamina, @"⚡体力")) {
+            success = NO;
         }
     }
     
     if (health > 0) {
-        if (writeMemoryValue(baseAddress + 72, health)) {
-            writeLog([NSString stringWithFormat:@"❤️ 健康修改成功: %ld", (long)health]);
-        } else {
-            allSuccess = NO;
+        if (!writeMemoryValue(baseAddress + 72, health, @"❤️健康")) {
+            success = NO;
         }
     }
     
     if (mood > 0) {
-        if (writeMemoryValue(baseAddress + 104, mood)) {
-            writeLog([NSString stringWithFormat:@"😊 心情修改成功: %ld", (long)mood]);
-        } else {
-            allSuccess = NO;
+        if (!writeMemoryValue(baseAddress + 104, mood, @"😊心情")) {
+            success = NO;
         }
     }
     
-    if (allSuccess) {
+    if (success) {
         writeLog(@"🎉 所有数值修改完成！");
-        g_isModificationActive = YES;
         
         // 验证修改结果
-        writeLog(@"🔍 验证修改结果...");
+        writeLog(@"🔍 验证修改结果:");
         verifyGameDataStructure(baseAddress);
-        
-        success = YES;
     } else {
         writeLog(@"⚠️ 部分修改失败");
     }
     
-    writeLog(@"========== 自动内存修改结束 ==========");
+    writeLog(@"========== 精准内存修改结束 ==========");
     return success;
 }
 
@@ -388,7 +365,7 @@ found_base:
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v10.0";
+    title.text = @"🏠 我独自生活 v11.0";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -420,7 +397,7 @@ found_base:
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"自动搜索并修改内存中的游戏数据\n一键修改金钱、体力、健康、心情";
+    tip.text = @"基于已知偏移精准定位游戏数据\n一键修改：金钱+24→体力+72→健康+104→心情";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
