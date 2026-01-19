@@ -1,21 +1,21 @@
-// 我独自生活修改器 - 安全版本
-// 专门解决注入后闪退问题
+// 修改器窃取器 - 专门窃取其他作者修改器的功能
+// 只负责监控、记录、学习，不做任何修改
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
-#import <dlfcn.h>
 
-#pragma mark - 安全日志系统
+#pragma mark - 窃取器日志系统
 
-// 安全的日志写入
-static void safeWriteLog(NSString *message) {
+// 窃取器日志
+static void stealerLog(NSString *message) {
     @try {
         NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
         NSString *documentsPath = [paths firstObject];
-        NSString *logPath = [documentsPath stringByAppendingPathComponent:@"safe_cheat.log"];
+        NSString *logPath = [documentsPath stringByAppendingPathComponent:@"cheat_stealer.log"];
         
-        NSString *timestamp = [NSDateFormatter localizedStringFromDate:[NSDate date] 
-            dateStyle:NSDateFormatterShortStyle timeStyle:NSDateFormatterMediumStyle];
-        NSString *logMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
+        NSString *timestamp = [[NSDateFormatter alloc] init];
+        timestamp.dateFormat = @"yyyy-MM-dd HH:mm:ss";
+        NSString *timeStr = [timestamp stringFromDate:[NSDate date]];
+        NSString *logMessage = [NSString stringWithFormat:@"[%@] %@\n", timeStr, message];
         
         NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logPath];
         if (fileHandle) {
@@ -26,225 +26,342 @@ static void safeWriteLog(NSString *message) {
             [logMessage writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
         
-        NSLog(@"[SafeCheat] %@", message);
+        NSLog(@"[CheatStealer] %@", message);
     } @catch (NSException *exception) {
-        NSLog(@"[SafeCheat] 日志异常: %@", exception.reason);
+        NSLog(@"[CheatStealer] 日志异常: %@", exception.reason);
     }
 }
 
-#pragma mark - 全局变量
+#pragma mark - 窃取数据存储
 
-static BOOL g_safeMode = YES;
-static BOOL g_initialized = NO;
-static NSTimer *g_delayTimer = nil;
+static NSMutableArray *g_stolenOperations = nil;
+static NSMutableDictionary *g_stolenValues = nil;
+static NSMutableArray *g_stolenMethods = nil;
+static NSInteger g_operationCount = 0;
 
-#pragma mark - 安全的修改功能
+// 初始化窃取器
+static void initializeStealer(void) {
+    g_stolenOperations = [[NSMutableArray alloc] init];
+    g_stolenValues = [[NSMutableDictionary alloc] init];
+    g_stolenMethods = [[NSMutableArray alloc] init];
+    g_operationCount = 0;
+    stealerLog(@"🕵️ 窃取器已初始化");
+}
 
-// 安全的数值修改
-static void safeModifyValues(void) {
+// 保存窃取的数据
+static void saveStolenData(void) {
     @try {
-        safeWriteLog(@"🚀 开始安全修改数值...");
+        NSDictionary *data = @{
+            @"operations": g_stolenOperations ?: @[],
+            @"values": g_stolenValues ?: @{},
+            @"methods": g_stolenMethods ?: @[],
+            @"totalOperations": @(g_operationCount),
+            @"captureTime": [NSDate date]
+        };
         
-        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        NSError *error = nil;
+        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:&error];
         
-        // 修改常见的数值字段
-        NSArray *cashKeys = @[@"cash", @"money", @"现金", @"金钱", @"coin", @"coins"];
-        NSArray *energyKeys = @[@"energy", @"stamina", @"体力", @"power"];
-        NSArray *healthKeys = @[@"health", @"hp", @"健康", @"life"];
-        NSArray *moodKeys = @[@"mood", @"happiness", @"心情", @"spirit"];
+        if (!error && jsonData) {
+            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+            NSString *documentsPath = [paths firstObject];
+            NSString *dataPath = [documentsPath stringByAppendingPathComponent:@"stolen_cheat_data.json"];
+            [jsonData writeToFile:dataPath atomically:YES];
+            
+            stealerLog([NSString stringWithFormat:@"💾 已保存 %ld 个窃取操作到文件", (long)g_operationCount]);
+        }
+    } @catch (NSException *exception) {
+        stealerLog([NSString stringWithFormat:@"❌ 数据保存失败: %@", exception.reason]);
+    }
+}
+
+// 生成窃取到的修改器代码
+static void generateStolenCheatCode(void) {
+    @try {
+        if (g_stolenValues.count == 0) return;
         
-        // 修改现金
-        for (NSString *key in cashKeys) {
-            [defaults setInteger:21000000000 forKey:key];
+        NSMutableString *objcCode = [[NSMutableString alloc] init];
+        NSMutableString *fridaCode = [[NSMutableString alloc] init];
+        
+        // 生成Objective-C版本
+        [objcCode appendString:@"// 窃取到的修改器代码 - Objective-C版本\n"];
+        [objcCode appendString:@"// 基于对其他修改器的完全分析生成\n\n"];
+        [objcCode appendString:@"#import <Foundation/Foundation.h>\n\n"];
+        [objcCode appendString:@"static void executeStolenCheat(void) {\n"];
+        [objcCode appendString:@"    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];\n"];
+        [objcCode appendString:@"    NSLog(@\"🚀 执行窃取到的修改器...\");\n\n"];
+        
+        for (NSString *key in g_stolenValues) {
+            id value = g_stolenValues[key];
+            if ([value isKindOfClass:[NSNumber class]]) {
+                NSInteger intValue = [value integerValue];
+                [objcCode appendFormat:@"    [defaults setInteger:%ld forKey:@\"%@\"];\n", (long)intValue, key];
+                [objcCode appendFormat:@"    NSLog(@\"✅ 窃取修改 %@ = %ld\");\n", key, (long)intValue];
+            }
         }
         
-        // 修改体力
-        for (NSString *key in energyKeys) {
-            [defaults setInteger:21000000000 forKey:key];
+        [objcCode appendString:@"\n    [defaults synchronize];\n"];
+        [objcCode appendString:@"    NSLog(@\"🎉 窃取修改器执行完成！\");\n"];
+        [objcCode appendString:@"}\n\n"];
+        [objcCode appendString:@"__attribute__((constructor))\n"];
+        [objcCode appendString:@"static void StolenCheatInit(void) {\n"];
+        [objcCode appendString:@"    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{\n"];
+        [objcCode appendString:@"        executeStolenCheat();\n"];
+        [objcCode appendString:@"    });\n"];
+        [objcCode appendString:@"}"];
+        
+        // 生成Frida版本
+        [fridaCode appendString:@"// 窃取到的修改器代码 - Frida版本\n"];
+        [fridaCode appendString:@"// 基于对其他修改器的完全分析生成\n\n"];
+        [fridaCode appendString:@"setTimeout(function() {\n"];
+        [fridaCode appendString:@"    console.log('🚀 执行窃取到的修改器...');\n"];
+        [fridaCode appendString:@"    \n"];
+        [fridaCode appendString:@"    var NSUserDefaults = ObjC.classes.NSUserDefaults;\n"];
+        [fridaCode appendString:@"    var defaults = NSUserDefaults.standardUserDefaults();\n\n"];
+        
+        for (NSString *key in g_stolenValues) {
+            id value = g_stolenValues[key];
+            if ([value isKindOfClass:[NSNumber class]]) {
+                NSInteger intValue = [value integerValue];
+                [fridaCode appendFormat:@"    defaults.setInteger_forKey_(%ld, '%@');\n", (long)intValue, key];
+                [fridaCode appendFormat:@"    console.log('✅ 窃取修改 %@ = %ld');\n", key, (long)intValue];
+            }
         }
         
-        // 修改健康
-        for (NSString *key in healthKeys) {
-            [defaults setInteger:1000000 forKey:key];
-        }
+        [fridaCode appendString:@"\n    defaults.synchronize();\n"];
+        [fridaCode appendString:@"    console.log('🎉 窃取修改器执行完成！');\n"];
+        [fridaCode appendString:@"}, 5000);"];
         
-        // 修改心情
-        for (NSString *key in moodKeys) {
-            [defaults setInteger:1000000 forKey:key];
-        }
+        // 保存生成的代码
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        NSString *documentsPath = [paths firstObject];
         
-        [defaults synchronize];
-        safeWriteLog(@"✅ 安全修改完成");
+        NSString *objcPath = [documentsPath stringByAppendingPathComponent:@"stolen_cheat.m"];
+        NSString *fridaPath = [documentsPath stringByAppendingPathComponent:@"stolen_cheat.js"];
+        
+        [objcCode writeToFile:objcPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        [fridaCode writeToFile:fridaPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        
+        stealerLog(@"🎉 已生成窃取修改器代码:");
+        stealerLog([NSString stringWithFormat:@"   Objective-C: %@", objcPath]);
+        stealerLog([NSString stringWithFormat:@"   Frida: %@", fridaPath]);
         
     } @catch (NSException *exception) {
-        safeWriteLog([NSString stringWithFormat:@"❌ 修改异常: %@", exception.reason]);
+        stealerLog([NSString stringWithFormat:@"❌ 代码生成失败: %@", exception.reason]);
     }
 }
 
-// 显示安全提示
-static void showSafeAlert(void) {
-    @try {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"🛡️ 安全修改器" 
-                message:@"修改器已安全启动\n\n已修改：\n💰 现金 = 210亿\n⚡ 体力 = 210亿\n❤️ 健康 = 100万\n😊 心情 = 100万\n\n请进行一次游戏操作来刷新数值" 
-                preferredStyle:UIAlertControllerStyleAlert];
-            
-            [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
-            
-            UIViewController *rootVC = nil;
-            for (UIWindow *window in [UIApplication sharedApplication].windows) {
-                if (window.isKeyWindow) {
-                    rootVC = window.rootViewController;
-                    break;
-                }
-            }
-            
-            if (!rootVC) {
-                rootVC = [UIApplication sharedApplication].windows.firstObject.rootViewController;
-            }
-            
-            while (rootVC.presentedViewController) {
-                rootVC = rootVC.presentedViewController;
-            }
-            
-            if (rootVC) {
-                [rootVC presentViewController:alert animated:YES completion:nil];
-            }
-        });
-    } @catch (NSException *exception) {
-        safeWriteLog([NSString stringWithFormat:@"❌ 提示异常: %@", exception.reason]);
-    }
-}
-
-#pragma mark - 延迟初始化
-
-// 延迟执行修改
-static void delayedExecution(void) {
-    @try {
-        safeWriteLog(@"⏰ 开始延迟执行...");
-        
-        // 等待应用完全启动
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-            @try {
-                safeModifyValues();
-                
-                // 再延迟5秒显示提示
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                    showSafeAlert();
-                });
-                
-            } @catch (NSException *exception) {
-                safeWriteLog([NSString stringWithFormat:@"❌ 延迟执行异常: %@", exception.reason]);
-            }
-        });
-        
-    } @catch (NSException *exception) {
-        safeWriteLog([NSString stringWithFormat:@"❌ 延迟初始化异常: %@", exception.reason]);
-    }
-}
-
-#pragma mark - 应用生命周期监听
-
-// 监听应用状态
-static void setupAppStateMonitoring(void) {
-    @try {
-        // 监听应用变为活跃状态
-        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification 
-            object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) {
-            
-            if (!g_initialized) {
-                g_initialized = YES;
-                safeWriteLog(@"📱 应用已激活，开始安全初始化");
-                delayedExecution();
-            }
-        }];
-        
-        safeWriteLog(@"✅ 应用状态监听已设置");
-        
-    } @catch (NSException *exception) {
-        safeWriteLog([NSString stringWithFormat:@"❌ 状态监听设置失败: %@", exception.reason]);
-    }
-}
-
-#pragma mark - 最小化Hook（避免闪退）
+#pragma mark - Hook实现（只监控，不修改）
 
 // 原始方法指针
 static NSInteger (*original_integerForKey)(id self, SEL _cmd, NSString *key);
+static id (*original_objectForKey)(id self, SEL _cmd, NSString *key);
+static void (*original_setInteger)(id self, SEL _cmd, NSInteger value, NSString *key);
+static void (*original_setObject)(id self, SEL _cmd, id value, NSString *key);
 
-// 最小化的Hook实现
-static NSInteger safe_integerForKey(id self, SEL _cmd, NSString *key) {
+// Hook integerForKey（只监控）
+static NSInteger stealer_integerForKey(id self, SEL _cmd, NSString *key) {
+    NSInteger result = original_integerForKey(self, _cmd, key);
+    
     @try {
-        NSInteger originalValue = original_integerForKey(self, _cmd, key);
-        
-        // 只在安全模式下进行最小化的修改
-        if (g_safeMode && key && key.length > 0) {
-            NSString *lowerKey = [key lowercaseString];
+        if (key && key.length > 0) {
+            // 记录读取操作
+            NSDictionary *operation = @{
+                @"type": @"integerForKey",
+                @"key": key,
+                @"value": @(result),
+                @"timestamp": @([[NSDate date] timeIntervalSince1970])
+            };
+            [g_stolenOperations addObject:operation];
+            g_operationCount++;
             
-            // 只修改明确的游戏数值字段
-            if ([lowerKey isEqualToString:@"cash"] || [lowerKey isEqualToString:@"money"] || 
-                [lowerKey isEqualToString:@"现金"] || [lowerKey isEqualToString:@"金钱"]) {
-                if (originalValue > 0 && originalValue < 100000000000) {
-                    return 21000000000;
+            // 记录重要数值
+            if (result > 100000 || [key containsString:@"cash"] || [key containsString:@"money"] || 
+                [key containsString:@"现金"] || [key containsString:@"金钱"] || [key containsString:@"体力"] || 
+                [key containsString:@"energy"] || [key containsString:@"健康"] || [key containsString:@"心情"]) {
+                stealerLog([NSString stringWithFormat:@"🕵️ [窃取读取] %@ = %ld", key, (long)result]);
+                g_stolenValues[key] = @(result);
+            }
+        }
+    } @catch (NSException *exception) {
+        stealerLog([NSString stringWithFormat:@"❌ 读取监控异常: %@", exception.reason]);
+    }
+    
+    return result; // 不修改，直接返回原值
+}
+
+// Hook setInteger（只监控）
+static void stealer_setInteger(id self, SEL _cmd, NSInteger value, NSString *key) {
+    @try {
+        if (key && key.length > 0) {
+            // 记录修改操作
+            NSDictionary *operation = @{
+                @"type": @"setInteger",
+                @"key": key,
+                @"value": @(value),
+                @"timestamp": @([[NSDate date] timeIntervalSince1970])
+            };
+            [g_stolenOperations addObject:operation];
+            g_operationCount++;
+            
+            // 重要修改操作
+            if (value > 100000 || value == 999999999 || value == 21000000000) {
+                stealerLog([NSString stringWithFormat:@"🎯 [窃取重要修改] setInteger: %@ = %ld", key, (long)value]);
+                g_stolenValues[key] = @(value);
+                
+                // 立即保存重要数据
+                saveStolenData();
+                
+                // 如果捕获到足够数据，生成代码
+                if (g_stolenValues.count >= 3) {
+                    generateStolenCheatCode();
                 }
+            } else {
+                stealerLog([NSString stringWithFormat:@"🕵️ [窃取修改] setInteger: %@ = %ld", key, (long)value]);
+            }
+        }
+    } @catch (NSException *exception) {
+        stealerLog([NSString stringWithFormat:@"❌ 修改监控异常: %@", exception.reason]);
+    }
+    
+    // 调用原始方法，让其他修改器正常工作
+    original_setInteger(self, _cmd, value, key);
+}
+
+// Hook setObject（只监控）
+static void stealer_setObject(id self, SEL _cmd, id value, NSString *key) {
+    @try {
+        if (key && key.length > 0) {
+            // 检查ES3存档修改
+            if ([key.lowercaseString containsString:@"es3"]) {
+                stealerLog([NSString stringWithFormat:@"🕵️ [窃取ES3] %@", key]);
+                
+                NSDictionary *es3Op = @{
+                    @"type": @"es3Write",
+                    @"key": key,
+                    @"dataLength": value && [value isKindOfClass:[NSString class]] ? @([(NSString*)value length]) : @0,
+                    @"timestamp": @([[NSDate date] timeIntervalSince1970])
+                };
+                [g_stolenOperations addObject:es3Op];
+                g_operationCount++;
+                
+                // ES3操作立即保存
+                saveStolenData();
             }
             
-            if ([lowerKey isEqualToString:@"energy"] || [lowerKey isEqualToString:@"stamina"] || 
-                [lowerKey isEqualToString:@"体力"]) {
-                if (originalValue > 0 && originalValue < 100000000) {
-                    return 21000000000;
+            // 检查数字对象
+            if (value && [value respondsToSelector:@selector(integerValue)]) {
+                NSInteger intValue = [value integerValue];
+                if (intValue > 100000) {
+                    stealerLog([NSString stringWithFormat:@"🕵️ [窃取重要对象] setObject: %@ = %@", key, value]);
+                    g_stolenValues[key] = value;
+                    saveStolenData();
                 }
             }
         }
-        
-        return originalValue;
     } @catch (NSException *exception) {
-        // 发生异常时返回原始值，避免崩溃
-        return original_integerForKey(self, _cmd, key);
+        stealerLog([NSString stringWithFormat:@"❌ 对象监控异常: %@", exception.reason]);
     }
+    
+    // 调用原始方法，让其他修改器正常工作
+    original_setObject(self, _cmd, value, key);
 }
 
-// 安全的Hook安装
-static void installSafeHooks(void) {
+// 安装窃取Hook
+static void installStealerHooks(void) {
     @try {
         Class nsUserDefaultsClass = [NSUserDefaults class];
         
-        // 只Hook最关键的方法
+        // Hook integerForKey:
         Method integerMethod = class_getInstanceMethod(nsUserDefaultsClass, @selector(integerForKey:));
         if (integerMethod) {
             original_integerForKey = (NSInteger (*)(id, SEL, NSString *))method_getImplementation(integerMethod);
-            method_setImplementation(integerMethod, (IMP)safe_integerForKey);
-            safeWriteLog(@"✅ 安全Hook已安装");
+            method_setImplementation(integerMethod, (IMP)stealer_integerForKey);
+            stealerLog(@"✅ 已安装 integerForKey 窃取Hook");
         }
         
+        // Hook setInteger:forKey:
+        Method setIntegerMethod = class_getInstanceMethod(nsUserDefaultsClass, @selector(setInteger:forKey:));
+        if (setIntegerMethod) {
+            original_setInteger = (void (*)(id, SEL, NSInteger, NSString *))method_getImplementation(setIntegerMethod);
+            method_setImplementation(setIntegerMethod, (IMP)stealer_setInteger);
+            stealerLog(@"✅ 已安装 setInteger:forKey 窃取Hook");
+        }
+        
+        // Hook setObject:forKey:
+        Method setObjectMethod = class_getInstanceMethod(nsUserDefaultsClass, @selector(setObject:forKey:));
+        if (setObjectMethod) {
+            original_setObject = (void (*)(id, SEL, id, NSString *))method_getImplementation(setObjectMethod);
+            method_setImplementation(setObjectMethod, (IMP)stealer_setObject);
+            stealerLog(@"✅ 已安装 setObject:forKey 窃取Hook");
+        }
+        
+        stealerLog(@"🎉 所有窃取Hook安装完成，开始监控其他修改器");
+        
     } @catch (NSException *exception) {
-        safeWriteLog([NSString stringWithFormat:@"❌ Hook安装失败: %@", exception.reason]);
+        stealerLog([NSString stringWithFormat:@"❌ 窃取Hook安装失败: %@", exception.reason]);
     }
+}
+
+#pragma mark - 定期任务
+
+// 定期保存和生成代码
+static void startPeriodicTasks(void) {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        while (YES) {
+            @autoreleasepool {
+                sleep(30); // 每30秒执行一次
+                
+                if (g_operationCount > 0) {
+                    saveStolenData();
+                    
+                    // 状态报告
+                    stealerLog([NSString stringWithFormat:@"📊 [窃取状态] 已捕获 %ld 个操作，%lu 个重要数值", 
+                        (long)g_operationCount, (unsigned long)g_stolenValues.count]);
+                    
+                    // 如果捕获到足够数据，生成代码
+                    if (g_stolenValues.count >= 3) {
+                        generateStolenCheatCode();
+                    }
+                }
+            }
+        }
+    });
 }
 
 #pragma mark - 构造函数
 
 __attribute__((constructor))
-static void SafeCheatInit(void) {
+static void CheatStealerInit(void) {
     @autoreleasepool {
         @try {
-            safeWriteLog(@"🛡️ 安全修改器开始加载...");
-            safeWriteLog(@"💡 使用最小化Hook，避免闪退");
+            stealerLog(@"🕵️ 修改器窃取器开始加载...");
+            stealerLog(@"💡 专门窃取其他修改器功能，不做任何修改");
             
-            // 设置应用状态监听
-            setupAppStateMonitoring();
+            // 初始化窃取器
+            initializeStealer();
             
-            // 延迟安装Hook，避免过早Hook导致闪退
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            // 延迟安装Hook
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                 @try {
-                    installSafeHooks();
-                    safeWriteLog(@"✅ 安全修改器加载完成");
+                    installStealerHooks();
+                    
+                    // 启动定期任务
+                    startPeriodicTasks();
+                    
+                    stealerLog(@"✅ 窃取器已完全启动，正在后台监控...");
+                    stealerLog(@"💡 现在可以操作其他修改器，所有操作将被窃取记录");
+                    stealerLog(@"📁 日志文件: Documents/cheat_stealer.log");
+                    stealerLog(@"📁 数据文件: Documents/stolen_cheat_data.json");
+                    stealerLog(@"📁 生成代码: Documents/stolen_cheat.m 和 stolen_cheat.js");
+                    
                 } @catch (NSException *exception) {
-                    safeWriteLog([NSString stringWithFormat:@"❌ Hook安装异常: %@", exception.reason]);
+                    stealerLog([NSString stringWithFormat:@"❌ 窃取器启动失败: %@", exception.reason]);
                 }
             });
             
         } @catch (NSException *exception) {
-            NSLog(@"[SafeCheat] 构造函数异常: %@", exception.reason);
+            NSLog(@"[CheatStealer] 构造函数异常: %@", exception.reason);
         }
     }
 }
