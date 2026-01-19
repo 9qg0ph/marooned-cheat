@@ -21,7 +21,38 @@ static const NSInteger CURRENT_CASH = 2099999100;
 // Hook状态
 static BOOL isHookEnabled = YES;
 
-// 日志函数
+// 获取主窗口的兼容方法
+static UIWindow* getKeyWindow(void) {
+    UIWindow *keyWindow = nil;
+    if (@available(iOS 13.0, *)) {
+        NSSet<UIScene *> *connectedScenes = [UIApplication sharedApplication].connectedScenes;
+        for (UIScene *scene in connectedScenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                for (UIWindow *window in windowScene.windows) {
+                    if (window.isKeyWindow) {
+                        keyWindow = window;
+                        break;
+                    }
+                }
+                if (keyWindow) break;
+            }
+        }
+    }
+    if (!keyWindow) {
+        keyWindow = [UIApplication sharedApplication].windows.firstObject;
+    }
+    return keyWindow;
+}
+
+// 创建重复字符串的辅助函数
+static NSString* repeatString(NSString *str, NSInteger count) {
+    NSMutableString *result = [NSMutableString string];
+    for (NSInteger i = 0; i < count; i++) {
+        [result appendString:str];
+    }
+    return result;
+}
 static NSString* getLogPath(void) {
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     NSString *documentsDirectory = [paths objectAtIndex:0];
@@ -193,7 +224,7 @@ static void showControlPanel() {
                                                                           preferredStyle:UIAlertControllerStyleAlert];
             [statusAlert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
             
-            UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+            UIViewController *rootVC = getKeyWindow().rootViewController;
             [rootVC presentViewController:statusAlert animated:YES completion:nil];
         }];
         
@@ -217,7 +248,7 @@ static void showControlPanel() {
                                                                        preferredStyle:UIAlertControllerStyleAlert];
             [logAlert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
             
-            UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+            UIViewController *rootVC = getKeyWindow().rootViewController;
             [rootVC presentViewController:logAlert animated:YES completion:nil];
         }];
         
@@ -230,7 +261,7 @@ static void showControlPanel() {
         [alert addAction:logAction];
         [alert addAction:closeAction];
         
-        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+        UIViewController *rootVC = getKeyWindow().rootViewController;
         [rootVC presentViewController:alert animated:YES completion:nil];
     });
 }
@@ -238,7 +269,7 @@ static void showControlPanel() {
 // 添加手势控制
 static void addGestureControl() {
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+        UIWindow *keyWindow = getKeyWindow();
         if (keyWindow) {
             // 添加三指长按手势
             UILongPressGestureRecognizer *gesture = [[UILongPressGestureRecognizer alloc] 
@@ -276,11 +307,11 @@ static void addGestureControl() {
 // 构造函数
 __attribute__((constructor))
 static void initialize() {
-    writeLog(@"=".repeat(60));
+    writeLog(repeatString(@"=", 60));
     writeLog(@"🚀 我独自生活实时Hook修改器已加载");
     writeLog(@"💡 基于发现：必须保持开启状态才有效 = 实时拦截方式");
     writeLog(@"🎯 目标现金数值: 2099999100");
-    writeLog(@"=".repeat(60));
+    writeLog(repeatString(@"=", 60));
     
     // Hook NSUserDefaults
     Class userDefaultsClass = [NSUserDefaults class];
@@ -333,7 +364,7 @@ static void initialize() {
         
         [alert addAction:[UIAlertAction actionWithTitle:@"开始游戏" style:UIAlertActionStyleDefault handler:nil]];
         
-        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+        UIViewController *rootVC = getKeyWindow().rootViewController;
         [rootVC presentViewController:alert animated:YES completion:nil];
     });
     
