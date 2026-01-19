@@ -206,16 +206,14 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                 
                 if (money > 0) {
                     writeLog(@"🔍 开始查找金钱相关字段");
-                    // 使用更宽泛的模式匹配金钱字段 - 注意JSON中的空格格式
+                    // 使用更宽泛的模式匹配包含金钱关键词的字段
                     NSArray *moneyPatterns = @[
-                        @"\"金钱\"\\s*:\\s*\\d+",
-                        @"\"现金\"\\s*:\\s*\\d+", 
-                        @"\"玩家现金\"\\s*:\\s*\\d+",
+                        @"\"[^\"]*金钱[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"金钱"的字段
+                        @"\"[^\"]*现金[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"现金"的字段
+                        @"\"[^\"]*钱[^\"]*\"\\s*:\\s*\\d+",    // 匹配任何包含"钱"的字段
+                        @"\"[^\"]*金额[^\"]*\"\\s*:\\s*\\d+",  // 匹配任何包含"金额"的字段
                         @"\"userCash\"\\s*:\\s*\\d+",
-                        @"\"当前现金\"\\s*:\\s*\\d+",
                         @"\"Cash\"\\s*:\\s*\\d+",
-                        // 添加更多可能的字段名
-                        @"\"钱\"\\s*:\\s*\\d+",
                         @"\"money\"\\s*:\\s*\\d+",
                         @"\"Money\"\\s*:\\s*\\d+",
                         @"\"coin\"\\s*:\\s*\\d+",
@@ -225,6 +223,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     // 先搜索是否包含任何金钱相关的中文字符
                     if ([modifiedJsonString containsString:@"金钱"] || 
                         [modifiedJsonString containsString:@"现金"] || 
+                        [modifiedJsonString containsString:@"金额"] ||
                         [modifiedJsonString containsString:@"钱"]) {
                         writeLog(@"✅ JSON中包含金钱相关字符");
                     } else {
@@ -244,19 +243,25 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                         writeLog([NSString stringWithFormat:@"🔍 模式 %@ 找到 %lu 个匹配", pattern, (unsigned long)matchCount]);
                         
                         if (matchCount > 0) {
-                            // 提取字段名并替换
-                            NSArray *components = [pattern componentsSeparatedByString:@"\""];
-                            if (components.count > 1) {
-                                NSString *fieldName = [components objectAtIndex:1];
-                                NSString *replacement = [NSString stringWithFormat:@"\"%@\" : %ld", fieldName, (long)money];
+                            // 获取所有匹配并替换
+                            NSArray *matches = [regex matchesInString:modifiedJsonString options:0 range:NSMakeRange(0, modifiedJsonString.length)];
+                            
+                            // 从后往前替换，避免位置偏移
+                            for (NSInteger i = matches.count - 1; i >= 0; i--) {
+                                NSTextCheckingResult *match = [matches objectAtIndex:i];
+                                NSString *matchedString = [modifiedJsonString substringWithRange:match.range];
+                                writeLog([NSString stringWithFormat:@"🎯 找到匹配: %@", matchedString]);
                                 
-                                NSString *newString = [regex stringByReplacingMatchesInString:modifiedJsonString 
-                                    options:0 range:NSMakeRange(0, modifiedJsonString.length) withTemplate:replacement];
-                                if (![newString isEqualToString:modifiedJsonString]) {
-                                    modifiedJsonString = newString;
+                                // 提取字段名
+                                NSRange colonRange = [matchedString rangeOfString:@":"];
+                                if (colonRange.location != NSNotFound) {
+                                    NSString *fieldPart = [matchedString substringToIndex:colonRange.location];
+                                    NSString *replacement = [NSString stringWithFormat:@"%@ : %ld", fieldPart, (long)money];
+                                    
+                                    modifiedJsonString = [modifiedJsonString stringByReplacingCharactersInRange:match.range withString:replacement];
                                     stringModified = YES;
                                     replaceCount++;
-                                    writeLog([NSString stringWithFormat:@"✅ 替换金钱字段 %@: %ld (%lu处)", fieldName, (long)money, (unsigned long)matchCount]);
+                                    writeLog([NSString stringWithFormat:@"✅ 替换字段: %@ -> %ld", fieldPart, (long)money]);
                                 }
                             }
                         }
