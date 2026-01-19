@@ -1,54 +1,92 @@
-// 游戏分析器 + 修改器 - 既能分析又能修改
+// 持久化游戏修改器 - 解决重启后数值重置问题
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 
 // 日志系统
-static void gameLog(NSString *message) {
-    NSLog(@"[GameAnalyzer] %@", message);
+static void persistentLog(NSString *message) {
+    NSLog(@"[PersistentCheat] %@", message);
 }
 
 // 全局变量
-static NSInteger g_analysisCount = 0;
-static NSMutableDictionary *g_gameData = nil;
-static BOOL g_modificationEnabled = NO;
+static NSMutableDictionary *g_targetValues = nil;
+static NSTimer *g_persistentTimer = nil;
+static BOOL g_cheatEnabled = NO;
 
 // 原始方法指针
 static void (*original_setInteger)(id self, SEL _cmd, NSInteger value, NSString *key);
 static NSInteger (*original_integerForKey)(id self, SEL _cmd, NSString *key);
+static void (*original_setObject)(id self, SEL _cmd, id value, NSString *key);
+static id (*original_objectForKey)(id self, SEL _cmd, NSString *key);
+static BOOL (*original_synchronize)(id self, SEL _cmd);
 
-// Hook setInteger - 分析和修改
-static void analyzer_setInteger(id self, SEL _cmd, NSInteger value, NSString *key) {
-    // 分析阶段 - 记录所有游戏数据操作
-    if (key && key.length > 0) {
-        g_analysisCount++;
-        
-        // 记录重要的游戏数据
-        if ([key containsString:@"cash"] || [key containsString:@"money"] || 
-            [key containsString:@"现金"] || [key containsString:@"金钱"] || 
-            [key containsString:@"体力"] || [key containsString:@"energy"] ||
-            [key containsString:@"健康"] || [key containsString:@"心情"] ||
-            [key containsString:@"饥饿"] || [key containsString:@"thirst"] ||
-            value > 10000) {
-            
-            gameLog([NSString stringWithFormat:@"🔍 [游戏数据] %@ = %ld", key, (long)value]);
-            g_gameData[key] = @(value);
-            
-            // 如果是修改模式，直接修改为大数值
-            if (g_modificationEnabled) {
-                if ([key containsString:@"cash"] || [key containsString:@"money"] || [key containsString:@"现金"] || [key containsString:@"金钱"]) {
-                    value = 999999999; // 修改金钱
-                    gameLog([NSString stringWithFormat:@"💰 [修改金钱] %@ -> %ld", key, (long)value]);
-                } else if ([key containsString:@"体力"] || [key containsString:@"energy"]) {
-                    value = 100; // 修改体力
-                    gameLog([NSString stringWithFormat:@"⚡ [修改体力] %@ -> %ld", key, (long)value]);
-                } else if ([key containsString:@"健康"] || [key containsString:@"health"]) {
-                    value = 100; // 修改健康
-                    gameLog([NSString stringWithFormat:@"❤️ [修改健康] %@ -> %ld", key, (long)value]);
-                } else if ([key containsString:@"心情"] || [key containsString:@"mood"]) {
-                    value = 100; // 修改心情
-                    gameLog([NSString stringWithFormat:@"😊 [修改心情] %@ -> %ld", key, (long)value]);
-                }
-            }
+// 目标修改数值
+static void initializeTargetValues(void) {
+    g_targetValues = [[NSMutableDictionary alloc] init];
+    
+    // 金钱相关
+    g_targetValues[@"cash"] = @999999999;
+    g_targetValues[@"money"] = @999999999;
+    g_targetValues[@"现金"] = @999999999;
+    g_targetValues[@"金钱"] = @999999999;
+    g_targetValues[@"Money"] = @999999999;
+    g_targetValues[@"Cash"] = @999999999;
+    
+    // 体力相关
+    g_targetValues[@"energy"] = @100;
+    g_targetValues[@"体力"] = @100;
+    g_targetValues[@"Energy"] = @100;
+    g_targetValues[@"stamina"] = @100;
+    
+    // 健康相关
+    g_targetValues[@"health"] = @100;
+    g_targetValues[@"健康"] = @100;
+    g_targetValues[@"Health"] = @100;
+    g_targetValues[@"hp"] = @100;
+    
+    // 心情相关
+    g_targetValues[@"mood"] = @100;
+    g_targetValues[@"心情"] = @100;
+    g_targetValues[@"Mood"] = @100;
+    g_targetValues[@"happiness"] = @100;
+    
+    // 饥饿相关（设为0表示不饿）
+    g_targetValues[@"hunger"] = @0;
+    g_targetValues[@"饥饿"] = @0;
+    g_targetValues[@"Hunger"] = @0;
+    g_targetValues[@"thirst"] = @0;
+    
+    persistentLog(@"✅ 目标数值已初始化");
+}
+
+// 检查是否是目标键
+static BOOL isTargetKey(NSString *key) {
+    if (!key || key.length == 0) return NO;
+    
+    for (NSString *targetKey in g_targetValues) {
+        if ([key containsString:targetKey] || [key isEqualToString:targetKey]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+// 获取目标值
+static NSInteger getTargetValue(NSString *key) {
+    for (NSString *targetKey in g_targetValues) {
+        if ([key containsString:targetKey] || [key isEqualToString:targetKey]) {
+            return [g_targetValues[targetKey] integerValue];
+        }
+    }
+    return 0;
+}
+
+// Hook setInteger - 拦截并修改保存的数值
+static void persistent_setInteger(id self, SEL _cmd, NSInteger value, NSString *key) {
+    if (g_cheatEnabled && isTargetKey(key)) {
+        NSInteger targetValue = getTargetValue(key);
+        if (targetValue != 0) {
+            persistentLog([NSString stringWithFormat:@"🔄 [拦截修改] %@ : %ld -> %ld", key, (long)value, (long)targetValue]);
+            value = targetValue;
         }
     }
     
@@ -56,146 +94,161 @@ static void analyzer_setInteger(id self, SEL _cmd, NSInteger value, NSString *ke
     original_setInteger(self, _cmd, value, key);
 }
 
-// Hook integerForKey - 分析读取操作
-static NSInteger analyzer_integerForKey(id self, SEL _cmd, NSString *key) {
+// Hook integerForKey - 拦截读取，返回修改后的值
+static NSInteger persistent_integerForKey(id self, SEL _cmd, NSString *key) {
     NSInteger result = original_integerForKey(self, _cmd, key);
     
-    // 记录重要数据的读取
-    if (key && key.length > 0 && result > 0) {
-        if ([key containsString:@"cash"] || [key containsString:@"money"] || 
-            [key containsString:@"现金"] || [key containsString:@"金钱"] || 
-            [key containsString:@"体力"] || [key containsString:@"energy"] ||
-            [key containsString:@"健康"] || [key containsString:@"心情"] ||
-            result > 10000) {
-            
-            gameLog([NSString stringWithFormat:@"📖 [读取数据] %@ = %ld", key, (long)result]);
-            g_gameData[key] = @(result);
+    if (g_cheatEnabled && isTargetKey(key)) {
+        NSInteger targetValue = getTargetValue(key);
+        if (targetValue != 0) {
+            persistentLog([NSString stringWithFormat:@"📖 [拦截读取] %@ : %ld -> %ld", key, (long)result, (long)targetValue]);
+            return targetValue;
         }
     }
     
     return result;
 }
 
-// 启用修改模式
-static void enableModificationMode(void) {
-    g_modificationEnabled = YES;
-    gameLog(@"🚀 修改模式已启用！");
-    gameLog(@"💡 现在所有重要数值都会被自动修改");
+// Hook setObject - 处理对象类型的存档
+static void persistent_setObject(id self, SEL _cmd, id value, NSString *key) {
+    if (g_cheatEnabled && key && [key.lowercaseString containsString:@"save"]) {
+        persistentLog([NSString stringWithFormat:@"💾 [存档操作] %@", key]);
+    }
     
-    // 输出已发现的游戏数据
-    gameLog(@"📊 已发现的游戏数据:");
-    for (NSString *key in g_gameData) {
-        NSNumber *value = g_gameData[key];
-        gameLog([NSString stringWithFormat:@"   %@ = %@", key, value]);
+    // 调用原始方法
+    original_setObject(self, _cmd, value, key);
+}
+
+// Hook synchronize - 在同步时强制写入修改值
+static BOOL persistent_synchronize(id self, SEL _cmd) {
+    if (g_cheatEnabled) {
+        persistentLog(@"🔄 [同步拦截] 强制写入修改数值");
+        
+        // 在同步前强制设置所有目标值
+        for (NSString *key in g_targetValues) {
+            NSInteger targetValue = [g_targetValues[key] integerValue];
+            [self setInteger:targetValue forKey:key];
+        }
+    }
+    
+    // 调用原始方法
+    BOOL result = original_synchronize(self, _cmd);
+    
+    if (g_cheatEnabled) {
+        persistentLog(@"✅ [同步完成] 修改数值已保存到存档");
+    }
+    
+    return result;
+}
+
+// 定期强制修改存档
+static void forceModifyUserDefaults(void) {
+    @autoreleasepool {
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        
+        persistentLog(@"🔧 [定期修改] 强制写入所有目标数值");
+        
+        for (NSString *key in g_targetValues) {
+            NSInteger targetValue = [g_targetValues[key] integerValue];
+            [defaults setInteger:targetValue forKey:key];
+        }
+        
+        [defaults synchronize];
+        persistentLog(@"✅ [定期修改] 完成");
     }
 }
 
-// 手动修改存档数据
-static void modifyGameSaveData(void) {
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    gameLog(@"🔧 开始手动修改存档数据...");
+// 启动定期任务
+static void startPersistentTimer(void) {
+    // 每30秒强制修改一次存档
+    g_persistentTimer = [NSTimer scheduledTimerWithTimeInterval:30.0
+                                                        target:[NSBlockOperation blockOperationWithBlock:^{
+                                                            forceModifyUserDefaults();
+                                                        }]
+                                                      selector:@selector(main)
+                                                      userInfo:nil
+                                                       repeats:YES];
     
-    // 基于之前的分析，尝试修改常见的游戏数据键
-    NSArray *moneyKeys = @[@"cash", @"money", @"现金", @"金钱", @"Money", @"Cash"];
-    NSArray *energyKeys = @[@"energy", @"体力", @"Energy", @"stamina"];
-    NSArray *healthKeys = @[@"health", @"健康", @"Health", @"hp"];
-    NSArray *moodKeys = @[@"mood", @"心情", @"Mood", @"happiness"];
-    
-    // 修改金钱
-    for (NSString *key in moneyKeys) {
-        [defaults setInteger:999999999 forKey:key];
-        gameLog([NSString stringWithFormat:@"💰 设置 %@ = 999999999", key]);
-    }
-    
-    // 修改体力
-    for (NSString *key in energyKeys) {
-        [defaults setInteger:100 forKey:key];
-        gameLog([NSString stringWithFormat:@"⚡ 设置 %@ = 100", key]);
-    }
-    
-    // 修改健康
-    for (NSString *key in healthKeys) {
-        [defaults setInteger:100 forKey:key];
-        gameLog([NSString stringWithFormat:@"❤️ 设置 %@ = 100", key]);
-    }
-    
-    // 修改心情
-    for (NSString *key in moodKeys) {
-        [defaults setInteger:100 forKey:key];
-        gameLog([NSString stringWithFormat:@"😊 设置 %@ = 100", key]);
-    }
-    
-    [defaults synchronize];
-    gameLog(@"✅ 存档数据修改完成！");
+    persistentLog(@"⏰ 定期修改任务已启动 (每30秒)");
 }
 
-// 安装Hook
-static void installAnalyzerHooks(void) {
+// 安装所有Hook
+static void installPersistentHooks(void) {
     @try {
         Class cls = [NSUserDefaults class];
         
         // Hook setInteger:forKey:
-        Method setMethod = class_getInstanceMethod(cls, @selector(setInteger:forKey:));
-        if (setMethod) {
-            original_setInteger = (void (*)(id, SEL, NSInteger, NSString *))method_getImplementation(setMethod);
-            method_setImplementation(setMethod, (IMP)analyzer_setInteger);
-            gameLog(@"✅ setInteger Hook安装成功");
+        Method setIntegerMethod = class_getInstanceMethod(cls, @selector(setInteger:forKey:));
+        if (setIntegerMethod) {
+            original_setInteger = (void (*)(id, SEL, NSInteger, NSString *))method_getImplementation(setIntegerMethod);
+            method_setImplementation(setIntegerMethod, (IMP)persistent_setInteger);
+            persistentLog(@"✅ setInteger Hook安装成功");
         }
         
         // Hook integerForKey:
-        Method getMethod = class_getInstanceMethod(cls, @selector(integerForKey:));
-        if (getMethod) {
-            original_integerForKey = (NSInteger (*)(id, SEL, NSString *))method_getImplementation(getMethod);
-            method_setImplementation(getMethod, (IMP)analyzer_integerForKey);
-            gameLog(@"✅ integerForKey Hook安装成功");
+        Method integerForKeyMethod = class_getInstanceMethod(cls, @selector(integerForKey:));
+        if (integerForKeyMethod) {
+            original_integerForKey = (NSInteger (*)(id, SEL, NSString *))method_getImplementation(integerForKeyMethod);
+            method_setImplementation(integerForKeyMethod, (IMP)persistent_integerForKey);
+            persistentLog(@"✅ integerForKey Hook安装成功");
         }
         
-        gameLog(@"🎉 游戏分析器Hook安装完成");
+        // Hook setObject:forKey:
+        Method setObjectMethod = class_getInstanceMethod(cls, @selector(setObject:forKey:));
+        if (setObjectMethod) {
+            original_setObject = (void (*)(id, SEL, id, NSString *))method_getImplementation(setObjectMethod);
+            method_setImplementation(setObjectMethod, (IMP)persistent_setObject);
+            persistentLog(@"✅ setObject Hook安装成功");
+        }
+        
+        // Hook synchronize
+        Method synchronizeMethod = class_getInstanceMethod(cls, @selector(synchronize));
+        if (synchronizeMethod) {
+            original_synchronize = (BOOL (*)(id, SEL))method_getImplementation(synchronizeMethod);
+            method_setImplementation(synchronizeMethod, (IMP)persistent_synchronize);
+            persistentLog(@"✅ synchronize Hook安装成功");
+        }
+        
+        persistentLog(@"🎉 所有持久化Hook安装完成");
         
     } @catch (NSException *e) {
-        gameLog([NSString stringWithFormat:@"❌ Hook安装异常: %@", e.reason]);
+        persistentLog([NSString stringWithFormat:@"❌ Hook安装异常: %@", e.reason]);
     }
 }
 
-// 定时任务
-static void startPeriodicTasks(void) {
-    // 30秒后启用修改模式
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        enableModificationMode();
-    });
+// 启用修改功能
+static void enablePersistentCheat(void) {
+    g_cheatEnabled = YES;
+    persistentLog(@"🚀 持久化修改已启用！");
     
-    // 60秒后执行手动修改
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 60 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-        modifyGameSaveData();
-    });
+    // 立即执行一次修改
+    forceModifyUserDefaults();
     
-    // 每2分钟报告一次状态
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        while (YES) {
-            sleep(120);
-            gameLog([NSString stringWithFormat:@"📊 [状态报告] 已分析 %ld 次操作，发现 %lu 个游戏数据", 
-                (long)g_analysisCount, (unsigned long)g_gameData.count]);
-        }
-    });
+    // 启动定期任务
+    startPersistentTimer();
+    
+    persistentLog(@"💡 现在游戏数值将被持久化修改，重启后也不会重置");
 }
 
 // 构造函数
 __attribute__((constructor))
-static void GameAnalyzerInit(void) {
+static void PersistentCheatInit(void) {
     @autoreleasepool {
-        gameLog(@"🎮 游戏分析器 + 修改器启动");
+        persistentLog(@"🎮 持久化游戏修改器启动");
+        persistentLog(@"💡 专门解决重启后数值重置问题");
         
         // 初始化
-        g_gameData = [[NSMutableDictionary alloc] init];
-        g_analysisCount = 0;
-        g_modificationEnabled = NO;
+        initializeTargetValues();
+        g_cheatEnabled = NO;
         
         // 10秒后安装Hook
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            installAnalyzerHooks();
-            startPeriodicTasks();
-            gameLog(@"🔍 分析模式启动，正在学习游戏数据结构...");
-            gameLog(@"💡 30秒后将自动启用修改模式");
+            installPersistentHooks();
+            
+            // 20秒后启用修改
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                enablePersistentCheat();
+            });
         });
     }
 }

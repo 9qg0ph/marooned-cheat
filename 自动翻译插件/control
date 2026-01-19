@@ -1,9 +1,0 @@
-Package: com.translate.autotranslate
-Name: AutoTranslate
-Version: 1.0.0
-Architecture: iphoneos-arm
-Description: 自动将应用中的英文翻译成中文
-Maintainer: Developer
-Author: Developer
-Section: Tweaks
-Depends: mobilesubstrate
