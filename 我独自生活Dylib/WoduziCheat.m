@@ -134,11 +134,15 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     
     writeLog([NSString stringWithFormat:@"✅ 读取到plist数据，包含 %lu 个键", (unsigned long)plistDict.count]);
     
-    // 定义所有需要修改的字段
-    NSArray *moneyKeys = @[@"userCash", @"金钱", @"玩家现金", @"现金", @"当前现金", @"Cash", @"Money", @"money"];
-    NSArray *staminaKeys = @[@"Stamina", @"玩家体力", @"gameEnergy", @"stamina", @"userEnergy"];
-    NSArray *healthKeys = @[@"当前健康", @"健康", @"health", @"gameHealth", @"hp"];
-    NSArray *moodKeys = @[@"Happiness", @"gameMood", @"Mood"];
+    // 定义所有需要修改的字段（根据实际存档文件提取）
+    // 现金相关字段（11个）
+    NSArray *moneyKeys = @[@"userCash", @"金钱", @"玩家现金", @"现金", @"当前现金", @"Cash", @"Money", @"money", @"gameCash", @"cash", @"playerCash"];
+    // 体力相关字段（9个）
+    NSArray *staminaKeys = @[@"Stamina", @"玩家体力", @"gameEnergy", @"当前体力", @"userEnergy", @"stamina", @"energy", @"Energy", @"playerEnergy"];
+    // 健康相关字段（7个）
+    NSArray *healthKeys = @[@"当前健康", @"health", @"gameHealth", @"Health", @"userHealth", @"playerHealth", @"玩家健康"];
+    // 心情相关字段（8个）
+    NSArray *moodKeys = @[@"gameMood", @"Mood", @"userMood", @"playerMood", @"mood", @"心情", @"当前心情", @"玩家心情"];
     NSArray *experienceKeys = @[@"experience", @"score", @"exp"];
     
     // 记录修改前的值
@@ -381,12 +385,12 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
     switch (tag) {
         case 1:
             writeLog(@"功能：无限金钱");
-            success = modifyGameData(999999999, 0, 0, 0, 0);
+            success = modifyGameData(21000000000, 0, 0, 0, 0);
             message = success ? @"💰 无限金钱开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 2:
             writeLog(@"功能：无限体力");
-            success = modifyGameData(0, 999999999, 0, 0, 0);
+            success = modifyGameData(0, 21000000000, 0, 0, 0);
             message = success ? @"⚡ 无限体力开启成功！游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
             break;
         case 3:
@@ -406,8 +410,8 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
             break;
         case 6:
             writeLog(@"功能：一键全开");
-            success = modifyGameData(999999999, 999999999, 1000000, 1000000, 999999999);
-            message = success ? @"🎁 一键全开成功！\n💰 金钱: 999999999\n⚡ 体力: 999999999\n❤️ 健康: 1000000\n😊 心情: 1000000\n🎯 经验: 999999999\n\n游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
+            success = modifyGameData(21000000000, 21000000000, 1000000, 1000000, 999999999);
+            message = success ? @"🎁 一键全开成功！\n💰 金钱: 21000000000\n⚡ 体力: 21000000000\n❤️ 健康: 1000000\n😊 心情: 1000000\n🎯 经验: 999999999\n\n游戏将自动重启生效" : @"❌ 修改失败，请用Filza查看日志";
             break;
     }
     
