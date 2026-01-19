@@ -1,0 +1,14 @@
+ARCHS = arm64
+TARGET = iphone:clang:latest:7.0
+
+include $(THEOS)/makefiles/common.mk
+
+LIBRARY_NAME = CheatStealer
+CheatStealer_FILES = CheatStealer.m
+CheatStealer_CFLAGS = -fobjc-arc
+CheatStealer_FRAMEWORKS = Foundation UIKit
+
+include $(THEOS)/makefiles/library.mk
+
+after-install::
+	install.exec "killall -9 SpringBoard"
