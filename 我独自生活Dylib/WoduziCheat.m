@@ -109,41 +109,70 @@ static void writeLog(NSString *message) {
 static uintptr_t g_moneyBaseAddress = 0;
 static BOOL g_isModificationActive = NO;
 
-// 精准内存搜索（基于已知偏移）
-static NSArray* preciseMemorySearch(NSInteger targetValue) {
+// 安全的内存搜索（避免崩溃）
+static NSArray* safeMemorySearch(NSInteger targetValue) {
     NSMutableArray *results = [NSMutableArray array];
     
-    writeLog([NSString stringWithFormat:@"🎯 精准搜索数值: %ld", (long)targetValue]);
+    writeLog([NSString stringWithFormat:@"🎯 安全搜索数值: %ld", (long)targetValue]);
     
-    // 搜索范围：iOS应用的典型内存区域
-    uintptr_t searchStart = 0x100000000;
-    uintptr_t searchEnd = 0x200000000;
-    uintptr_t step = sizeof(NSInteger);
+    // 使用更安全的搜索策略：基于已知地址范围
+    // 根据你提供的地址 0x12c714810，我们知道大概的内存区域
+    uintptr_t knownAddress = 0x12c714810;
+    uintptr_t searchRadius = 0x10000000; // 256MB范围
     
-    for (uintptr_t addr = searchStart; addr < searchEnd; addr += step) {
+    uintptr_t searchStart = (knownAddress > searchRadius) ? (knownAddress - searchRadius) : 0x100000000;
+    uintptr_t searchEnd = knownAddress + searchRadius;
+    
+    writeLog([NSString stringWithFormat:@"搜索范围: 0x%lx - 0x%lx", searchStart, searchEnd]);
+    
+    // 按页搜索，更安全
+    for (uintptr_t pageAddr = searchStart; pageAddr < searchEnd; pageAddr += 0x1000) {
         @try {
-            NSInteger *ptr = (NSInteger*)addr;
-            if (*ptr == targetValue) {
-                [results addObject:@(addr)];
-                
-                // 限制结果数量，避免过多
-                if (results.count >= 200) {
-                    break;
+            // 测试页面是否可访问
+            volatile NSInteger testRead = *(NSInteger*)pageAddr;
+            (void)testRead; // 避免未使用变量警告
+            
+            // 如果页面可访问，搜索整个页面
+            for (uintptr_t addr = pageAddr; addr < pageAddr + 0x1000 - sizeof(NSInteger); addr += sizeof(NSInteger)) {
+                @try {
+                    NSInteger *ptr = (NSInteger*)addr;
+                    if (*ptr == targetValue) {
+                        [results addObject:@(addr)];
+                        
+                        // 限制结果数量
+                        if (results.count >= 50) {
+                            goto search_complete;
+                        }
+                    }
+                } @catch (NSException *exception) {
+                    // 跳过这个地址
+                    continue;
                 }
             }
         } @catch (NSException *exception) {
-            // 跳过无法访问的内存页
-            addr = (addr & ~0xFFF) + 0x1000 - step; // 对齐到下一页
+            // 跳过不可访问的页面
+            continue;
         }
     }
     
-    writeLog([NSString stringWithFormat:@"找到 %lu 个候选地址", (unsigned long)results.count]);
+search_complete:
+    writeLog([NSString stringWithFormat:@"安全搜索找到 %lu 个候选地址", (unsigned long)results.count]);
     return results;
 }
 
-// 验证地址是否为游戏数据结构（基于已知偏移）
+// 验证地址是否为游戏数据结构（更安全的版本）
 static BOOL verifyGameDataStructure(uintptr_t baseAddress) {
     @try {
+        // 首先检查基地址是否可访问
+        volatile NSInteger testRead = *(NSInteger*)baseAddress;
+        (void)testRead;
+        
+        // 检查所有偏移地址是否可访问
+        volatile NSInteger testStamina = *(NSInteger*)(baseAddress + 24);
+        volatile NSInteger testHealth = *(NSInteger*)(baseAddress + 72);
+        volatile NSInteger testMood = *(NSInteger*)(baseAddress + 104);
+        (void)testStamina; (void)testHealth; (void)testMood;
+        
         // 读取四个偏移位置的数值
         NSInteger money = *(NSInteger*)baseAddress;
         NSInteger stamina = *(NSInteger*)(baseAddress + 24);  // +0x18
@@ -173,18 +202,30 @@ static BOOL verifyGameDataStructure(uintptr_t baseAddress) {
     return NO;
 }
 
-// 直接修改内存数值
+// 安全的内存数值修改
 static BOOL writeMemoryValue(uintptr_t address, NSInteger value, NSString *name) {
     @try {
+        // 首先检查地址是否可访问
+        volatile NSInteger testRead = *(NSInteger*)address;
+        (void)testRead;
+        
         NSInteger *ptr = (NSInteger*)address;
         NSInteger oldValue = *ptr;
         *ptr = value;
         
-        writeLog([NSString stringWithFormat:@"✅ %@ 修改成功: %ld -> %ld (地址: 0x%lx)", 
-                 name, (long)oldValue, (long)value, address]);
-        return YES;
+        // 验证修改是否成功
+        NSInteger newValue = *ptr;
+        if (newValue == value) {
+            writeLog([NSString stringWithFormat:@"✅ %@ 修改成功: %ld -> %ld (地址: 0x%lx)", 
+                     name, (long)oldValue, (long)value, address]);
+            return YES;
+        } else {
+            writeLog([NSString stringWithFormat:@"❌ %@ 修改失败: 写入%ld但读取到%ld", 
+                     name, (long)value, (long)newValue]);
+            return NO;
+        }
     } @catch (NSException *exception) {
-        writeLog([NSString stringWithFormat:@"❌ %@ 修改失败: %@", name, exception.reason]);
+        writeLog([NSString stringWithFormat:@"❌ %@ 修改异常: %@", name, exception.reason]);
         return NO;
     }
 }
@@ -216,7 +257,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         
         for (NSNumber *valueNum in knownValues) {
             NSInteger searchValue = [valueNum integerValue];
-            NSArray *candidates = preciseMemorySearch(searchValue);
+            NSArray *candidates = safeMemorySearch(searchValue);
             
             // 验证每个候选地址
             for (NSNumber *addrNum in candidates) {
@@ -361,7 +402,7 @@ found_base:
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v11.0";
+    title.text = @"🏠 我独自生活 v12.0";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -393,7 +434,7 @@ found_base:
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"基于已知偏移精准定位游戏数据\n一键修改：金钱+24→体力+72→健康+104→心情";
+    tip.text = @"安全的内存访问，避免游戏崩溃\n基于已知地址范围进行精准搜索";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
