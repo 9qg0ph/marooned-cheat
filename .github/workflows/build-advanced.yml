@@ -1,17 +1,17 @@
-name: Build WoduziCheat Advanced v16.0
+name: Build WoduziCheat v16.0
 
 on:
   push:
     branches: [ main ]
     paths:
-      - '我独自生活Dylib/WoduziCheat_Advanced.m'
+      - '我独自生活Dylib/WoduziCheat.m'
       - '.github/workflows/build-advanced.yml'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build-advanced:
+  build:
     runs-on: macos-latest
     
     steps:
@@ -25,63 +25,27 @@ jobs:
         
     - name: Show build info
       run: |
-        echo "🚀 Building WoduziCheat Advanced v16.0"
+        echo "🚀 Building WoduziCheat v16.0 (Based on PlayGearLib.dylib Analysis)"
         echo "📋 Build Configuration:"
         echo "   Architecture: arm64"
         echo "   Min iOS Version: 14.0"
-        echo "   Source: WoduziCheat_Advanced.m"
-        echo "   Output: WoduziCheat_Advanced.dylib"
-        echo "   Based on: PlayGearLib.dylib technology analysis"
+        echo "   Source: WoduziCheat.m"
+        echo "   Output: WoduziCheat.dylib"
+        echo "   Technology: Multi-layer Hook + Intelligent Recognition"
         
-    - name: Build Advanced Version
+    - name: Build WoduziCheat v16.0
       run: |
         cd "我独自生活Dylib"
         
         # 检查源文件
-        if [ ! -f "WoduziCheat_Advanced.m" ]; then
-          echo "❌ Error: WoduziCheat_Advanced.m not found"
+        if [ ! -f "WoduziCheat.m" ]; then
+          echo "❌ Error: WoduziCheat.m not found"
           exit 1
         fi
         
-        echo "🔨 Compiling WoduziCheat Advanced v16.0..."
+        echo "🔨 Compiling WoduziCheat v16.0..."
         
-        # 编译高级版本
-        clang -arch arm64 \
-          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
-          -miphoneos-version-min=14.0 \
-          -dynamiclib \
-          -framework UIKit \
-          -framework Foundation \
-          -fobjc-arc \
-          -O2 \
-          -o WoduziCheat_Advanced.dylib \
-          WoduziCheat_Advanced.m
-          
-        # 检查编译结果
-        if [ $? -eq 0 ]; then
-          echo "✅ Advanced version compiled successfully!"
-          ls -lh WoduziCheat_Advanced.dylib
-        else
-          echo "❌ Advanced version compilation failed!"
-          exit 1
-        fi
-        
-        # 代码签名
-        if command -v ldid &> /dev/null; then
-          echo "🔐 Code signing with ldid..."
-          ldid -S WoduziCheat_Advanced.dylib
-          echo "✅ Code signing completed"
-        else
-          echo "⚠️ ldid not found, skipping code signing"
-        fi
-        
-    - name: Build Traditional Version (v15.3)
-      run: |
-        cd "我独自生活Dylib"
-        
-        echo "🔨 Compiling WoduziCheat Traditional v15.3..."
-        
-        # 编译传统版本
+        # 编译
         clang -arch arm64 \
           -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
           -miphoneos-version-min=14.0 \
@@ -95,10 +59,10 @@ jobs:
           
         # 检查编译结果
         if [ $? -eq 0 ]; then
-          echo "✅ Traditional version compiled successfully!"
+          echo "✅ WoduziCheat v16.0 compiled successfully!"
           ls -lh WoduziCheat.dylib
         else
-          echo "❌ Traditional version compilation failed!"
+          echo "❌ Compilation failed!"
           exit 1
         fi
         
@@ -118,60 +82,47 @@ jobs:
         echo "📊 Build Summary:" > build_info.txt
         echo "=================" >> build_info.txt
         echo "" >> build_info.txt
-        echo "🚀 WoduziCheat v16.0 Advanced Edition" >> build_info.txt
-        echo "Based on PlayGearLib.dylib technology analysis" >> build_info.txt
+        echo "🚀 WoduziCheat v16.0 - PlayGearLib Technology Edition" >> build_info.txt
+        echo "Based on deep analysis of PlayGearLib.dylib" >> build_info.txt
         echo "" >> build_info.txt
-        echo "📋 Features:" >> build_info.txt
+        echo "🔧 Technical Features:" >> build_info.txt
         echo "• Multi-layer Hook system (NSUserDefaults + memcpy/memmove)" >> build_info.txt
-        echo "• Intelligent value recognition engine" >> build_info.txt
+        echo "• Intelligent value recognition engine (keyword + range detection)" >> build_info.txt
         echo "• PlayGearLib standard values (2.1B money/stamina, 100K health/mood)" >> build_info.txt
-        echo "• Real-time interception statistics" >> build_info.txt
+        echo "• Real-time interception statistics and monitoring" >> build_info.txt
         echo "• Modular architecture (WDZController + WDZGameManager)" >> build_info.txt
+        echo "• Professional UI with advanced controls" >> build_info.txt
         echo "" >> build_info.txt
-        echo "🛡️ WoduziCheat v15.3 Traditional Edition" >> build_info.txt
-        echo "Stable manual guidance version" >> build_info.txt
+        echo "🎯 Learned from PlayGearLib.dylib:" >> build_info.txt
+        echo "• shenling control class design pattern" >> build_info.txt
+        echo "• ImgTool data management class pattern" >> build_info.txt
+        echo "• Multi-framework Hook architecture" >> build_info.txt
+        echo "• Professional value standards (21亿/10万)" >> build_info.txt
         echo "" >> build_info.txt
-        echo "📋 Features:" >> build_info.txt
-        echo "• Manual modification guidance" >> build_info.txt
-        echo "• 100% crash-free (no automatic modifications)" >> build_info.txt
-        echo "• Detailed iGameGod tutorials" >> build_info.txt
-        echo "• Memory offset calculations" >> build_info.txt
-        echo "" >> build_info.txt
-        echo "📁 Files:" >> build_info.txt
-        if [ -f "WoduziCheat_Advanced.dylib" ]; then
-          echo "✅ WoduziCheat_Advanced.dylib - $(ls -lh WoduziCheat_Advanced.dylib | awk '{print $5}')" >> build_info.txt
-        fi
+        echo "📁 Output File:" >> build_info.txt
         if [ -f "WoduziCheat.dylib" ]; then
           echo "✅ WoduziCheat.dylib - $(ls -lh WoduziCheat.dylib | awk '{print $5}')" >> build_info.txt
         fi
         echo "" >> build_info.txt
         echo "🕐 Build Time: $(date)" >> build_info.txt
         echo "🏗️ Built with GitHub Actions on macOS" >> build_info.txt
+        echo "🎓 Technology learned from PlayGearLib.dylib analysis" >> build_info.txt
         
         cat build_info.txt
         
-    - name: Upload Advanced Version
+    - name: Upload WoduziCheat v16.0
       uses: actions/upload-artifact@v4
       with:
-        name: WoduziCheat-Advanced-v16.0
-        path: |
-          我独自生活Dylib/WoduziCheat_Advanced.dylib
-          我独自生活Dylib/build_info.txt
-        retention-days: 30
-        
-    - name: Upload Traditional Version  
-      uses: actions/upload-artifact@v4
-      with:
-        name: WoduziCheat-Traditional-v15.3
+        name: WoduziCheat-v16.0-PlayGearLib-Edition
         path: |
           我独自生活Dylib/WoduziCheat.dylib
           我独自生活Dylib/build_info.txt
         retention-days: 30
         
-    - name: Upload All Documentation
+    - name: Upload Documentation
       uses: actions/upload-artifact@v4
       with:
-        name: Documentation-and-Analysis
+        name: Technical-Documentation
         path: |
           我独自生活Dylib/README.md
           我独自生活Dylib/PlayGearLib技术学习报告.md
