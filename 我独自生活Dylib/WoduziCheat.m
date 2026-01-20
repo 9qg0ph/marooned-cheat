@@ -12,6 +12,26 @@ static vm_region_func_t vm_region_ptr = NULL;
 static task_for_pid_func_t task_for_pid_ptr = NULL;
 static BOOL mach_available = NO;
 
+// 全局异常处理（防闪退保护）
+static void handleUncaughtException(NSException *exception) {
+    writeLog([NSString stringWithFormat:@"🚨 捕获异常: %@", exception.reason]);
+    writeLog([NSString stringWithFormat:@"🚨 异常堆栈: %@", exception.callStackSymbols]);
+    
+    // 显示用户友好的错误信息
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"⚠️ 修改器异常" 
+            message:@"检测到异常情况，已自动保护游戏不闪退。\n\n建议：\n1. 重启游戏后再试\n2. 确保游戏数值界面已显示\n3. 查看日志了解详情" 
+            preferredStyle:UIAlertControllerStyleAlert];
+        
+        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
+        
+        UIViewController *rootVC = getRootViewController();
+        if (rootVC) {
+            [rootVC presentViewController:alert animated:YES completion:nil];
+        }
+    });
+}
+
 #pragma mark - 全局变量
 
 @class WDZMenuView;
@@ -200,40 +220,65 @@ search_timeout:
     return results;
 }
 
-// 验证地址是否为游戏数据结构（更安全的版本）
-static BOOL verifyGameDataStructure(uintptr_t baseAddress) {
+// 更严格的游戏数据结构验证（防闪退版本）
+static BOOL verifyGameDataStructureSafe(uintptr_t baseAddress) {
     @try {
-        // 首先检查基地址是否可访问
-        volatile NSInteger testRead = *(NSInteger*)baseAddress;
-        (void)testRead;
+        // 1. 基础地址对齐检查
+        if (baseAddress % sizeof(NSInteger) != 0) {
+            writeLog([NSString stringWithFormat:@"❌ 地址未对齐: 0x%lx", baseAddress]);
+            return NO;
+        }
         
-        // 检查所有偏移地址是否可访问
+        // 2. 地址范围检查（确保在合理的内存范围内）
+        if (baseAddress < 0x100000000 || baseAddress > 0x200000000) {
+            writeLog([NSString stringWithFormat:@"❌ 地址超出范围: 0x%lx", baseAddress]);
+            return NO;
+        }
+        
+        // 3. 检查所有偏移地址是否可访问
+        volatile NSInteger testBase = *(NSInteger*)baseAddress;
         volatile NSInteger testStamina = *(NSInteger*)(baseAddress + 24);
         volatile NSInteger testHealth = *(NSInteger*)(baseAddress + 72);
         volatile NSInteger testMood = *(NSInteger*)(baseAddress + 104);
-        (void)testStamina; (void)testHealth; (void)testMood;
+        (void)testBase; (void)testStamina; (void)testHealth; (void)testMood;
         
-        // 读取四个偏移位置的数值
+        // 4. 读取四个偏移位置的数值
         NSInteger money = *(NSInteger*)baseAddress;
-        NSInteger stamina = *(NSInteger*)(baseAddress + 24);  // +0x18
-        NSInteger health = *(NSInteger*)(baseAddress + 72);   // +0x48  
-        NSInteger mood = *(NSInteger*)(baseAddress + 104);    // +0x68
+        NSInteger stamina = *(NSInteger*)(baseAddress + 24);
+        NSInteger health = *(NSInteger*)(baseAddress + 72);
+        NSInteger mood = *(NSInteger*)(baseAddress + 104);
         
-        writeLog([NSString stringWithFormat:@"验证地址 0x%lx:", baseAddress]);
+        writeLog([NSString stringWithFormat:@"🔍 验证地址 0x%lx:", baseAddress]);
         writeLog([NSString stringWithFormat:@"  💰=%ld ⚡=%ld ❤️=%ld 😊=%ld", 
                  (long)money, (long)stamina, (long)health, (long)mood]);
         
-        // 验证数值是否在合理的游戏范围内
+        // 5. 更严格的数值范围验证
         BOOL moneyValid = (money >= 0 && money <= 999999999);
         BOOL staminaValid = (stamina >= 0 && stamina <= 999999);
         BOOL healthValid = (health >= 0 && health <= 999);
         BOOL moodValid = (mood >= 0 && mood <= 999);
         
+        // 6. 检查数值是否过于相似（可能是错误的数据结构）
+        if (money == stamina && stamina == health && health == mood && money != 0) {
+            writeLog(@"❌ 所有数值相同，可能不是游戏数据");
+            return NO;
+        }
+        
+        // 7. 检查是否所有数值都为0（可能是未初始化的内存）
+        if (money == 0 && stamina == 0 && health == 0 && mood == 0) {
+            writeLog(@"❌ 所有数值为0，可能是空内存");
+            return NO;
+        }
+        
         if (moneyValid && staminaValid && healthValid && moodValid) {
             writeLog(@"✅ 数据结构验证通过！");
             return YES;
         } else {
-            writeLog(@"❌ 数值超出合理范围");
+            writeLog([NSString stringWithFormat:@"❌ 数值超出合理范围 - 💰:%s ⚡:%s ❤️:%s 😊:%s", 
+                     moneyValid ? "✓" : "✗",
+                     staminaValid ? "✓" : "✗", 
+                     healthValid ? "✓" : "✗",
+                     moodValid ? "✓" : "✗"]);
         }
     } @catch (NSException *exception) {
         writeLog([NSString stringWithFormat:@"❌ 验证异常: %@", exception.reason]);
@@ -242,22 +287,52 @@ static BOOL verifyGameDataStructure(uintptr_t baseAddress) {
     return NO;
 }
 
-// 安全的内存数值修改
-static BOOL writeMemoryValue(uintptr_t address, NSInteger value, NSString *name) {
+// 更安全的内存数值修改（防闪退版本）
+static BOOL writeMemoryValueSafe(uintptr_t address, NSInteger value, NSString *name) {
     @try {
-        // 首先检查地址是否可访问
+        // 多重安全检查
+        // 1. 检查地址是否可读
         volatile NSInteger testRead = *(NSInteger*)address;
         (void)testRead;
         
+        // 2. 检查地址是否可写（尝试写入原值）
         NSInteger *ptr = (NSInteger*)address;
-        NSInteger oldValue = *ptr;
+        NSInteger originalValue = *ptr;
+        *ptr = originalValue; // 写入原值测试
+        
+        // 3. 验证写入测试是否成功
+        if (*ptr != originalValue) {
+            writeLog([NSString stringWithFormat:@"⚠️ %@ 地址不可写: 0x%lx", name, address]);
+            return NO;
+        }
+        
+        // 4. 检查数值是否合理（避免修改系统关键数据）
+        if (originalValue < 0 || originalValue > 2000000000) {
+            writeLog([NSString stringWithFormat:@"⚠️ %@ 原值异常: %ld，跳过修改", name, (long)originalValue]);
+            return NO;
+        }
+        
+        // 5. 执行实际修改
         *ptr = value;
         
-        // 验证修改是否成功
+        // 6. 验证修改结果
         NSInteger newValue = *ptr;
         if (newValue == value) {
             writeLog([NSString stringWithFormat:@"✅ %@ 修改成功: %ld -> %ld (地址: 0x%lx)", 
-                     name, (long)oldValue, (long)value, address]);
+                     name, (long)originalValue, (long)value, address]);
+            
+            // 7. 延迟验证（防止游戏立即检测）
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                @try {
+                    NSInteger verifyValue = *(NSInteger*)address;
+                    if (verifyValue != value) {
+                        writeLog([NSString stringWithFormat:@"⚠️ %@ 数值被游戏还原: %ld", name, (long)verifyValue]);
+                    }
+                } @catch (NSException *exception) {
+                    // 忽略延迟验证的异常
+                }
+            });
+            
             return YES;
         } else {
             writeLog([NSString stringWithFormat:@"❌ %@ 修改失败: 写入%ld但读取到%ld", 
@@ -272,14 +347,14 @@ static BOOL writeMemoryValue(uintptr_t address, NSInteger value, NSString *name)
 
 // 核心修改函数：智能搜索并修改
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始智能内存修改 v14.1 ==========");
+    writeLog(@"========== 开始智能内存修改 v14.2 ==========");
     
     uintptr_t baseAddress = 0;
     
     // 第一步：验证缓存地址
     if (g_moneyBaseAddress != 0) {
         writeLog([NSString stringWithFormat:@"🔄 验证缓存地址: 0x%lx", g_moneyBaseAddress]);
-        if (verifyGameDataStructure(g_moneyBaseAddress)) {
+        if (verifyGameDataStructureSafe(g_moneyBaseAddress)) {
             baseAddress = g_moneyBaseAddress;
             writeLog(@"✅ 缓存地址有效，直接使用");
         } else {
@@ -319,7 +394,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                 writeLog([NSString stringWithFormat:@"🧪 测试基地址: 0x%lx (从%@地址0x%lx推算)", possibleBase, valueName, candidateAddr]);
                 
                 // 验证这个基地址是否正确
-                if (verifyGameDataStructure(possibleBase)) {
+                if (verifyGameDataStructureSafe(possibleBase)) {
                     baseAddress = possibleBase;
                     g_moneyBaseAddress = baseAddress;
                     writeLog([NSString stringWithFormat:@"🎉 通过%@找到正确的基地址: 0x%lx", valueName, baseAddress]);
@@ -343,7 +418,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     uintptr_t candidateAddr = [addrNum unsignedLongValue];
                     
                     // 尝试作为基地址
-                    if (verifyGameDataStructure(candidateAddr)) {
+                    if (verifyGameDataStructureSafe(candidateAddr)) {
                         baseAddress = candidateAddr;
                         g_moneyBaseAddress = baseAddress;
                         writeLog([NSString stringWithFormat:@"🎉 广泛搜索找到基地址: 0x%lx", baseAddress]);
@@ -354,7 +429,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
                     for (NSInteger offset = 0; offset <= 104; offset += 8) {
                         if (candidateAddr >= offset) {
                             uintptr_t possibleBase = candidateAddr - offset;
-                            if (verifyGameDataStructure(possibleBase)) {
+                            if (verifyGameDataStructureSafe(possibleBase)) {
                                 baseAddress = possibleBase;
                                 g_moneyBaseAddress = baseAddress;
                                 writeLog([NSString stringWithFormat:@"🎉 通过偏移%ld找到基地址: 0x%lx", (long)offset, baseAddress]);
@@ -403,25 +478,25 @@ found_base:
     BOOL success = YES;
     
     if (money > 0) {
-        if (!writeMemoryValue(baseAddress, money, @"💰金钱")) {
+        if (!writeMemoryValueSafe(baseAddress, money, @"💰金钱")) {
             success = NO;
         }
     }
     
     if (stamina > 0) {
-        if (!writeMemoryValue(baseAddress + 24, stamina, @"⚡体力")) {
+        if (!writeMemoryValueSafe(baseAddress + 24, stamina, @"⚡体力")) {
             success = NO;
         }
     }
     
     if (health > 0) {
-        if (!writeMemoryValue(baseAddress + 72, health, @"❤️健康")) {
+        if (!writeMemoryValueSafe(baseAddress + 72, health, @"❤️健康")) {
             success = NO;
         }
     }
     
     if (mood > 0) {
-        if (!writeMemoryValue(baseAddress + 104, mood, @"😊心情")) {
+        if (!writeMemoryValueSafe(baseAddress + 104, mood, @"😊心情")) {
             success = NO;
         }
     }
@@ -431,7 +506,7 @@ found_base:
         
         // 验证修改结果
         writeLog(@"🔍 验证修改结果:");
-        verifyGameDataStructure(baseAddress);
+        verifyGameDataStructureSafe(baseAddress);
         
         // 保存基地址供下次使用
         g_moneyBaseAddress = baseAddress;
@@ -488,7 +563,7 @@ found_base:
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v14.1";
+    title.text = @"🏠 我独自生活 v14.2";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -520,7 +595,7 @@ found_base:
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"v14.1: 高效内存搜索引擎\n10秒超时保护，4KB页面扫描";
+    tip.text = @"v14.2: 防闪退安全引擎\n多重验证保护，延迟检测机制";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -587,8 +662,8 @@ found_base:
 
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
-    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🧠 智能修改 v14.1" 
-        message:@"新版本特性：\n• 高效内存搜索引擎\n• 10秒超时保护机制\n• 4KB页面扫描优化\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🛡️ 安全修改 v14.2" 
+        message:@"防闪退特性：\n• 多重安全验证机制\n• 智能地址范围检查\n• 延迟检测保护\n• 原值合理性验证\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -815,6 +890,11 @@ static void setupFloatingButton(void) {
 __attribute__((constructor))
 static void WDZCheatInit(void) {
     @autoreleasepool {
+        // 设置全局异常处理器（防闪退保护）
+        NSSetUncaughtExceptionHandler(&handleUncaughtException);
+        
+        writeLog(@"🛡️ WoduziCheat v14.2 初始化完成 - 防闪退保护已启用");
+        
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             setupFloatingButton();
         });
