@@ -387,7 +387,7 @@
             
             switch(inputStep) {
                 case 0:
-                    inputValue = h5gg.prompt("💰 请输入当前金钱数值：", "474");
+                    inputValue = prompt("💰 请输入当前金钱数值：", "474");
                     if (inputValue === null || inputValue === "") {
                         alert("❌ 输入取消或为空！");
                         return;
@@ -400,7 +400,7 @@
                     break;
                     
                 case 1:
-                    inputValue = h5gg.prompt("⚡ 请输入当前体力数值：", "136");
+                    inputValue = prompt("⚡ 请输入当前体力数值：", "136");
                     if (inputValue === null || inputValue === "") {
                         alert("❌ 输入取消或为空！");
                         return;
@@ -413,7 +413,7 @@
                     break;
                     
                 case 2:
-                    inputValue = h5gg.prompt("❤️ 请输入当前健康数值：", "93");
+                    inputValue = prompt("❤️ 请输入当前健康数值：", "93");
                     if (inputValue === null || inputValue === "") {
                         alert("❌ 输入取消或为空！");
                         return;
@@ -426,7 +426,7 @@
                     break;
                     
                 case 3:
-                    inputValue = h5gg.prompt("😊 请输入当前心情数值：", "88");
+                    inputValue = prompt("😊 请输入当前心情数值：", "88");
                     if (inputValue === null || inputValue === "") {
                         alert("❌ 输入取消或为空！");
                         return;
@@ -440,7 +440,7 @@
                     // 所有输入完成，确认修改
                     var confirmMsg = "确认修改以下数值？\n\n💰 金钱: " + inputValues.money + " → 2,100,000,000\n⚡ 体力: " + inputValues.stamina + " → 2,100,000,000\n❤️ 健康: " + inputValues.health + " → 10,000\n😊 心情: " + inputValues.mood + " → 10,000";
                     
-                    if (h5gg.confirm(confirmMsg)) {
+                    if (confirm(confirmMsg)) {
                         // 执行修改
                         modifyByOffset(inputValues.money, inputValues.stamina, inputValues.health, inputValues.mood);
                     }
