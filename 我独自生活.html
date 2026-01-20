@@ -257,6 +257,7 @@
                 
                 <!-- 功能按钮 -->
                 <a href="javascript:void(0);" onclick="autoModify()" class="button-style">🎁 一键全开修改</a>
+                <a href="javascript:void(0);" onclick="findAnchors()" class="button-style">🔍 寻找锚点特征值</a>
                 <a href="javascript:void(0);" onclick="startModify()" class="button-style">📝 手动输入修改</a>
                 
                 <div>
@@ -267,62 +268,223 @@
     </div>
 
     <script>
-        // 自动修改功能 - 不需要输入当前值
+        // 自动修改功能 - 使用固定特征值锚点（参考无尽噩梦方法）
         function autoModify() {
             h5gg.clearResults();
             
-            // 方法1：智能搜索游戏数据结构
-            var foundCount = smartSearch();
+            // 尝试寻找游戏中的固定特征值作为锚点
+            var success = findGameDataByAnchor();
             
-            if (foundCount > 0) {
-                alert("🎁 自动修改成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n修改了 " + foundCount + " 个地址");
+            if (success) {
+                alert("🎁 自动修改成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！");
             } else {
-                alert("❌ 自动修改失败\n未找到有效的游戏数据地址\n请尝试手动输入修改或确保游戏正在运行");
+                alert("❌ 自动修改失败\n未找到游戏数据锚点\n请尝试手动输入修改");
             }
         }
         
-        // 智能搜索函数
-        function smartSearch() {
-            var modifiedCount = 0;
-            
-            // 方法1：搜索常见的数值范围，而不是固定值
-            var searchRanges = [
-                {min: 50, max: 200},    // 小数值范围
-                {min: 200, max: 1000},  // 中等数值范围
-                {min: 1000, max: 5000}, // 大数值范围
-                {min: 10, max: 100}     // 很小数值范围
+        // 使用锚点搜索法（类似无尽噩梦的-9.81方法）
+        function findGameDataByAnchor() {
+            // 尝试多个可能的游戏固定值作为锚点
+            var anchors = [
+                {value: '100', type: 'I32', desc: '满值体力'},
+                {value: '1000', type: 'I32', desc: '经验值'},
+                {value: '24', type: 'I32', desc: '小时数'},
+                {value: '60', type: 'I32', desc: '分钟数'},
+                {value: '7', type: 'I32', desc: '星期数'},
+                {value: '365', type: 'I32', desc: '天数'},
+                {value: '50', type: 'I32', desc: '基础值'},
+                {value: '200', type: 'I32', desc: '上限值'}
             ];
             
-            for (var r = 0; r < searchRanges.length; r++) {
+            for (var a = 0; a < anchors.length; a++) {
                 try {
-                    // 搜索范围内的多个数值
-                    for (var val = searchRanges[r].min; val <= searchRanges[r].max; val += 25) {
-                        h5gg.clearResults();
-                        var count = h5gg.searchNumber(val.toString(), 'I32', '0x00000000', '0x20000000000');
+                    h5gg.clearResults();
+                    
+                    // 搜索锚点值
+                    var count = h5gg.searchNumber(anchors[a].value, anchors[a].type, '0x00000000', '0x20000000000');
+                    
+                    if (count > 0 && count < 100) {
+                        // 在锚点附近搜索游戏数据
+                        var results = h5gg.getResults(count);
                         
-                        if (count > 0 && count < 100) {
-                            var results = h5gg.getResults(Math.min(count, 50));
+                        for (var i = 0; i < results.length; i++) {
+                            var anchorAddr = results[i].address;
                             
-                            for (var i = 0; i < results.length; i++) {
-                                var baseAddr = results[i].address;
-                                
-                                if (tryModifyAtAddress(baseAddr)) {
-                                    modifiedCount++;
-                                    if (modifiedCount >= 1) break; // 找到1个有效地址就够了
-                                }
+                            // 尝试在锚点附近的不同偏移位置寻找游戏数据
+                            if (searchNearAnchor(anchorAddr)) {
+                                return true; // 找到并修改成功
                             }
-                            
-                            if (modifiedCount > 0) break;
                         }
                     }
-                    
-                    if (modifiedCount > 0) break;
                 } catch (e) {
-                    continue; // 忽略搜索错误，继续下一个范围
+                    continue;
                 }
             }
             
-            return modifiedCount;
+            return false;
+        }
+        
+        // 在锚点附近搜索游戏数据
+        function searchNearAnchor(anchorAddr) {
+            // 尝试多个偏移范围
+            var offsets = [-200, -100, -50, 0, 50, 100, 200, 300, 500];
+            
+            for (var o = 0; o < offsets.length; o++) {
+                try {
+                    var testAddr = '0x' + (parseInt(anchorAddr, 16) + offsets[o]).toString(16);
+                    var testValue = h5gg.getValue(testAddr, 'I32');
+                    
+                    // 检查是否可能是游戏数据（合理范围内的数值）
+                    if (testValue >= 10 && testValue <= 10000) {
+                        // 验证是否为游戏数据结构（检查偏移关系）
+                        if (validateGameData(testAddr)) {
+                            return true;
+                        }
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+            
+            return false;
+        }
+        
+        // 验证并修改游戏数据
+        function validateGameData(baseAddr) {
+            try {
+                // 计算偏移地址
+                var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
+                var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
+                var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
+                
+                // 读取偏移地址的值
+                var baseValue = h5gg.getValue(baseAddr, 'I32');
+                var staminaValue = h5gg.getValue(staminaAddr, 'I32');
+                var healthValue = h5gg.getValue(healthAddr, 'I32');
+                var moodValue = h5gg.getValue(moodAddr, 'I32');
+                
+                // 验证数值是否在游戏合理范围内
+                if (baseValue >= 10 && baseValue <= 50000 &&
+                    staminaValue >= 0 && staminaValue <= 50000 &&
+                    healthValue >= 0 && healthValue <= 1000 &&
+                    moodValue >= 0 && moodValue <= 1000) {
+                    
+                    // 执行修改
+                    h5gg.setValue(baseAddr, 2100000000, 'I32');        // 21亿金钱
+                    h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
+                    h5gg.setValue(healthAddr, 10000, 'I32');            // 10000健康
+                    h5gg.setValue(moodAddr, 10000, 'I32');              // 10000心情
+                    
+                    return true;
+                }
+            } catch (e) {
+                // 忽略无效地址
+            }
+            
+            return false;
+        }
+        
+        // 锚点发现工具
+        function findAnchors() {
+            alert("🔍 开始寻找游戏中的固定特征值...\n这将帮助我们找到稳定的锚点");
+            
+            // 常见的游戏固定值
+            var candidates = [
+                // 时间相关
+                {val: '24', desc: '小时数'},
+                {val: '60', desc: '分钟/秒数'},
+                {val: '7', desc: '星期数'},
+                {val: '12', desc: '月份数'},
+                
+                // 游戏机制
+                {val: '100', desc: '满值/百分比'},
+                {val: '1000', desc: '基础单位'},
+                {val: '50', desc: '中间值'},
+                {val: '200', desc: '双倍值'},
+                
+                // 可能的引擎常数
+                {val: '30', desc: '帧率'},
+                {val: '16', desc: '像素单位'},
+                {val: '32', desc: '系统位数'},
+                
+                // Unity常见值
+                {val: '1', desc: '单位值'},
+                {val: '255', desc: '颜色最大值'}
+            ];
+            
+            var foundAnchors = [];
+            
+            for (var i = 0; i < candidates.length; i++) {
+                try {
+                    h5gg.clearResults();
+                    var count = h5gg.searchNumber(candidates[i].val, 'I32', '0x00000000', '0x20000000000');
+                    
+                    if (count > 0 && count < 50) { // 理想的锚点：存在但不太多
+                        foundAnchors.push({
+                            value: candidates[i].val,
+                            desc: candidates[i].desc,
+                            count: count
+                        });
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+            
+            if (foundAnchors.length > 0) {
+                var report = "🎯 发现潜在锚点：\n\n";
+                for (var j = 0; j < Math.min(foundAnchors.length, 8); j++) {
+                    report += "• " + foundAnchors[j].value + " (" + foundAnchors[j].desc + ") - " + foundAnchors[j].count + "个\n";
+                }
+                report += "\n💡 建议测试这些值作为锚点";
+                alert(report);
+                
+                // 自动测试最有希望的锚点
+                testBestAnchor(foundAnchors);
+            } else {
+                alert("❌ 未发现明显的锚点特征值\n建议：\n1. 观察游戏界面的固定数值\n2. 查看游戏设置中的常数\n3. 尝试手动输入修改");
+            }
+        }
+        
+        // 测试最佳锚点
+        function testBestAnchor(anchors) {
+            // 选择数量最少的锚点进行测试（通常最稳定）
+            anchors.sort(function(a, b) { return a.count - b.count; });
+            
+            var bestAnchor = anchors[0];
+            alert("🧪 测试最佳锚点: " + bestAnchor.value + "\n数量: " + bestAnchor.count + "\n描述: " + bestAnchor.desc);
+            
+            // 使用这个锚点尝试修改
+            if (testAnchorModification(bestAnchor.value)) {
+                alert("🎉 锚点测试成功！\n已使用 " + bestAnchor.value + " 作为锚点完成修改");
+            } else {
+                alert("❌ 锚点测试失败\n" + bestAnchor.value + " 无法定位到游戏数据\n请尝试其他方法");
+            }
+        }
+        
+        // 测试锚点修改
+        function testAnchorModification(anchorValue) {
+            try {
+                h5gg.clearResults();
+                var count = h5gg.searchNumber(anchorValue, 'I32', '0x00000000', '0x20000000000');
+                
+                if (count > 0) {
+                    var results = h5gg.getResults(count);
+                    
+                    for (var i = 0; i < results.length; i++) {
+                        var anchorAddr = results[i].address;
+                        
+                        // 在锚点附近搜索游戏数据
+                        if (searchNearAnchor(anchorAddr)) {
+                            return true;
+                        }
+                    }
+                }
+            } catch (e) {
+                // 忽略错误
+            }
+            
+            return false;
         }
         
         // 尝试在指定地址修改数值
