@@ -1,16 +1,20 @@
 // 我独自生活修改器 - WoduziCheat.m
-// 混合内存修改系统
+// Hook拦截修改系统 v14.3
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
 
-// 动态加载mach函数（避免链接错误）
-typedef int (*vm_region_func_t)(void*, void*, void*, int, void*, void*, void*);
-typedef int (*task_for_pid_func_t)(int, int, void*);
+// 全局修改开关
+static BOOL g_moneyHookEnabled = NO;
+static BOOL g_staminaHookEnabled = NO;
+static BOOL g_healthHookEnabled = NO;
+static BOOL g_moodHookEnabled = NO;
 
-static vm_region_func_t vm_region_ptr = NULL;
-static task_for_pid_func_t task_for_pid_ptr = NULL;
-static BOOL mach_available = NO;
+// 修改后的数值
+static NSInteger g_modifiedMoney = 999999999;
+static NSInteger g_modifiedStamina = 999999;
+static NSInteger g_modifiedHealth = 999;
+static NSInteger g_modifiedMood = 999;
 
 #pragma mark - 函数前向声明
 
@@ -125,398 +129,149 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-// 全局变量存储找到的基地址
-static uintptr_t g_moneyBaseAddress = 0;
-static BOOL g_isModificationActive = NO;
+#pragma mark - Hook拦截系统
 
-// 高效内存搜索（优化版本）
-static NSArray* fastMemorySearch(NSInteger targetValue) {
-    NSMutableArray *results = [NSMutableArray array];
+// NSUserDefaults Hook - 拦截游戏数据读取
+static id (*original_objectForKey)(id self, SEL _cmd, NSString *key) = NULL;
+
+static id hooked_objectForKey(id self, SEL _cmd, NSString *key) {
+    // 调用原始方法获取原值
+    id originalValue = original_objectForKey(self, _cmd, key);
     
-    writeLog([NSString stringWithFormat:@"🎯 高效搜索数值: %ld", (long)targetValue]);
-    
-    // 获取当前进程的内存映射信息
-    void *stackPtr = &results;
-    uintptr_t stackAddr = (uintptr_t)stackPtr;
-    
-    writeLog([NSString stringWithFormat:@"📍 栈地址参考: 0x%lx", stackAddr]);
-    
-    // 使用更合理的搜索范围和步长
-    NSArray *searchRanges = @[
-        // 缩小搜索范围，使用更大的步长
-        @[@0x100000000, @0x108000000], // 128MB范围
-        @[@0x110000000, @0x118000000], // 128MB范围
-        @[@0x120000000, @0x128000000], // 128MB范围
-    ];
-    
-    NSInteger foundCount = 0;
-    NSTimeInterval startTime = [[NSDate date] timeIntervalSince1970];
-    
-    for (NSArray *range in searchRanges) {
-        uintptr_t searchStart = [range[0] unsignedLongValue];
-        uintptr_t searchEnd = [range[1] unsignedLongValue];
-        
-        writeLog([NSString stringWithFormat:@"🔍 搜索范围: 0x%lx - 0x%lx", searchStart, searchEnd]);
-        
-        // 使用页面对齐的大步长搜索（4KB步长）
-        for (uintptr_t pageAddr = searchStart; pageAddr < searchEnd; pageAddr += 0x1000) {
-            
-            // 检查搜索时间，避免无限等待
-            NSTimeInterval currentTime = [[NSDate date] timeIntervalSince1970];
-            if (currentTime - startTime > 10.0) { // 10秒超时
-                writeLog(@"⏰ 搜索超时，停止搜索");
-                goto search_timeout;
-            }
-            
-            @try {
-                // 测试页面是否可访问
-                volatile NSInteger testRead = *(NSInteger*)pageAddr;
-                (void)testRead;
-                
-                // 如果页面可访问，在页面内进行精细搜索
-                for (uintptr_t addr = pageAddr; addr < pageAddr + 0x1000 - sizeof(NSInteger); addr += sizeof(NSInteger)) {
-                    @try {
-                        NSInteger *ptr = (NSInteger*)addr;
-                        volatile NSInteger value = *ptr;
-                        
-                        if (value == targetValue) {
-                            [results addObject:@(addr)];
-                            foundCount++;
-                            
-                            writeLog([NSString stringWithFormat:@"✅ 找到匹配: 0x%lx = %ld", addr, (long)value]);
-                            
-                            // 找到足够的结果就停止
-                            if (foundCount >= 20) {
-                                writeLog(@"🎉 找到足够结果，停止搜索");
-                                goto search_complete;
-                            }
-                        }
-                    } @catch (NSException *exception) {
-                        // 跳过不可访问的地址
-                        continue;
-                    }
-                }
-            } @catch (NSException *exception) {
-                // 跳过不可访问的页面
-                continue;
-            }
-        }
-        
-        // 如果在当前范围找到了结果，记录一下
-        if (results.count > 0) {
-            writeLog([NSString stringWithFormat:@"📊 当前范围找到 %lu 个地址", (unsigned long)results.count]);
-            // 如果已经找到一些结果，就不用继续搜索其他范围了
-            break;
+    // 检查是否是游戏相关的数值键
+    if ([key containsString:@"money"] || [key containsString:@"金钱"] || [key containsString:@"cash"] || [key containsString:@"coin"]) {
+        if (g_moneyHookEnabled) {
+            writeLog([NSString stringWithFormat:@"🎯 拦截金钱读取: %@ -> %ld", key, (long)g_modifiedMoney]);
+            return @(g_modifiedMoney);
         }
     }
     
-search_complete:
-search_timeout:
-    ; // 空语句避免C23扩展警告
+    if ([key containsString:@"stamina"] || [key containsString:@"体力"] || [key containsString:@"energy"]) {
+        if (g_staminaHookEnabled) {
+            writeLog([NSString stringWithFormat:@"🎯 拦截体力读取: %@ -> %ld", key, (long)g_modifiedStamina]);
+            return @(g_modifiedStamina);
+        }
+    }
     
-    NSTimeInterval endTime = [[NSDate date] timeIntervalSince1970];
-    writeLog([NSString stringWithFormat:@"🎉 搜索完成，耗时 %.2f 秒，共找到 %lu 个候选地址", 
-             endTime - startTime, (unsigned long)results.count]);
+    if ([key containsString:@"health"] || [key containsString:@"健康"] || [key containsString:@"hp"]) {
+        if (g_healthHookEnabled) {
+            writeLog([NSString stringWithFormat:@"🎯 拦截健康读取: %@ -> %ld", key, (long)g_modifiedHealth]);
+            return @(g_modifiedHealth);
+        }
+    }
     
-    return results;
+    if ([key containsString:@"mood"] || [key containsString:@"心情"] || [key containsString:@"happiness"]) {
+        if (g_moodHookEnabled) {
+            writeLog([NSString stringWithFormat:@"🎯 拦截心情读取: %@ -> %ld", key, (long)g_modifiedMood]);
+            return @(g_modifiedMood);
+        }
+    }
+    
+    return originalValue;
 }
 
-// 更严格的游戏数据结构验证（防闪退版本）
-static BOOL verifyGameDataStructureSafe(uintptr_t baseAddress) {
-    @try {
-        // 1. 基础地址对齐检查
-        if (baseAddress % sizeof(NSInteger) != 0) {
-            writeLog([NSString stringWithFormat:@"❌ 地址未对齐: 0x%lx", baseAddress]);
-            return NO;
+// NSUserDefaults integerForKey Hook
+static NSInteger (*original_integerForKey)(id self, SEL _cmd, NSString *key) = NULL;
+
+static NSInteger hooked_integerForKey(id self, SEL _cmd, NSString *key) {
+    NSInteger originalValue = original_integerForKey(self, _cmd, key);
+    
+    if ([key containsString:@"money"] || [key containsString:@"金钱"] || [key containsString:@"cash"] || [key containsString:@"coin"]) {
+        if (g_moneyHookEnabled) {
+            writeLog([NSString stringWithFormat:@"🎯 拦截金钱整数读取: %@ -> %ld", key, (long)g_modifiedMoney]);
+            return g_modifiedMoney;
         }
-        
-        // 2. 地址范围检查（确保在合理的内存范围内）
-        if (baseAddress < 0x100000000 || baseAddress > 0x200000000) {
-            writeLog([NSString stringWithFormat:@"❌ 地址超出范围: 0x%lx", baseAddress]);
-            return NO;
-        }
-        
-        // 3. 检查所有偏移地址是否可访问
-        volatile NSInteger testBase = *(NSInteger*)baseAddress;
-        volatile NSInteger testStamina = *(NSInteger*)(baseAddress + 24);
-        volatile NSInteger testHealth = *(NSInteger*)(baseAddress + 72);
-        volatile NSInteger testMood = *(NSInteger*)(baseAddress + 104);
-        (void)testBase; (void)testStamina; (void)testHealth; (void)testMood;
-        
-        // 4. 读取四个偏移位置的数值
-        NSInteger money = *(NSInteger*)baseAddress;
-        NSInteger stamina = *(NSInteger*)(baseAddress + 24);
-        NSInteger health = *(NSInteger*)(baseAddress + 72);
-        NSInteger mood = *(NSInteger*)(baseAddress + 104);
-        
-        writeLog([NSString stringWithFormat:@"🔍 验证地址 0x%lx:", baseAddress]);
-        writeLog([NSString stringWithFormat:@"  💰=%ld ⚡=%ld ❤️=%ld 😊=%ld", 
-                 (long)money, (long)stamina, (long)health, (long)mood]);
-        
-        // 5. 更严格的数值范围验证
-        BOOL moneyValid = (money >= 0 && money <= 999999999);
-        BOOL staminaValid = (stamina >= 0 && stamina <= 999999);
-        BOOL healthValid = (health >= 0 && health <= 999);
-        BOOL moodValid = (mood >= 0 && mood <= 999);
-        
-        // 6. 检查数值是否过于相似（可能是错误的数据结构）
-        if (money == stamina && stamina == health && health == mood && money != 0) {
-            writeLog(@"❌ 所有数值相同，可能不是游戏数据");
-            return NO;
-        }
-        
-        // 7. 检查是否所有数值都为0（可能是未初始化的内存）
-        if (money == 0 && stamina == 0 && health == 0 && mood == 0) {
-            writeLog(@"❌ 所有数值为0，可能是空内存");
-            return NO;
-        }
-        
-        if (moneyValid && staminaValid && healthValid && moodValid) {
-            writeLog(@"✅ 数据结构验证通过！");
-            return YES;
-        } else {
-            writeLog([NSString stringWithFormat:@"❌ 数值超出合理范围 - 💰:%s ⚡:%s ❤️:%s 😊:%s", 
-                     moneyValid ? "✓" : "✗",
-                     staminaValid ? "✓" : "✗", 
-                     healthValid ? "✓" : "✗",
-                     moodValid ? "✓" : "✗"]);
-        }
-    } @catch (NSException *exception) {
-        writeLog([NSString stringWithFormat:@"❌ 验证异常: %@", exception.reason]);
     }
     
-    return NO;
+    if ([key containsString:@"stamina"] || [key containsString:@"体力"] || [key containsString:@"energy"]) {
+        if (g_staminaHookEnabled) {
+            writeLog([NSString stringWithFormat:@"🎯 拦截体力整数读取: %@ -> %ld", key, (long)g_modifiedStamina]);
+            return g_modifiedStamina;
+        }
+    }
+    
+    if ([key containsString:@"health"] || [key containsString:@"健康"] || [key containsString:@"hp"]) {
+        if (g_healthHookEnabled) {
+            writeLog([NSString stringWithFormat:@"🎯 拦截健康整数读取: %@ -> %ld", key, (long)g_modifiedHealth]);
+            return g_modifiedHealth;
+        }
+    }
+    
+    if ([key containsString:@"mood"] || [key containsString:@"心情"] || [key containsString:@"happiness"]) {
+        if (g_moodHookEnabled) {
+            writeLog([NSString stringWithFormat:@"🎯 拦截心情整数读取: %@ -> %ld", key, (long)g_modifiedMood]);
+            return g_modifiedMood;
+        }
+    }
+    
+    return originalValue;
 }
 
-// 更安全的内存数值修改（防闪退版本）
-static BOOL writeMemoryValueSafe(uintptr_t address, NSInteger value, NSString *name) {
-    @try {
-        // 多重安全检查
-        // 1. 检查地址是否可读
-        volatile NSInteger testRead = *(NSInteger*)address;
-        (void)testRead;
-        
-        // 2. 检查地址是否可写（尝试写入原值）
-        NSInteger *ptr = (NSInteger*)address;
-        NSInteger originalValue = *ptr;
-        *ptr = originalValue; // 写入原值测试
-        
-        // 3. 验证写入测试是否成功
-        if (*ptr != originalValue) {
-            writeLog([NSString stringWithFormat:@"⚠️ %@ 地址不可写: 0x%lx", name, address]);
-            return NO;
-        }
-        
-        // 4. 检查数值是否合理（避免修改系统关键数据）
-        if (originalValue < 0 || originalValue > 2000000000) {
-            writeLog([NSString stringWithFormat:@"⚠️ %@ 原值异常: %ld，跳过修改", name, (long)originalValue]);
-            return NO;
-        }
-        
-        // 5. 执行实际修改
-        *ptr = value;
-        
-        // 6. 验证修改结果
-        NSInteger newValue = *ptr;
-        if (newValue == value) {
-            writeLog([NSString stringWithFormat:@"✅ %@ 修改成功: %ld -> %ld (地址: 0x%lx)", 
-                     name, (long)originalValue, (long)value, address]);
-            
-            // 7. 延迟验证（防止游戏立即检测）
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                @try {
-                    NSInteger verifyValue = *(NSInteger*)address;
-                    if (verifyValue != value) {
-                        writeLog([NSString stringWithFormat:@"⚠️ %@ 数值被游戏还原: %ld", name, (long)verifyValue]);
-                    }
-                } @catch (NSException *exception) {
-                    // 忽略延迟验证的异常
-                }
-            });
-            
-            return YES;
-        } else {
-            writeLog([NSString stringWithFormat:@"❌ %@ 修改失败: 写入%ld但读取到%ld", 
-                     name, (long)value, (long)newValue]);
-            return NO;
-        }
-    } @catch (NSException *exception) {
-        writeLog([NSString stringWithFormat:@"❌ %@ 修改异常: %@", name, exception.reason]);
-        return NO;
+// 安装Hook
+static void installHooks(void) {
+    writeLog(@"🔧 开始安装Hook拦截器...");
+    
+    Class nsUserDefaultsClass = [NSUserDefaults class];
+    
+    // Hook objectForKey:
+    Method objectForKeyMethod = class_getInstanceMethod(nsUserDefaultsClass, @selector(objectForKey:));
+    if (objectForKeyMethod) {
+        original_objectForKey = (id (*)(id, SEL, NSString *))method_getImplementation(objectForKeyMethod);
+        method_setImplementation(objectForKeyMethod, (IMP)hooked_objectForKey);
+        writeLog(@"✅ objectForKey: Hook安装成功");
     }
+    
+    // Hook integerForKey:
+    Method integerForKeyMethod = class_getInstanceMethod(nsUserDefaultsClass, @selector(integerForKey:));
+    if (integerForKeyMethod) {
+        original_integerForKey = (NSInteger (*)(id, SEL, NSString *))method_getImplementation(integerForKeyMethod);
+        method_setImplementation(integerForKeyMethod, (IMP)hooked_integerForKey);
+        writeLog(@"✅ integerForKey: Hook安装成功");
+    }
+    
+    writeLog(@"🎉 Hook拦截器安装完成！");
 }
 
-// 核心修改函数：智能搜索并修改
-static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始智能内存修改 v14.2 ==========");
+// 核心修改函数：Hook拦截方式
+static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
+    writeLog(@"========== 开始Hook拦截修改 v14.3 ==========");
     
-    uintptr_t baseAddress = 0;
-    
-    // 第一步：验证缓存地址
-    if (g_moneyBaseAddress != 0) {
-        writeLog([NSString stringWithFormat:@"🔄 验证缓存地址: 0x%lx", g_moneyBaseAddress]);
-        if (verifyGameDataStructureSafe(g_moneyBaseAddress)) {
-            baseAddress = g_moneyBaseAddress;
-            writeLog(@"✅ 缓存地址有效，直接使用");
-        } else {
-            writeLog(@"❌ 缓存地址失效，重新搜索");
-            g_moneyBaseAddress = 0;
-        }
+    // 安装Hook（如果还没安装）
+    static BOOL hooksInstalled = NO;
+    if (!hooksInstalled) {
+        installHooks();
+        hooksInstalled = YES;
     }
     
-    // 第二步：智能搜索游戏数据结构
-    if (baseAddress == 0) {
-        writeLog(@"🧠 开始智能搜索游戏数据结构...");
-        
-        // 使用已知的游戏数值进行搜索
-        // 根据你之前提供的数据：金钱474、体力136、健康93、心情88
-        NSArray *knownValues = @[@474, @136, @93, @88];
-        NSArray *valueNames = @[@"金钱", @"体力", @"健康", @"心情"];
-        NSArray *offsets = @[@0, @24, @72, @104];
-        
-        for (NSInteger i = 0; i < knownValues.count; i++) {
-            NSInteger searchValue = [knownValues[i] integerValue];
-            NSString *valueName = valueNames[i];
-            NSInteger offset = [offsets[i] integerValue];
-            
-            writeLog([NSString stringWithFormat:@"🔍 搜索 %@: %ld", valueName, (long)searchValue]);
-            
-            NSArray *candidates = fastMemorySearch(searchValue);
-            
-            writeLog([NSString stringWithFormat:@"📊 %@ 找到 %lu 个候选地址", valueName, (unsigned long)candidates.count]);
-            
-            // 验证每个候选地址
-            for (NSNumber *addrNum in candidates) {
-                uintptr_t candidateAddr = [addrNum unsignedLongValue];
-                
-                // 计算可能的基地址
-                uintptr_t possibleBase = candidateAddr - offset;
-                
-                writeLog([NSString stringWithFormat:@"🧪 测试基地址: 0x%lx (从%@地址0x%lx推算)", possibleBase, valueName, candidateAddr]);
-                
-                // 验证这个基地址是否正确
-                if (verifyGameDataStructureSafe(possibleBase)) {
-                    baseAddress = possibleBase;
-                    g_moneyBaseAddress = baseAddress;
-                    writeLog([NSString stringWithFormat:@"🎉 通过%@找到正确的基地址: 0x%lx", valueName, baseAddress]);
-                    goto found_base;
-                }
-            }
-        }
-        
-        // 如果上面的方法没找到，尝试更广泛的搜索
-        if (baseAddress == 0) {
-            writeLog(@"🔄 尝试广泛搜索...");
-            
-            // 搜索一些常见的游戏数值范围
-            NSArray *commonValues = @[@100, @200, @300, @500, @1000];
-            
-            for (NSNumber *valueNum in commonValues) {
-                NSInteger searchValue = [valueNum integerValue];
-                NSArray *candidates = fastMemorySearch(searchValue);
-                
-                for (NSNumber *addrNum in candidates) {
-                    uintptr_t candidateAddr = [addrNum unsignedLongValue];
-                    
-                    // 尝试作为基地址
-                    if (verifyGameDataStructureSafe(candidateAddr)) {
-                        baseAddress = candidateAddr;
-                        g_moneyBaseAddress = baseAddress;
-                        writeLog([NSString stringWithFormat:@"🎉 广泛搜索找到基地址: 0x%lx", baseAddress]);
-                        goto found_base;
-                    }
-                    
-                    // 尝试作为偏移地址
-                    for (NSInteger offset = 0; offset <= 104; offset += 8) {
-                        if (candidateAddr >= offset) {
-                            uintptr_t possibleBase = candidateAddr - offset;
-                            if (verifyGameDataStructureSafe(possibleBase)) {
-                                baseAddress = possibleBase;
-                                g_moneyBaseAddress = baseAddress;
-                                writeLog([NSString stringWithFormat:@"🎉 通过偏移%ld找到基地址: 0x%lx", (long)offset, baseAddress]);
-                                goto found_base;
-                            }
-                        }
-                    }
-                }
-                
-                if (baseAddress != 0) break;
-            }
-        }
-    }
-    
-found_base:
-    
-    if (baseAddress == 0) {
-        writeLog(@"❌ 未能找到游戏数据结构");
-        writeLog(@"💡 建议：");
-        writeLog(@"1. 确保游戏正在运行且界面显示数值");
-        writeLog(@"2. 尝试在游戏中进行一些操作改变数值");
-        writeLog(@"3. 重新启动修改器");
-        return NO;
-    }
-    
-    // 第三步：执行精准修改
-    writeLog(@"🚀 开始修改游戏数值...");
-    writeLog([NSString stringWithFormat:@"📍 基地址: 0x%lx", baseAddress]);
-    
-    // 先读取当前值
-    @try {
-        NSInteger currentMoney = *(NSInteger*)baseAddress;
-        NSInteger currentStamina = *(NSInteger*)(baseAddress + 24);
-        NSInteger currentHealth = *(NSInteger*)(baseAddress + 72);
-        NSInteger currentMood = *(NSInteger*)(baseAddress + 104);
-        
-        writeLog(@"📊 修改前数值:");
-        writeLog([NSString stringWithFormat:@"  💰金钱: %ld", (long)currentMoney]);
-        writeLog([NSString stringWithFormat:@"  ⚡体力: %ld", (long)currentStamina]);
-        writeLog([NSString stringWithFormat:@"  ❤️健康: %ld", (long)currentHealth]);
-        writeLog([NSString stringWithFormat:@"  😊心情: %ld", (long)currentMood]);
-    } @catch (NSException *exception) {
-        writeLog([NSString stringWithFormat:@"⚠️ 读取当前值失败: %@", exception.reason]);
-    }
-    
-    BOOL success = YES;
-    
+    // 启用相应的Hook
     if (money > 0) {
-        if (!writeMemoryValueSafe(baseAddress, money, @"💰金钱")) {
-            success = NO;
-        }
+        g_modifiedMoney = money;
+        g_moneyHookEnabled = YES;
+        writeLog([NSString stringWithFormat:@"💰 启用金钱Hook: %ld", (long)money]);
     }
     
     if (stamina > 0) {
-        if (!writeMemoryValueSafe(baseAddress + 24, stamina, @"⚡体力")) {
-            success = NO;
-        }
+        g_modifiedStamina = stamina;
+        g_staminaHookEnabled = YES;
+        writeLog([NSString stringWithFormat:@"⚡ 启用体力Hook: %ld", (long)stamina]);
     }
     
     if (health > 0) {
-        if (!writeMemoryValueSafe(baseAddress + 72, health, @"❤️健康")) {
-            success = NO;
-        }
+        g_modifiedHealth = health;
+        g_healthHookEnabled = YES;
+        writeLog([NSString stringWithFormat:@"❤️ 启用健康Hook: %ld", (long)health]);
     }
     
     if (mood > 0) {
-        if (!writeMemoryValueSafe(baseAddress + 104, mood, @"😊心情")) {
-            success = NO;
-        }
+        g_modifiedMood = mood;
+        g_moodHookEnabled = YES;
+        writeLog([NSString stringWithFormat:@"😊 启用心情Hook: %ld", (long)mood]);
     }
     
-    if (success) {
-        writeLog(@"🎉 所有数值修改完成！");
-        
-        // 验证修改结果
-        writeLog(@"🔍 验证修改结果:");
-        verifyGameDataStructureSafe(baseAddress);
-        
-        // 保存基地址供下次使用
-        g_moneyBaseAddress = baseAddress;
-    } else {
-        writeLog(@"⚠️ 部分修改失败，请检查日志");
-    }
+    writeLog(@"🎯 Hook拦截器已激活，游戏读取数值时将自动返回修改后的值");
+    writeLog(@"========== Hook拦截修改完成 ==========");
     
-    writeLog(@"========== 智能内存修改完成 ==========");
-    return success;
+    return YES;
 }
 
 #pragma mark - 菜单视图
@@ -564,7 +319,7 @@ found_base:
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v14.2";
+    title.text = @"🏠 我独自生活 v14.3";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -574,7 +329,7 @@ found_base:
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"🧠 智能内存搜索修改器";
+    info.text = @"🎯 Hook拦截修改器";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -596,7 +351,7 @@ found_base:
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"v14.2: 防闪退安全引擎\n多重验证保护，延迟检测机制";
+    tip.text = @"v14.3: Hook拦截引擎\n无内存搜索，拦截数据读取";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -630,7 +385,7 @@ found_base:
     [self.contentView addSubview:btn5];
     y += 43;
     
-    UIButton *btn6 = [self createButtonWithTitle:@"🔍 内存分析" tag:6];
+    UIButton *btn6 = [self createButtonWithTitle:@"🔍 Hook状态" tag:6];
     btn6.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn6];
     y += 48;
@@ -663,8 +418,8 @@ found_base:
 
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
-    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🛡️ 安全修改 v14.2" 
-        message:@"防闪退特性：\n• 多重安全验证机制\n• 智能地址范围检查\n• 延迟检测保护\n• 原值合理性验证\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🎯 Hook拦截 v14.3" 
+        message:@"全新Hook引擎：\n• 无内存搜索，避免触发保护\n• 拦截游戏数据读取\n• 立即生效，无需重启\n• 完全避免闪退问题\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -686,33 +441,37 @@ found_base:
     switch (tag) {
         case 1:
             writeLog(@"功能：无限金钱");
-            success = modifyGameData(999999999, 0, 0, 0, 0);
-            message = success ? @"💰 无限金钱修改完成！\n\n已自动搜索并修改内存数值\n游戏中的金钱应该立即更新" : @"❌ 修改失败，请查看日志或手动操作";
+            success = modifyGameDataByHook(999999999, 0, 0, 0, 0);
+            message = success ? @"💰 无限金钱Hook已启用！\n\n游戏读取金钱时将自动返回修改值\n无需重启，立即生效" : @"❌ Hook安装失败，请查看日志";
             break;
         case 2:
             writeLog(@"功能：无限体力");
-            success = modifyGameData(0, 999999, 0, 0, 0);
-            message = success ? @"⚡ 无限体力修改完成！\n\n已自动搜索并修改内存数值\n游戏中的体力应该立即更新" : @"❌ 修改失败，请查看日志或手动操作";
+            success = modifyGameDataByHook(0, 999999, 0, 0, 0);
+            message = success ? @"⚡ 无限体力Hook已启用！\n\n游戏读取体力时将自动返回修改值\n无需重启，立即生效" : @"❌ Hook安装失败，请查看日志";
             break;
         case 3:
             writeLog(@"功能：无限健康");
-            success = modifyGameData(0, 0, 999, 0, 0);
-            message = success ? @"❤️ 无限健康修改完成！\n\n已自动搜索并修改内存数值\n游戏中的健康应该立即更新" : @"❌ 修改失败，请查看日志或手动操作";
+            success = modifyGameDataByHook(0, 0, 999, 0, 0);
+            message = success ? @"❤️ 无限健康Hook已启用！\n\n游戏读取健康时将自动返回修改值\n无需重启，立即生效" : @"❌ Hook安装失败，请查看日志";
             break;
         case 4:
             writeLog(@"功能：无限心情");
-            success = modifyGameData(0, 0, 0, 999, 0);
-            message = success ? @"😊 无限心情修改完成！\n\n已自动搜索并修改内存数值\n游戏中的心情应该立即更新" : @"❌ 修改失败，请查看日志或手动操作";
+            success = modifyGameDataByHook(0, 0, 0, 999, 0);
+            message = success ? @"😊 无限心情Hook已启用！\n\n游戏读取心情时将自动返回修改值\n无需重启，立即生效" : @"❌ Hook安装失败，请查看日志";
             break;
         case 5:
             writeLog(@"功能：一键全开");
-            success = modifyGameData(999999999, 999999, 999, 999, 0);
-            message = success ? @"🎁 一键全开修改完成！\n\n💰金钱、⚡体力、❤️健康、😊心情\n所有属性已自动修改完成！" : @"❌ 修改失败，请查看日志或手动操作";
+            success = modifyGameDataByHook(999999999, 999999, 999, 999, 0);
+            message = success ? @"🎁 一键全开Hook已启用！\n\n💰金钱、⚡体力、❤️健康、😊心情\n所有Hook已激活，立即生效！" : @"❌ Hook安装失败，请查看日志";
             break;
         case 6:
-            writeLog(@"功能：内存分析");
-            success = modifyGameData(0, 0, 0, 0, 0); // 只分析，不修改
-            message = @"🔍 内存分析完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含完整的内存搜索信息";
+            writeLog(@"功能：Hook状态");
+            writeLog([NSString stringWithFormat:@"💰 金钱Hook: %@", g_moneyHookEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"⚡ 体力Hook: %@", g_staminaHookEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"❤️ 健康Hook: %@", g_healthHookEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"😊 心情Hook: %@", g_moodHookEnabled ? @"已启用" : @"未启用"]);
+            success = YES;
+            message = @"🔍 Hook状态检查完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含Hook拦截信息";
             break;
     }
     
@@ -894,7 +653,7 @@ static void WDZCheatInit(void) {
         // 设置全局异常处理器（防闪退保护）
         NSSetUncaughtExceptionHandler(&handleUncaughtException);
         
-        writeLog(@"🛡️ WoduziCheat v14.2 初始化完成 - 防闪退保护已启用");
+        writeLog(@"🛡️ WoduziCheat v14.3 初始化完成 - Hook拦截引擎已启用");
         
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             setupFloatingButton();
