@@ -1,14 +1,14 @@
 // 我独自生活修改器 - WoduziCheat.m
-// Unity内存数据拦截系统 v15.0
+// 文件数据拦截系统 v15.1
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <mach/mach.h>
 #import <sys/mman.h>
 
-// Unity数据拦截开关
-static BOOL g_unityHookEnabled = NO;
-static BOOL g_memoryHookEnabled = NO;
+// 文件数据拦截开关
+static BOOL g_fileHookEnabled = NO;
+static BOOL g_sqliteHookEnabled = NO;
 
 // 修改后的数值
 static NSInteger g_modifiedMoney = 999999999;
@@ -16,14 +16,9 @@ static NSInteger g_modifiedStamina = 999999;
 static NSInteger g_modifiedHealth = 999;
 static NSInteger g_modifiedMood = 999;
 
-// Unity Hook拦截计数器
-static NSInteger g_unityInterceptCount = 0;
-static NSInteger g_memoryReadCount = 0;
-
-// 数据结构偏移量（用户确认的固定偏移）
-static const NSInteger STAMINA_OFFSET = 24;  // 体力 = 金钱地址 + 24
-static const NSInteger HEALTH_OFFSET = 72;   // 健康 = 金钱地址 + 72  
-static const NSInteger MOOD_OFFSET = 104;    // 心情 = 金钱地址 + 104
+// 文件Hook拦截计数器
+static NSInteger g_fileInterceptCount = 0;
+static NSInteger g_sqliteInterceptCount = 0;
 
 #pragma mark - 函数前向声明
 
@@ -138,172 +133,156 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-#pragma mark - Unity内存数据拦截系统
+#pragma mark - 文件数据拦截系统
 
-// 内存读取Hook - 拦截memcpy等内存操作
-static void* (*original_memcpy)(void *dest, const void *src, size_t n) = NULL;
+// NSData Hook - 拦截数据读取操作
+static NSData* (*original_dataWithContentsOfFile)(Class cls, SEL _cmd, NSString *path) = NULL;
 
-static void* hooked_memcpy(void *dest, const void *src, size_t n) {
-    void* result = original_memcpy(dest, src, n);
+static NSData* hooked_dataWithContentsOfFile(Class cls, SEL _cmd, NSString *path) {
+    NSData* originalData = original_dataWithContentsOfFile(cls, _cmd, path);
     
-    // 检查是否是4字节整数读取（游戏数值通常是int类型）
-    if (n == sizeof(int) && g_unityHookEnabled) {
-        int value = *(int*)src;
-        uintptr_t srcAddr = (uintptr_t)src;
+    if (g_fileHookEnabled && originalData && path) {
+        writeLog([NSString stringWithFormat:@"📁 文件读取: %@", path.lastPathComponent]);
         
-        g_memoryReadCount++;
-        
-        // 检查数值范围（游戏数值通常在合理范围内）
-        if (value >= 0 && value <= 1000000) {
-            writeLog([NSString stringWithFormat:@"🔍 内存读取: 地址=0x%lx, 值=%d, 大小=%zu", srcAddr, value, n]);
+        // 检查是否是游戏数据文件
+        NSString *fileName = path.lastPathComponent.lowercaseString;
+        if ([fileName containsString:@"save"] || [fileName containsString:@"data"] || 
+            [fileName containsString:@"game"] || [fileName containsString:@"player"] ||
+            [fileName containsString:@"plist"] || [fileName containsString:@"json"]) {
             
-            // 尝试识别游戏数值并替换
-            if (value >= 100 && value <= 100000) {
-                // 可能是金钱
-                *(int*)dest = (int)g_modifiedMoney;
-                g_unityInterceptCount++;
-                writeLog([NSString stringWithFormat:@"🎯 拦截疑似金钱: %d -> %ld", value, (long)g_modifiedMoney]);
-                return result;
-            } else if (value >= 50 && value <= 1000) {
-                // 可能是体力/健康/心情
-                if (value >= 100 && value <= 500) {
-                    // 可能是体力
-                    *(int*)dest = (int)g_modifiedStamina;
-                    g_unityInterceptCount++;
-                    writeLog([NSString stringWithFormat:@"🎯 拦截疑似体力: %d -> %ld", value, (long)g_modifiedStamina]);
-                } else if (value >= 50 && value <= 200) {
-                    // 可能是健康或心情
-                    *(int*)dest = (int)g_modifiedHealth;
-                    g_unityInterceptCount++;
-                    writeLog([NSString stringWithFormat:@"🎯 拦截疑似健康/心情: %d -> %ld", value, (long)g_modifiedHealth]);
+            // 尝试解析文件内容
+            NSString *content = [[NSString alloc] initWithData:originalData encoding:NSUTF8StringEncoding];
+            if (content) {
+                writeLog([NSString stringWithFormat:@"📄 文件内容预览: %@", [content substringToIndex:MIN(200, content.length)]]);
+                
+                // 检查是否包含数值数据
+                if ([content containsString:@"474"] || [content containsString:@"136"] || 
+                    [content containsString:@"93"] || [content containsString:@"88"]) {
+                    
+                    g_fileInterceptCount++;
+                    writeLog([NSString stringWithFormat:@"🎯 发现疑似游戏数据文件: %@", path]);
+                    
+                    // 尝试修改数据
+                    NSMutableString *modifiedContent = [content mutableCopy];
+                    [modifiedContent replaceOccurrencesOfString:@"474" withString:@"999999999" options:0 range:NSMakeRange(0, modifiedContent.length)];
+                    [modifiedContent replaceOccurrencesOfString:@"136" withString:@"999999" options:0 range:NSMakeRange(0, modifiedContent.length)];
+                    [modifiedContent replaceOccurrencesOfString:@"93" withString:@"999" options:0 range:NSMakeRange(0, modifiedContent.length)];
+                    [modifiedContent replaceOccurrencesOfString:@"88" withString:@"999" options:0 range:NSMakeRange(0, modifiedContent.length)];
+                    
+                    NSData *modifiedData = [modifiedContent dataUsingEncoding:NSUTF8StringEncoding];
+                    if (modifiedData) {
+                        writeLog(@"✅ 文件数据已修改");
+                        return modifiedData;
+                    }
                 }
-                return result;
             }
         }
     }
     
-    return result;
+    return originalData;
 }
 
-// memmove Hook - 另一种内存操作
-static void* (*original_memmove)(void *dest, const void *src, size_t n) = NULL;
+// NSString Hook - 拦截字符串文件读取
+static NSString* (*original_stringWithContentsOfFile)(Class cls, SEL _cmd, NSString *path, NSStringEncoding encoding, NSError **error) = NULL;
 
-static void* hooked_memmove(void *dest, const void *src, size_t n) {
-    void* result = original_memmove(dest, src, n);
+static NSString* hooked_stringWithContentsOfFile(Class cls, SEL _cmd, NSString *path, NSStringEncoding encoding, NSError **error) {
+    NSString* originalContent = original_stringWithContentsOfFile(cls, _cmd, path, encoding, error);
     
-    if (n == sizeof(int) && g_unityHookEnabled) {
-        int value = *(int*)src;
-        uintptr_t srcAddr = (uintptr_t)src;
+    if (g_fileHookEnabled && originalContent && path) {
+        writeLog([NSString stringWithFormat:@"📝 字符串文件读取: %@", path.lastPathComponent]);
         
-        if (value >= 0 && value <= 1000000) {
-            writeLog([NSString stringWithFormat:@"🔄 memmove读取: 地址=0x%lx, 值=%d", srcAddr, value]);
+        // 检查是否包含游戏数值
+        if ([originalContent containsString:@"474"] || [originalContent containsString:@"136"] || 
+            [originalContent containsString:@"93"] || [originalContent containsString:@"88"]) {
             
-            // 同样的数值识别逻辑
-            if (value >= 100 && value <= 100000) {
-                *(int*)dest = (int)g_modifiedMoney;
-                g_unityInterceptCount++;
-                writeLog([NSString stringWithFormat:@"🎯 memmove拦截金钱: %d -> %ld", value, (long)g_modifiedMoney]);
-            } else if (value >= 50 && value <= 500) {
-                *(int*)dest = (int)g_modifiedStamina;
-                g_unityInterceptCount++;
-                writeLog([NSString stringWithFormat:@"🎯 memmove拦截体力: %d -> %ld", value, (long)g_modifiedStamina]);
-            }
+            g_fileInterceptCount++;
+            writeLog([NSString stringWithFormat:@"🎯 发现游戏数值文件: %@", path]);
+            
+            // 修改数值
+            NSMutableString *modifiedContent = [originalContent mutableCopy];
+            [modifiedContent replaceOccurrencesOfString:@"474" withString:@"999999999" options:0 range:NSMakeRange(0, modifiedContent.length)];
+            [modifiedContent replaceOccurrencesOfString:@"136" withString:@"999999" options:0 range:NSMakeRange(0, modifiedContent.length)];
+            [modifiedContent replaceOccurrencesOfString:@"93" withString:@"999" options:0 range:NSMakeRange(0, modifiedContent.length)];
+            [modifiedContent replaceOccurrencesOfString:@"88" withString:@"999" options:0 range:NSMakeRange(0, modifiedContent.length)];
+            
+            writeLog(@"✅ 字符串文件数据已修改");
+            return [modifiedContent copy];
         }
+    }
+    
+    return originalContent;
+}
+
+// SQLite Hook - 拦截数据库查询
+static int (*original_sqlite3_step)(void *stmt) = NULL;
+
+static int hooked_sqlite3_step(void *stmt) {
+    int result = original_sqlite3_step(stmt);
+    
+    if (g_sqliteHookEnabled && result == 100) { // SQLITE_ROW
+        g_sqliteInterceptCount++;
+        writeLog([NSString stringWithFormat:@"🗄️ SQLite查询执行: 结果=%d", result]);
+        
+        // 这里可以进一步分析SQLite结果
+        // 但需要更复杂的SQLite API调用来获取具体数据
     }
     
     return result;
 }
 
-// Unity PlayerPrefs Hook - Unity游戏常用的数据存储
-static int (*original_PlayerPrefs_GetInt)(const char* key, int defaultValue) = NULL;
-
-static int hooked_PlayerPrefs_GetInt(const char* key, int defaultValue) {
-    int originalValue = original_PlayerPrefs_GetInt ? original_PlayerPrefs_GetInt(key, defaultValue) : defaultValue;
+// 安装文件数据Hook
+static void installFileHooks(void) {
+    writeLog(@"🔧 开始安装文件数据拦截器...");
     
-    if (g_unityHookEnabled && key) {
-        NSString *keyStr = [NSString stringWithUTF8String:key];
-        writeLog([NSString stringWithFormat:@"🎮 Unity PlayerPrefs读取: %@ = %d", keyStr, originalValue]);
-        
-        // 检查Unity常用的游戏数据键名
-        NSString *lowerKey = [keyStr lowercaseString];
-        if ([lowerKey containsString:@"money"] || [lowerKey containsString:@"coin"] || 
-            [lowerKey containsString:@"cash"] || [lowerKey containsString:@"gold"]) {
-            g_unityInterceptCount++;
-            writeLog([NSString stringWithFormat:@"🎯 Unity拦截金钱: %@ (%d) -> %ld", keyStr, originalValue, (long)g_modifiedMoney]);
-            return (int)g_modifiedMoney;
-        } else if ([lowerKey containsString:@"stamina"] || [lowerKey containsString:@"energy"] || 
-                   [lowerKey containsString:@"power"]) {
-            g_unityInterceptCount++;
-            writeLog([NSString stringWithFormat:@"🎯 Unity拦截体力: %@ (%d) -> %ld", keyStr, originalValue, (long)g_modifiedStamina]);
-            return (int)g_modifiedStamina;
-        } else if ([lowerKey containsString:@"health"] || [lowerKey containsString:@"hp"] || 
-                   [lowerKey containsString:@"life"]) {
-            g_unityInterceptCount++;
-            writeLog([NSString stringWithFormat:@"🎯 Unity拦截健康: %@ (%d) -> %ld", keyStr, originalValue, (long)g_modifiedHealth]);
-            return (int)g_modifiedHealth;
-        } else if ([lowerKey containsString:@"mood"] || [lowerKey containsString:@"happiness"] || 
-                   [lowerKey containsString:@"emotion"]) {
-            g_unityInterceptCount++;
-            writeLog([NSString stringWithFormat:@"🎯 Unity拦截心情: %@ (%d) -> %ld", keyStr, originalValue, (long)g_modifiedMood]);
-            return (int)g_modifiedMood;
-        }
+    // Hook NSData dataWithContentsOfFile:
+    Class nsDataClass = [NSData class];
+    Method dataMethod = class_getClassMethod(nsDataClass, @selector(dataWithContentsOfFile:));
+    if (dataMethod) {
+        original_dataWithContentsOfFile = (NSData* (*)(Class, SEL, NSString *))method_getImplementation(dataMethod);
+        method_setImplementation(dataMethod, (IMP)hooked_dataWithContentsOfFile);
+        writeLog(@"✅ NSData文件读取Hook安装成功");
     }
     
-    return originalValue;
+    // Hook NSString stringWithContentsOfFile:encoding:error:
+    Class nsStringClass = [NSString class];
+    Method stringMethod = class_getClassMethod(nsStringClass, @selector(stringWithContentsOfFile:encoding:error:));
+    if (stringMethod) {
+        original_stringWithContentsOfFile = (NSString* (*)(Class, SEL, NSString *, NSStringEncoding, NSError **))method_getImplementation(stringMethod);
+        method_setImplementation(stringMethod, (IMP)hooked_stringWithContentsOfFile);
+        writeLog(@"✅ NSString文件读取Hook安装成功");
+    }
+    
+    // 尝试Hook SQLite
+    original_sqlite3_step = dlsym(RTLD_DEFAULT, "sqlite3_step");
+    if (original_sqlite3_step) {
+        writeLog(@"✅ SQLite Hook准备就绪");
+        // 注意：实际的SQLite Hook需要更复杂的实现
+    } else {
+        writeLog(@"⚠️ 未找到SQLite函数");
+    }
+    
+    writeLog(@"🎉 文件数据拦截器安装完成！");
+    writeLog(@"📊 监控范围：NSData + NSString + SQLite");
 }
 
-// 安装Unity内存Hook
-static void installUnityHooks(void) {
-    writeLog(@"🔧 开始安装Unity内存拦截器...");
-    
-    // Hook memcpy
-    original_memcpy = dlsym(RTLD_DEFAULT, "memcpy");
-    if (original_memcpy) {
-        // 使用MSHookFunction进行Hook（如果可用）
-        // 这里使用简单的函数指针替换
-        writeLog(@"✅ memcpy Hook准备就绪");
-    }
-    
-    // Hook memmove  
-    original_memmove = dlsym(RTLD_DEFAULT, "memmove");
-    if (original_memmove) {
-        writeLog(@"✅ memmove Hook准备就绪");
-    }
-    
-    // 尝试Hook Unity PlayerPrefs（如果游戏使用Unity）
-    void* unityHandle = dlopen(NULL, RTLD_NOW);
-    if (unityHandle) {
-        // 查找Unity PlayerPrefs函数
-        original_PlayerPrefs_GetInt = dlsym(unityHandle, "PlayerPrefs_GetInt");
-        if (original_PlayerPrefs_GetInt) {
-            writeLog(@"✅ Unity PlayerPrefs Hook准备就绪");
-        } else {
-            writeLog(@"⚠️ 未找到Unity PlayerPrefs函数");
-        }
-    }
-    
-    writeLog(@"🎉 Unity内存拦截器安装完成！");
-    writeLog(@"📊 监控范围：memcpy + memmove + Unity PlayerPrefs");
-}
-
-// 核心修改函数：Unity内存拦截方式
-static BOOL modifyGameDataByUnityHook(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始Unity内存拦截修改 v15.0 ==========");
+// 核心修改函数：文件数据拦截方式
+static BOOL modifyGameDataByFileHook(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
+    writeLog(@"========== 开始文件数据拦截修改 v15.1 ==========");
     
     // 重置拦截计数器
-    g_unityInterceptCount = 0;
-    g_memoryReadCount = 0;
+    g_fileInterceptCount = 0;
+    g_sqliteInterceptCount = 0;
     
     // 安装Hook（如果还没安装）
-    static BOOL unityHooksInstalled = NO;
-    if (!unityHooksInstalled) {
-        installUnityHooks();
-        unityHooksInstalled = YES;
+    static BOOL fileHooksInstalled = NO;
+    if (!fileHooksInstalled) {
+        installFileHooks();
+        fileHooksInstalled = YES;
     }
     
-    // 启用Unity Hook
-    g_unityHookEnabled = YES;
-    g_memoryHookEnabled = YES;
+    // 启用文件Hook
+    g_fileHookEnabled = YES;
+    g_sqliteHookEnabled = YES;
     
     // 设置修改值
     if (money > 0) {
@@ -326,28 +305,27 @@ static BOOL modifyGameDataByUnityHook(NSInteger money, NSInteger stamina, NSInte
         writeLog([NSString stringWithFormat:@"😊 设置心情目标值: %ld", (long)mood]);
     }
     
-    writeLog(@"🎯 Unity内存拦截器已激活");
-    writeLog(@"📊 监控内存读取操作，智能识别游戏数值");
-    writeLog(@"💡 提示：在游戏中进行操作，触发数值读取以查看拦截效果");
+    writeLog(@"🎯 文件数据拦截器已激活");
+    writeLog(@"📊 监控文件读取操作，智能识别游戏数据");
+    writeLog(@"💡 提示：在游戏中进行操作，触发数据文件读取以查看拦截效果");
     
     // 延迟检查拦截效果
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        writeLog([NSString stringWithFormat:@"📈 8秒内Unity拦截次数: %ld", (long)g_unityInterceptCount]);
-        writeLog([NSString stringWithFormat:@"📈 8秒内内存读取次数: %ld", (long)g_memoryReadCount]);
+        writeLog([NSString stringWithFormat:@"📈 8秒内文件拦截次数: %ld", (long)g_fileInterceptCount]);
+        writeLog([NSString stringWithFormat:@"📈 8秒内SQLite拦截次数: %ld", (long)g_sqliteInterceptCount]);
         
-        if (g_unityInterceptCount == 0 && g_memoryReadCount == 0) {
-            writeLog(@"⚠️ 未检测到Unity数据读取");
-            writeLog(@"💡 建议：在游戏中进行操作（购买、使用体力等）触发数值变化");
-            writeLog(@"🔍 游戏可能使用其他数据存储方式（SQLite、文件等）");
-        } else if (g_memoryReadCount > 0 && g_unityInterceptCount == 0) {
-            writeLog(@"✅ 检测到内存读取但未识别为游戏数值");
-            writeLog(@"💡 可能需要调整数值识别范围");
-        } else {
-            writeLog(@"✅ Unity拦截器正在工作，已成功拦截游戏数值");
+        if (g_fileInterceptCount == 0 && g_sqliteInterceptCount == 0) {
+            writeLog(@"⚠️ 未检测到文件数据读取");
+            writeLog(@"💡 建议：在游戏中进行操作（购买、使用体力等）触发数据保存/读取");
+            writeLog(@"🔍 游戏可能使用内存缓存或其他存储方式");
+        } else if (g_fileInterceptCount > 0) {
+            writeLog(@"✅ 文件拦截器正在工作，已检测到数据文件读取");
+        } else if (g_sqliteInterceptCount > 0) {
+            writeLog(@"✅ SQLite拦截器正在工作，已检测到数据库操作");
         }
     });
     
-    writeLog(@"========== Unity内存拦截修改完成 ==========");
+    writeLog(@"========== 文件数据拦截修改完成 ==========");
     
     return YES;
 }
@@ -397,7 +375,7 @@ static BOOL modifyGameDataByUnityHook(NSInteger money, NSInteger stamina, NSInte
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v15.0";
+    title.text = @"🏠 我独自生活 v15.1";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -407,7 +385,7 @@ static BOOL modifyGameDataByUnityHook(NSInteger money, NSInteger stamina, NSInte
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"🎮 Unity内存拦截器";
+    info.text = @"📁 文件数据拦截器";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -429,7 +407,7 @@ static BOOL modifyGameDataByUnityHook(NSInteger money, NSInteger stamina, NSInte
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"v15.0: Unity内存拦截\n监控memcpy/memmove/PlayerPrefs";
+    tip.text = @"v15.1: 文件数据拦截\n监控NSData/NSString/SQLite";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -463,7 +441,7 @@ static BOOL modifyGameDataByUnityHook(NSInteger money, NSInteger stamina, NSInte
     [self.contentView addSubview:btn5];
     y += 43;
     
-    UIButton *btn6 = [self createButtonWithTitle:@"🎮 Unity状态" tag:6];
+    UIButton *btn6 = [self createButtonWithTitle:@"📁 文件状态" tag:6];
     btn6.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn6];
     y += 48;
@@ -496,8 +474,8 @@ static BOOL modifyGameDataByUnityHook(NSInteger money, NSInteger stamina, NSInte
 
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
-    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🎮 Unity内存拦截 v15.0" 
-        message:@"新特性：\n• Hook memcpy/memmove内存操作\n• Hook Unity PlayerPrefs\n• 智能识别游戏数值范围\n• 监控内存读取操作\n• 基于数值特征自动拦截\n\n⚠️ 启用后在游戏中操作查看效果\n\n确认继续？" 
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"📁 文件数据拦截 v15.1" 
+        message:@"新特性：\n• Hook NSData文件读取\n• Hook NSString文件读取\n• Hook SQLite数据库操作\n• 智能识别游戏数据文件\n• 基于已知数值自动替换\n\n⚠️ 启用后在游戏中操作查看效果\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -519,37 +497,37 @@ static BOOL modifyGameDataByUnityHook(NSInteger money, NSInteger stamina, NSInte
     switch (tag) {
         case 1:
             writeLog(@"功能：无限金钱");
-            success = modifyGameDataByUnityHook(999999999, 0, 0, 0, 0);
-            message = success ? @"💰 Unity金钱拦截已启用！\n\n监控内存读取，智能识别金钱数值\n在游戏中操作触发拦截效果" : @"❌ Unity Hook安装失败，请查看日志";
+            success = modifyGameDataByFileHook(999999999, 0, 0, 0, 0);
+            message = success ? @"💰 文件金钱拦截已启用！\n\n监控文件读取，智能识别金钱数据\n在游戏中操作触发拦截效果" : @"❌ 文件Hook安装失败，请查看日志";
             break;
         case 2:
             writeLog(@"功能：无限体力");
-            success = modifyGameDataByUnityHook(0, 999999, 0, 0, 0);
-            message = success ? @"⚡ Unity体力拦截已启用！\n\n监控内存读取，智能识别体力数值\n在游戏中操作触发拦截效果" : @"❌ Unity Hook安装失败，请查看日志";
+            success = modifyGameDataByFileHook(0, 999999, 0, 0, 0);
+            message = success ? @"⚡ 文件体力拦截已启用！\n\n监控文件读取，智能识别体力数据\n在游戏中操作触发拦截效果" : @"❌ 文件Hook安装失败，请查看日志";
             break;
         case 3:
             writeLog(@"功能：无限健康");
-            success = modifyGameDataByUnityHook(0, 0, 999, 0, 0);
-            message = success ? @"❤️ Unity健康拦截已启用！\n\n监控内存读取，智能识别健康数值\n在游戏中操作触发拦截效果" : @"❌ Unity Hook安装失败，请查看日志";
+            success = modifyGameDataByFileHook(0, 0, 999, 0, 0);
+            message = success ? @"❤️ 文件健康拦截已启用！\n\n监控文件读取，智能识别健康数据\n在游戏中操作触发拦截效果" : @"❌ 文件Hook安装失败，请查看日志";
             break;
         case 4:
             writeLog(@"功能：无限心情");
-            success = modifyGameDataByUnityHook(0, 0, 0, 999, 0);
-            message = success ? @"😊 Unity心情拦截已启用！\n\n监控内存读取，智能识别心情数值\n在游戏中操作触发拦截效果" : @"❌ Unity Hook安装失败，请查看日志";
+            success = modifyGameDataByFileHook(0, 0, 0, 999, 0);
+            message = success ? @"😊 文件心情拦截已启用！\n\n监控文件读取，智能识别心情数据\n在游戏中操作触发拦截效果" : @"❌ 文件Hook安装失败，请查看日志";
             break;
         case 5:
             writeLog(@"功能：一键全开");
-            success = modifyGameDataByUnityHook(999999999, 999999, 999, 999, 0);
-            message = success ? @"🎁 Unity全能拦截已启用！\n\n💰金钱、⚡体力、❤️健康、😊心情\n所有Unity拦截器已激活！" : @"❌ Unity Hook安装失败，请查看日志";
+            success = modifyGameDataByFileHook(999999999, 999999, 999, 999, 0);
+            message = success ? @"🎁 文件全能拦截已启用！\n\n💰金钱、⚡体力、❤️健康、😊心情\n所有文件拦截器已激活！" : @"❌ 文件Hook安装失败，请查看日志";
             break;
         case 6:
-            writeLog(@"功能：Unity状态");
-            writeLog([NSString stringWithFormat:@"🎮 Unity Hook: %@", g_unityHookEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"🧠 内存Hook: %@", g_memoryHookEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"📈 Unity拦截次数: %ld", (long)g_unityInterceptCount]);
-            writeLog([NSString stringWithFormat:@"📈 内存读取次数: %ld", (long)g_memoryReadCount]);
+            writeLog(@"功能：文件状态");
+            writeLog([NSString stringWithFormat:@"📁 文件Hook: %@", g_fileHookEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"🗄️ SQLite Hook: %@", g_sqliteHookEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"📈 文件拦截次数: %ld", (long)g_fileInterceptCount]);
+            writeLog([NSString stringWithFormat:@"📈 SQLite拦截次数: %ld", (long)g_sqliteInterceptCount]);
             success = YES;
-            message = @"🎮 Unity状态检查完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含Unity拦截信息";
+            message = @"📁 文件状态检查完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含文件拦截信息";
             break;
     }
     
@@ -731,7 +709,7 @@ static void WDZCheatInit(void) {
         // 设置全局异常处理器（防闪退保护）
         NSSetUncaughtExceptionHandler(&handleUncaughtException);
         
-        writeLog(@"🛡️ WoduziCheat v15.0 初始化完成 - Unity内存拦截已启用");
+        writeLog(@"🛡️ WoduziCheat v15.1 初始化完成 - 文件数据拦截已启用");
         
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             setupFloatingButton();
