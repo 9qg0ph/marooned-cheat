@@ -269,63 +269,100 @@
     </div>
 
     <script>
-        // 自动修改功能 - 使用固定特征值锚点（参考无尽噩梦方法）
+        // 自动修改功能 - 参考无尽噩梦的锚点方法
         function autoModify() {
-            h5gg.clearResults();
+            alert("🎮 开始自动修改...\n使用多种锚点策略搜索游戏数据");
             
-            // 尝试寻找游戏中的固定特征值作为锚点
-            var success = findGameDataByAnchor();
-            
-            if (success) {
-                alert("🎁 自动修改成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！");
-            } else {
-                alert("❌ 自动修改失败\n未找到游戏数据锚点\n请尝试手动输入修改");
+            // 策略1：Unity重力锚点（参考无尽噩梦）
+            if (tryUnityGravityAnchor()) {
+                alert("🎁 Unity重力锚点成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！");
+                return;
             }
+            
+            // 策略2：商店价格锚点
+            if (tryShopPriceAnchor()) {
+                alert("🎁 商店价格锚点成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！");
+                return;
+            }
+            
+            // 策略3：默认数值锚点
+            if (tryDefaultValueAnchor()) {
+                alert("🎁 默认数值锚点成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！");
+                return;
+            }
+            
+            alert("❌ 所有锚点策略失败\n请尝试：\n1. 重启游戏到初始状态\n2. 确保在主界面\n3. 使用手动输入修改");
         }
         
-        // 使用锚点搜索法（基于游戏默认值）
-        function findGameDataByAnchor() {
-            // 基于新进游戏的默认值：现金500，体力100，健康100，心情100
-            
-            // 策略1：搜索500（默认现金）- 最独特的值
-            if (tryDefaultValueAnchor('500', '默认现金')) return true;
-            
-            // 策略2：搜索100（体力/健康/心情的默认值和上限）
-            if (tryDefaultValueAnchor('100', '默认体力/健康/心情')) return true;
-            
-            // 策略3：联合搜索 - 同时搜索500和100的组合
-            if (tryComboAnchor()) return true;
+        // 策略1：Unity重力锚点（参考无尽噩梦的成功方法）
+        function tryUnityGravityAnchor() {
+            try {
+                h5gg.clearResults();
+                
+                // 搜索Unity重力常数 -9.81
+                var gravityCount = h5gg.searchNumber('-9.81', 'F32', '0x00000000', '0x20000000000');
+                
+                if (gravityCount > 0) {
+                    alert("🎯 发现Unity重力锚点: " + gravityCount + "个\n开始在附近搜索游戏数据...");
+                    
+                    // 在重力锚点附近搜索可能的游戏数据
+                    var searchValues = [
+                        {val: '500', type: 'I32', desc: '默认金钱'},
+                        {val: '100', type: 'I32', desc: '默认体力/健康/心情'},
+                        {val: '474', type: 'I32', desc: '当前金钱'},
+                        {val: '136', type: 'I32', desc: '当前体力'},
+                        {val: '93', type: 'I32', desc: '当前健康'},
+                        {val: '88', type: 'I32', desc: '当前心情'}
+                    ];
+                    
+                    for (var i = 0; i < searchValues.length; i++) {
+                        var searchVal = searchValues[i];
+                        
+                        // 在重力锚点附近搜索游戏数据
+                        h5gg.searchNearby(searchVal.val, searchVal.type, '0x2000');
+                        var nearbyCount = h5gg.getResultsCount();
+                        
+                        if (nearbyCount > 0) {
+                            alert("🎯 在重力锚点附近发现 " + searchVal.desc + ": " + nearbyCount + "个");
+                            
+                            // 验证并修改找到的数据
+                            if (validateAndModifyNearbyData(searchVal.val)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // 忽略错误，尝试下一个策略
+            }
             
             return false;
         }
         
-        // 尝试默认值作为锚点
-        function tryDefaultValueAnchor(value, description) {
+        // 策略2：商店价格锚点
+        function tryShopPriceAnchor() {
             try {
-                h5gg.clearResults();
-                var count = h5gg.searchNumber(value, 'I32', '0x00000000', '0x20000000000');
+                // 商店固定价格
+                var shopPrices = ['900', '465', '1600', '270', '1100', '1500', '7500', '5999'];
                 
-                if (count > 0) {
-                    var results = h5gg.getResults(Math.min(count, 100));
+                for (var i = 0; i < shopPrices.length; i++) {
+                    h5gg.clearResults();
+                    var priceCount = h5gg.searchNumber(shopPrices[i], 'I32', '0x00000000', '0x20000000000');
                     
-                    for (var i = 0; i < results.length; i++) {
-                        var anchorAddr = results[i].address;
+                    if (priceCount > 0 && priceCount < 20) { // 商店价格应该比较少见
+                        alert("🏪 发现商店价格锚点: " + shopPrices[i] + "元 (" + priceCount + "个)");
                         
-                        if (value === '500') {
-                            // 如果是500（现金），直接测试作为基础地址
-                            if (testGameDataStructure(anchorAddr)) {
-                                return true;
-                            }
-                        } else if (value === '100') {
-                            // 如果是100，可能是体力(+24)、健康(+72)或心情(+104)
-                            var possibleBases = [
-                                '0x' + (parseInt(anchorAddr, 16) - 24).toString(16),  // 体力位置
-                                '0x' + (parseInt(anchorAddr, 16) - 72).toString(16),  // 健康位置
-                                '0x' + (parseInt(anchorAddr, 16) - 104).toString(16)  // 心情位置
-                            ];
+                        // 在商店价格附近大范围搜索游戏数据
+                        var gameValues = ['500', '100', '474', '136', '93', '88'];
+                        
+                        for (var j = 0; j < gameValues.length; j++) {
+                            h5gg.searchNearby(gameValues[j], 'I32', '0x5000'); // 更大的搜索范围
+                            var nearbyCount = h5gg.getResultsCount();
                             
-                            for (var j = 0; j < possibleBases.length; j++) {
-                                if (testGameDataStructure(possibleBases[j])) {
+                            if (nearbyCount > 0) {
+                                alert("🎯 在商店价格附近发现游戏数据: " + gameValues[j] + " (" + nearbyCount + "个)");
+                                
+                                if (validateAndModifyNearbyData(gameValues[j])) {
                                     return true;
                                 }
                             }
@@ -339,31 +376,74 @@
             return false;
         }
         
-        // 联合搜索策略
-        function tryComboAnchor() {
+        // 策略3：默认数值锚点
+        function tryDefaultValueAnchor() {
             try {
-                // 先搜索500（现金）
-                h5gg.clearResults();
-                var count500 = h5gg.searchNumber('500', 'I32', '0x00000000', '0x20000000000');
+                // 直接搜索默认值组合
+                var defaultCombos = [
+                    {money: '500', stamina: '100', health: '100', mood: '100'},
+                    {money: '474', stamina: '136', health: '93', mood: '88'}
+                ];
                 
-                if (count500 > 0 && count500 < 50) { // 500应该比较少见
-                    var results500 = h5gg.getResults(count500);
+                for (var i = 0; i < defaultCombos.length; i++) {
+                    var combo = defaultCombos[i];
                     
-                    for (var i = 0; i < results500.length; i++) {
-                        var moneyAddr = results500[i].address;
+                    h5gg.clearResults();
+                    var moneyCount = h5gg.searchNumber(combo.money, 'I32', '0x00000000', '0x20000000000');
+                    
+                    if (moneyCount > 0 && moneyCount < 50) {
+                        alert("💰 发现金钱锚点: " + combo.money + " (" + moneyCount + "个)\n验证数据结构...");
                         
-                        // 验证这个500是否真的是现金地址
-                        if (validateDefaultGameData(moneyAddr)) {
-                            // 执行修改
-                            var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
-                            var healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
-                            var moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
+                        var results = h5gg.getResults(moneyCount);
+                        
+                        for (var j = 0; j < results.length; j++) {
+                            var moneyAddr = results[j].address;
                             
-                            h5gg.setValue(moneyAddr, 2100000000, 'I32');     // 21亿现金
-                            h5gg.setValue(staminaAddr, 2100000000, 'I32');   // 21亿体力
-                            h5gg.setValue(healthAddr, 100, 'I32');           // 100健康
-                            h5gg.setValue(moodAddr, 100, 'I32');             // 100心情
-                            
+                            if (validateGameDataStructure(moneyAddr, combo)) {
+                                // 执行修改
+                                var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
+                                var healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
+                                var moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
+                                
+                                h5gg.setValue(moneyAddr, 2100000000, 'I32');
+                                h5gg.setValue(staminaAddr, 2100000000, 'I32');
+                                h5gg.setValue(healthAddr, 100, 'I32');
+                                h5gg.setValue(moodAddr, 100, 'I32');
+                                
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // 忽略错误
+            }
+            
+            return false;
+        }
+        
+        // 验证并修改附近的数据
+        function validateAndModifyNearbyData(anchorValue) {
+            try {
+                var results = h5gg.getResults(h5gg.getResultsCount());
+                
+                for (var i = 0; i < results.length; i++) {
+                    var anchorAddr = results[i].address;
+                    
+                    // 测试这个地址是否为金钱地址
+                    if (testAsMoneyAddress(anchorAddr)) {
+                        return true;
+                    }
+                    
+                    // 测试偏移地址（可能是体力、健康、心情）
+                    var possibleMoneyAddrs = [
+                        '0x' + (parseInt(anchorAddr, 16) - 24).toString(16),  // 如果当前是体力
+                        '0x' + (parseInt(anchorAddr, 16) - 72).toString(16),  // 如果当前是健康
+                        '0x' + (parseInt(anchorAddr, 16) - 104).toString(16)  // 如果当前是心情
+                    ];
+                    
+                    for (var j = 0; j < possibleMoneyAddrs.length; j++) {
+                        if (testAsMoneyAddress(possibleMoneyAddrs[j])) {
                             return true;
                         }
                     }
@@ -375,145 +455,89 @@
             return false;
         }
         
-        // 验证默认游戏数据（新进游戏的特征）
-        function validateDefaultGameData(baseAddr) {
+        // 测试地址是否为金钱地址
+        function testAsMoneyAddress(moneyAddr) {
             try {
-                var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
-                var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
-                var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
+                var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
+                var healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
+                var moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
                 
-                var moneyValue = h5gg.getValue(baseAddr, 'I32');
+                var moneyValue = h5gg.getValue(moneyAddr, 'I32');
                 var staminaValue = h5gg.getValue(staminaAddr, 'I32');
                 var healthValue = h5gg.getValue(healthAddr, 'I32');
                 var moodValue = h5gg.getValue(moodAddr, 'I32');
                 
-                // 验证是否符合新进游戏的默认值特征
-                return (moneyValue === 500 &&           // 现金必须是500
-                        staminaValue === 100 &&         // 体力必须是100
-                        healthValue === 100 &&          // 健康必须是100
-                        moodValue === 100);             // 心情必须是100
+                // 验证数据结构的合理性
+                if (moneyValue >= 0 && moneyValue <= 100000000 &&      // 金钱：合理范围
+                    staminaValue >= 0 && staminaValue <= 100000000 &&   // 体力：合理范围  
+                    healthValue >= 0 && healthValue <= 100 &&           // 健康：0-100
+                    moodValue >= 0 && moodValue <= 100) {               // 心情：0-100
+                    
+                    // 执行修改
+                    h5gg.setValue(moneyAddr, 2100000000, 'I32');
+                    h5gg.setValue(staminaAddr, 2100000000, 'I32');
+                    h5gg.setValue(healthAddr, 100, 'I32');
+                    h5gg.setValue(moodAddr, 100, 'I32');
+                    
+                    return true;
+                }
+            } catch (e) {
+                // 忽略无效地址
+            }
+            
+            return false;
+        }
+        
+        // 验证游戏数据结构
+        function validateGameDataStructure(moneyAddr, expectedValues) {
+            try {
+                var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
+                var healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
+                var moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
+                
+                var moneyValue = h5gg.getValue(moneyAddr, 'I32');
+                var staminaValue = h5gg.getValue(staminaAddr, 'I32');
+                var healthValue = h5gg.getValue(healthAddr, 'I32');
+                var moodValue = h5gg.getValue(moodAddr, 'I32');
+                
+                // 验证是否匹配期望值
+                return (moneyValue == parseInt(expectedValues.money) &&
+                        staminaValue == parseInt(expectedValues.stamina) &&
+                        healthValue == parseInt(expectedValues.health) &&
+                        moodValue == parseInt(expectedValues.mood));
                         
             } catch (e) {
                 return false;
             }
         }
         
-        // 测试游戏数据结构是否正确
-        function testGameDataStructure(baseAddr) {
-            try {
-                // 计算偏移地址
-                var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
-                var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
-                var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
-                
-                // 读取所有数值
-                var moneyValue = h5gg.getValue(baseAddr, 'I32');
-                var staminaValue = h5gg.getValue(staminaAddr, 'I32');
-                var healthValue = h5gg.getValue(healthAddr, 'I32');
-                var moodValue = h5gg.getValue(moodAddr, 'I32');
-                
-                // 验证数据结构：健康和心情应该在0-100范围内
-                if (moneyValue >= 0 && moneyValue <= 100000000 &&      // 金钱：合理范围
-                    staminaValue >= 0 && staminaValue <= 100000000 &&   // 体力：合理范围  
-                    healthValue >= 0 && healthValue <= 100 &&           // 健康：0-100
-                    moodValue >= 0 && moodValue <= 100) {               // 心情：0-100
-                    
-                    // 找到正确的数据结构，执行修改
-                    h5gg.setValue(baseAddr, 2100000000, 'I32');        // 21亿金钱
-                    h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
-                    h5gg.setValue(healthAddr, 100, 'I32');              // 100健康（满值）
-                    h5gg.setValue(moodAddr, 100, 'I32');                // 100心情（满值）
-                    
-                    return true;
-                }
-            } catch (e) {
-                // 忽略无效地址
-            }
-            
-            return false;
-        }
-        
-        // 验证并修改游戏数据
-        function validateGameData(baseAddr) {
-            try {
-                // 计算偏移地址
-                var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
-                var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
-                var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
-                
-                // 读取偏移地址的值
-                var baseValue = h5gg.getValue(baseAddr, 'I32');
-                var staminaValue = h5gg.getValue(staminaAddr, 'I32');
-                var healthValue = h5gg.getValue(healthAddr, 'I32');
-                var moodValue = h5gg.getValue(moodAddr, 'I32');
-                
-                // 验证数值是否在游戏合理范围内
-                if (baseValue >= 10 && baseValue <= 50000 &&
-                    staminaValue >= 0 && staminaValue <= 50000 &&
-                    healthValue >= 0 && healthValue <= 1000 &&
-                    moodValue >= 0 && moodValue <= 1000) {
-                    
-                    // 执行修改
-                    h5gg.setValue(baseAddr, 2100000000, 'I32');        // 21亿金钱
-                    h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
-                    h5gg.setValue(healthAddr, 10000, 'I32');            // 10000健康
-                    h5gg.setValue(moodAddr, 10000, 'I32');              // 10000心情
-                    
-                    return true;
-                }
-            } catch (e) {
-                // 忽略无效地址
-            }
-            
-            return false;
-        }
-        
-        // 锚点发现工具 - 专门搜索引擎级固定常数
+        // 锚点发现工具 - 搜索商店固定价格作为锚点
         function findAnchors() {
-            alert("🔍 搜索引擎级固定常数...\n类似无尽噩梦的-9.81重力值\n这些值不会被游戏保护影响");
+            alert("🔍 搜索商店固定价格作为锚点...\n商店价格是游戏配置数据，最稳定！");
             
-            // Unity引擎和游戏引擎的常见固定值
-            var engineConstants = [
-                // 物理引擎常数
-                {val: '-9.81', type: 'F32', desc: 'Unity重力值'},
-                {val: '9.81', type: 'F32', desc: '重力值(正数)'},
-                {val: '-9.8', type: 'F32', desc: '重力值(简化)'},
-                {val: '9.8', type: 'F32', desc: '重力值(简化正数)'},
-                
-                // 时间和帧率常数
-                {val: '60', type: 'F32', desc: '目标帧率'},
-                {val: '30', type: 'F32', desc: '最低帧率'},
-                {val: '0.016666', type: 'F32', desc: '60FPS时间间隔'},
-                {val: '0.033333', type: 'F32', desc: '30FPS时间间隔'},
-                
-                // 数学常数
-                {val: '3.14159', type: 'F32', desc: 'PI值'},
-                {val: '2.71828', type: 'F32', desc: 'E值'},
-                {val: '1.41421', type: 'F32', desc: '根号2'},
-                
-                // Unity特有常数
-                {val: '1', type: 'F32', desc: 'Unity单位'},
-                {val: '0', type: 'F32', desc: '零值'},
-                {val: '0.5', type: 'F32', desc: '中点值'},
-                
-                // 可能的游戏时间常数
-                {val: '24', type: 'F32', desc: '24小时'},
-                {val: '86400', type: 'F32', desc: '一天秒数'},
-                {val: '3600', type: 'F32', desc: '一小时秒数'}
+            // 从商店界面观察到的固定价格
+            var shopPrices = [
+                {val: '900', desc: '自行车/考公视频价格'},
+                {val: '465', desc: '设计道堂价格'},
+                {val: '1600', desc: '手表价格'},
+                {val: '270', desc: '微社套装价格'},
+                {val: '1100', desc: '动感单车价格'},
+                {val: '1500', desc: '设计插件价格'},
+                {val: '7500', desc: '高配电脑价格'},
+                {val: '5999', desc: '自动平衡车价格'}
             ];
             
-            var foundConstants = [];
+            var foundPrices = [];
             
-            for (var i = 0; i < engineConstants.length; i++) {
+            for (var i = 0; i < shopPrices.length; i++) {
                 try {
                     h5gg.clearResults();
-                    var count = h5gg.searchNumber(engineConstants[i].val, engineConstants[i].type, '0x00000000', '0x20000000000');
+                    var count = h5gg.searchNumber(shopPrices[i].val, 'I32', '0x00000000', '0x20000000000');
                     
-                    if (count > 0 && count < 100) {
-                        foundConstants.push({
-                            value: engineConstants[i].val,
-                            type: engineConstants[i].type,
-                            desc: engineConstants[i].desc,
+                    if (count > 0 && count < 50) { // 商店价格应该比较少见
+                        foundPrices.push({
+                            value: shopPrices[i].val,
+                            desc: shopPrices[i].desc,
                             count: count
                         });
                     }
@@ -522,127 +546,16 @@
                 }
             }
             
-            if (foundConstants.length > 0) {
-                var report = "🎯 发现引擎常数：\n\n";
-                for (var j = 0; j < Math.min(foundConstants.length, 10); j++) {
-                    report += "• " + foundConstants[j].value + " (" + foundConstants[j].type + ") - " + foundConstants[j].desc + " [" + foundConstants[j].count + "个]\n";
+            if (foundPrices.length > 0) {
+                var report = "🎯 发现商店价格锚点：\n\n";
+                for (var j = 0; j < Math.min(foundPrices.length, 10); j++) {
+                    report += "• " + foundPrices[j].value + "元 - " + foundPrices[j].desc + " [" + foundPrices[j].count + "个]\n";
                 }
-                report += "\n💡 这些可能是稳定的锚点";
+                report += "\n💡 这些价格可以作为稳定锚点！";
                 alert(report);
-                
-                // 测试最有希望的常数
-                testEngineConstants(foundConstants);
             } else {
-                alert("❌ 未发现引擎常数\n这个游戏可能：\n1. 使用了特殊的引擎\n2. 有强力的反调试保护\n3. 数据完全加密存储");
+                alert("❌ 未发现商店价格\n建议：\n1. 打开商店界面\n2. 确保商店数据已加载\n3. 尝试自动修改功能");
             }
-        }
-            
-            var foundAnchors = [];
-            
-            for (var i = 0; i < candidates.length; i++) {
-                try {
-                    h5gg.clearResults();
-                    var count = h5gg.searchNumber(candidates[i].val, 'I32', '0x00000000', '0x20000000000');
-                    
-                    if (count > 0 && count < 50) { // 理想的锚点：存在但不太多
-                        foundAnchors.push({
-                            value: candidates[i].val,
-                            desc: candidates[i].desc,
-                            count: count
-                        });
-                    }
-                } catch (e) {
-                    continue;
-                }
-            }
-            
-            if (foundAnchors.length > 0) {
-                var report = "🎯 发现潜在锚点：\n\n";
-                for (var j = 0; j < Math.min(foundAnchors.length, 8); j++) {
-                    report += "• " + foundAnchors[j].value + " (" + foundAnchors[j].desc + ") - " + foundAnchors[j].count + "个\n";
-                }
-                report += "\n💡 建议测试这些值作为锚点";
-                alert(report);
-                
-                // 自动测试最有希望的锚点
-                testBestAnchor(foundAnchors);
-            } else {
-                alert("❌ 未发现明显的锚点特征值\n建议：\n1. 观察游戏界面的固定数值\n2. 查看游戏设置中的常数\n3. 尝试手动输入修改");
-            }
-        }
-        
-        // 测试最佳锚点
-        function testBestAnchor(anchors) {
-            // 选择数量最少的锚点进行测试（通常最稳定）
-            anchors.sort(function(a, b) { return a.count - b.count; });
-            
-            var bestAnchor = anchors[0];
-            alert("🧪 测试最佳锚点: " + bestAnchor.value + "\n数量: " + bestAnchor.count + "\n描述: " + bestAnchor.desc);
-            
-            // 使用这个锚点尝试修改
-            if (testAnchorModification(bestAnchor.value)) {
-                alert("🎉 锚点测试成功！\n已使用 " + bestAnchor.value + " 作为锚点完成修改");
-            } else {
-                alert("❌ 锚点测试失败\n" + bestAnchor.value + " 无法定位到游戏数据\n请尝试其他方法");
-            }
-        }
-        
-        // 测试锚点修改
-        function testAnchorModification(anchorValue) {
-            try {
-                h5gg.clearResults();
-                var count = h5gg.searchNumber(anchorValue, 'I32', '0x00000000', '0x20000000000');
-                
-                if (count > 0) {
-                    var results = h5gg.getResults(count);
-                    
-                    for (var i = 0; i < results.length; i++) {
-                        var anchorAddr = results[i].address;
-                        
-                        // 在锚点附近搜索游戏数据
-                        if (searchNearAnchor(anchorAddr)) {
-                            return true;
-                        }
-                    }
-                }
-            } catch (e) {
-                // 忽略错误
-            }
-            
-            return false;
-        }
-        
-        // 尝试在指定地址修改数值
-        function tryModifyAtAddress(baseAddr) {
-            try {
-                // 计算偏移地址
-                var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
-                var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
-                var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
-                
-                // 读取偏移地址的值进行验证
-                var staminaValue = h5gg.getValue(staminaAddr, 'I32');
-                var healthValue = h5gg.getValue(healthAddr, 'I32');
-                var moodValue = h5gg.getValue(moodAddr, 'I32');
-                
-                // 验证数值是否在游戏合理范围内
-                if (staminaValue >= 0 && staminaValue <= 10000 &&
-                    healthValue >= 0 && healthValue <= 1000 &&
-                    moodValue >= 0 && moodValue <= 1000) {
-                    
-                    // 执行修改
-                    h5gg.setValue(baseAddr, 2100000000, 'I32');        // 21亿金钱
-                    h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
-                    h5gg.setValue(healthAddr, 10000, 'I32');            // 10000健康
-                    h5gg.setValue(moodAddr, 10000, 'I32');              // 10000心情
-                    
-                    return true;
-                }
-            } catch (e) {
-                // 忽略无效地址
-            }
-            
-            return false;
         }
         
         // 全局变量存储当前输入步骤
