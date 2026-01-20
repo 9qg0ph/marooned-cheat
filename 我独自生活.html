@@ -253,10 +253,11 @@
                     免责声明：本工具仅供技术研究与学习，严禁用于商业用途及非法途径。使用本工具修改游戏可能违反游戏服务条款，用户需自行承担一切风险和责任。严禁倒卖、传播或用于牟利，否则后果自负。继续使用即表示您已阅读并同意本声明。
                 </div>
                 
-                <div class="tip-text">点击按钮后依次输入当前数值进行修改</div>
+                <div class="tip-text">直接点击按钮即可自动搜索并修改数值</div>
                 
                 <!-- 功能按钮 -->
-                <a href="javascript:void(0);" onclick="startModify()" class="button-style">🎁 一键全开修改</a>
+                <a href="javascript:void(0);" onclick="autoModify()" class="button-style">🎁 一键全开修改</a>
+                <a href="javascript:void(0);" onclick="startModify()" class="button-style">📝 手动输入修改</a>
                 
                 <div>
                     <div class="list-group-item123 text-center">©&nbsp;2026&nbsp;&nbsp;𝐈𝐎𝐒𝐃𝐊 科技虎</div>
@@ -266,6 +267,105 @@
     </div>
 
     <script>
+        // 自动修改功能 - 不需要输入当前值
+        function autoModify() {
+            h5gg.clearResults();
+            
+            // 方法1：智能搜索游戏数据结构
+            var foundCount = smartSearch();
+            
+            if (foundCount > 0) {
+                alert("🎁 自动修改成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n修改了 " + foundCount + " 个地址");
+            } else {
+                alert("❌ 自动修改失败\n未找到有效的游戏数据地址\n请尝试手动输入修改或确保游戏正在运行");
+            }
+        }
+        
+        // 智能搜索函数
+        function smartSearch() {
+            var modifiedCount = 0;
+            
+            // 方法1：搜索可能的数值组合
+            var commonValues = [100, 200, 300, 500, 1000, 1500, 2000, 3000, 5000];
+            
+            for (var v = 0; v < commonValues.length; v++) {
+                h5gg.clearResults();
+                var count = h5gg.searchNumber(commonValues[v].toString(), 'I32', '0x100000000', '0x200000000');
+                
+                if (count > 0 && count < 50) {
+                    var results = h5gg.getResults(count);
+                    
+                    for (var i = 0; i < results.length; i++) {
+                        var baseAddr = results[i].address;
+                        
+                        if (tryModifyAtAddress(baseAddr)) {
+                            modifiedCount++;
+                        }
+                    }
+                }
+                
+                if (modifiedCount > 0) break;
+            }
+            
+            // 方法2：如果方法1失败，尝试搜索更大范围
+            if (modifiedCount === 0) {
+                h5gg.clearResults();
+                var count = h5gg.searchNumber('*', 'I32', '0x100000000', '0x200000000');
+                
+                if (count > 0) {
+                    var results = h5gg.getResults(Math.min(count, 100));
+                    
+                    for (var i = 0; i < results.length; i++) {
+                        var baseAddr = results[i].address;
+                        var value = parseInt(results[i].value);
+                        
+                        // 只处理合理范围的数值
+                        if (value >= 50 && value <= 50000) {
+                            if (tryModifyAtAddress(baseAddr)) {
+                                modifiedCount++;
+                                if (modifiedCount >= 3) break; // 限制修改数量
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return modifiedCount;
+        }
+        
+        // 尝试在指定地址修改数值
+        function tryModifyAtAddress(baseAddr) {
+            try {
+                // 计算偏移地址
+                var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
+                var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
+                var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
+                
+                // 读取偏移地址的值进行验证
+                var staminaValue = h5gg.getValue(staminaAddr, 'I32');
+                var healthValue = h5gg.getValue(healthAddr, 'I32');
+                var moodValue = h5gg.getValue(moodAddr, 'I32');
+                
+                // 验证数值是否在游戏合理范围内
+                if (staminaValue >= 0 && staminaValue <= 10000 &&
+                    healthValue >= 0 && healthValue <= 1000 &&
+                    moodValue >= 0 && moodValue <= 1000) {
+                    
+                    // 执行修改
+                    h5gg.setValue(baseAddr, 2100000000, 'I32');        // 21亿金钱
+                    h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
+                    h5gg.setValue(healthAddr, 10000, 'I32');            // 10000健康
+                    h5gg.setValue(moodAddr, 10000, 'I32');              // 10000心情
+                    
+                    return true;
+                }
+            } catch (e) {
+                // 忽略无效地址
+            }
+            
+            return false;
+        }
+        
         // 全局变量存储当前输入步骤
         var inputStep = 0;
         var inputValues = {};
