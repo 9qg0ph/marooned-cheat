@@ -1,14 +1,13 @@
 // 我独自生活修改器 - WoduziCheat.m
-// 实时内存搜索修改系统 v15.2
+// 稳定基础修改系统 v15.3
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <mach/mach.h>
 #import <sys/mman.h>
 
-// 实时内存搜索开关
-static BOOL g_memorySearchEnabled = NO;
-static BOOL g_realTimeModifyEnabled = NO;
+// 基础修改开关
+static BOOL g_basicModifyEnabled = NO;
 
 // 修改后的数值
 static NSInteger g_modifiedMoney = 999999999;
@@ -16,15 +15,8 @@ static NSInteger g_modifiedStamina = 999999;
 static NSInteger g_modifiedHealth = 999;
 static NSInteger g_modifiedMood = 999;
 
-// 内存搜索计数器
-static NSInteger g_memorySearchCount = 0;
-static NSInteger g_memoryModifyCount = 0;
-
-// 找到的地址缓存
-static uintptr_t g_foundMoneyAddress = 0;
-static uintptr_t g_foundStaminaAddress = 0;
-static uintptr_t g_foundHealthAddress = 0;
-static uintptr_t g_foundMoodAddress = 0;
+// 修改计数器
+static NSInteger g_modifyCount = 0;
 
 #pragma mark - 函数前向声明
 
@@ -139,227 +131,59 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-#pragma mark - 实时内存搜索修改系统
+#pragma mark - 基础修改系统（手动指导）
 
-// 安全的内存读取函数
-static BOOL safeMemoryRead(uintptr_t address, void* buffer, size_t size) {
-    @try {
-        // 检查地址是否可读
-        if (address == 0 || address < 0x100000000 || address > 0x200000000) {
-            return NO;
-        }
-        
-        // 尝试读取内存
-        memcpy(buffer, (void*)address, size);
-        return YES;
-    } @catch (NSException *exception) {
-        return NO;
-    }
-}
-
-// 安全的内存写入函数
-static BOOL safeMemoryWrite(uintptr_t address, void* data, size_t size) {
-    @try {
-        // 检查地址是否可写
-        if (address == 0 || address < 0x100000000 || address > 0x200000000) {
-            return NO;
-        }
-        
-        // 尝试写入内存
-        memcpy((void*)address, data, size);
-        return YES;
-    } @catch (NSException *exception) {
-        return NO;
-    }
-}
-
-// 搜索特定数值的内存地址
-static NSArray* searchMemoryForValue(int targetValue) {
-    NSMutableArray *foundAddresses = [NSMutableArray array];
+// 核心修改函数：手动指导方式
+static BOOL modifyGameDataByManualGuide(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
+    writeLog(@"========== 开始手动指导修改 v15.3 ==========");
     
-    writeLog([NSString stringWithFormat:@"🔍 开始搜索数值: %d", targetValue]);
+    g_modifyCount++;
     
-    // 搜索范围：堆内存区域
-    uintptr_t startAddr = 0x100000000;
-    uintptr_t endAddr = 0x150000000;
-    uintptr_t stepSize = 4; // 4字节对齐
+    writeLog(@"📋 手动修改指导：");
+    writeLog(@"");
+    writeLog(@"🎯 第一步：打开iGameGod");
+    writeLog(@"🎯 第二步：搜索当前数值");
     
-    int foundCount = 0;
-    for (uintptr_t addr = startAddr; addr < endAddr && foundCount < 50; addr += stepSize) {
-        int value = 0;
-        if (safeMemoryRead(addr, &value, sizeof(int))) {
-            if (value == targetValue) {
-                [foundAddresses addObject:@(addr)];
-                foundCount++;
-                writeLog([NSString stringWithFormat:@"📍 找到地址: 0x%lx = %d", addr, value]);
-            }
-        }
-        
-        // 每搜索1000万个地址输出一次进度
-        if ((addr - startAddr) % 10000000 == 0) {
-            writeLog([NSString stringWithFormat:@"⏳ 搜索进度: 0x%lx", addr]);
-        }
-    }
-    
-    writeLog([NSString stringWithFormat:@"✅ 搜索完成，找到 %lu 个地址", (unsigned long)foundAddresses.count]);
-    return [foundAddresses copy];
-}
-
-// 验证地址是否为游戏数据结构
-static BOOL verifyGameDataStructure(uintptr_t baseAddr) {
-    // 检查偏移地址的数值是否合理
-    int money = 0, stamina = 0, health = 0, mood = 0;
-    
-    if (!safeMemoryRead(baseAddr, &money, sizeof(int))) return NO;
-    if (!safeMemoryRead(baseAddr + 24, &stamina, sizeof(int))) return NO;
-    if (!safeMemoryRead(baseAddr + 72, &health, sizeof(int))) return NO;
-    if (!safeMemoryRead(baseAddr + 104, &mood, sizeof(int))) return NO;
-    
-    writeLog([NSString stringWithFormat:@"🔍 验证地址 0x%lx: 金钱=%d, 体力=%d, 健康=%d, 心情=%d", 
-              baseAddr, money, stamina, health, mood]);
-    
-    // 检查数值是否在合理范围内
-    if (money >= 0 && money <= 100000000 &&
-        stamina >= 0 && stamina <= 1000000 &&
-        health >= 0 && health <= 1000 &&
-        mood >= 0 && mood <= 1000) {
-        return YES;
-    }
-    
-    return NO;
-}
-
-// 实时修改内存数值
-static void realTimeModifyMemory(void) {
-    if (!g_realTimeModifyEnabled) return;
-    
-    // 如果已经找到地址，直接修改
-    if (g_foundMoneyAddress != 0) {
-        int newMoney = (int)g_modifiedMoney;
-        if (safeMemoryWrite(g_foundMoneyAddress, &newMoney, sizeof(int))) {
-            g_memoryModifyCount++;
-            writeLog([NSString stringWithFormat:@"💰 修改金钱成功: 0x%lx = %d", g_foundMoneyAddress, newMoney]);
-        }
-    }
-    
-    if (g_foundStaminaAddress != 0) {
-        int newStamina = (int)g_modifiedStamina;
-        if (safeMemoryWrite(g_foundStaminaAddress, &newStamina, sizeof(int))) {
-            g_memoryModifyCount++;
-            writeLog([NSString stringWithFormat:@"⚡ 修改体力成功: 0x%lx = %d", g_foundStaminaAddress, newStamina]);
-        }
-    }
-    
-    if (g_foundHealthAddress != 0) {
-        int newHealth = (int)g_modifiedHealth;
-        if (safeMemoryWrite(g_foundHealthAddress, &newHealth, sizeof(int))) {
-            g_memoryModifyCount++;
-            writeLog([NSString stringWithFormat:@"❤️ 修改健康成功: 0x%lx = %d", g_foundHealthAddress, newHealth]);
-        }
-    }
-    
-    if (g_foundMoodAddress != 0) {
-        int newMood = (int)g_modifiedMood;
-        if (safeMemoryWrite(g_foundMoodAddress, &newMood, sizeof(int))) {
-            g_memoryModifyCount++;
-            writeLog([NSString stringWithFormat:@"😊 修改心情成功: 0x%lx = %d", g_foundMoodAddress, newMood]);
-        }
-    }
-}
-
-// 启动实时内存搜索和修改
-static void startRealTimeMemoryModification(void) {
-    writeLog(@"🚀 启动实时内存搜索和修改系统");
-    
-    g_memorySearchEnabled = YES;
-    g_realTimeModifyEnabled = YES;
-    
-    // 创建后台队列进行内存搜索
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        // 搜索已知的游戏数值
-        NSArray *moneyAddresses = searchMemoryForValue(474);  // 搜索金钱
-        NSArray *staminaAddresses = searchMemoryForValue(136); // 搜索体力
-        NSArray *healthAddresses = searchMemoryForValue(93);   // 搜索健康
-        NSArray *moodAddresses = searchMemoryForValue(88);     // 搜索心情
-        
-        // 尝试找到正确的数据结构
-        for (NSNumber *addrNum in moneyAddresses) {
-            uintptr_t addr = [addrNum unsignedLongValue];
-            if (verifyGameDataStructure(addr)) {
-                g_foundMoneyAddress = addr;
-                g_foundStaminaAddress = addr + 24;
-                g_foundHealthAddress = addr + 72;
-                g_foundMoodAddress = addr + 104;
-                
-                writeLog([NSString stringWithFormat:@"🎯 找到游戏数据结构！基地址: 0x%lx", addr]);
-                break;
-            }
-        }
-        
-        // 启动实时修改定时器
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES block:^(NSTimer * _Nonnull timer) {
-                if (g_realTimeModifyEnabled) {
-                    realTimeModifyMemory();
-                } else {
-                    [timer invalidate];
-                }
-            }];
-        });
-    });
-}
-
-// 核心修改函数：实时内存搜索修改方式
-static BOOL modifyGameDataByRealTimeMemory(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始实时内存搜索修改 v15.2 ==========");
-    
-    // 重置计数器
-    g_memorySearchCount = 0;
-    g_memoryModifyCount = 0;
-    
-    // 设置修改值
     if (money > 0) {
-        g_modifiedMoney = money;
-        writeLog([NSString stringWithFormat:@"💰 设置金钱目标值: %ld", (long)money]);
+        writeLog(@"💰 金钱修改：");
+        writeLog(@"   1. 在iGameGod中搜索当前金钱数值");
+        writeLog(@"   2. 找到地址后修改为 999999999");
+        writeLog(@"   3. 记住地址，下次直接修改");
     }
     
     if (stamina > 0) {
-        g_modifiedStamina = stamina;
-        writeLog([NSString stringWithFormat:@"⚡ 设置体力目标值: %ld", (long)stamina]);
+        writeLog(@"⚡ 体力修改：");
+        writeLog(@"   1. 在iGameGod中搜索当前体力数值");
+        writeLog(@"   2. 找到地址后修改为 999999");
+        writeLog(@"   3. 体力地址 = 金钱地址 + 24字节");
     }
     
     if (health > 0) {
-        g_modifiedHealth = health;
-        writeLog([NSString stringWithFormat:@"❤️ 设置健康目标值: %ld", (long)health]);
+        writeLog(@"❤️ 健康修改：");
+        writeLog(@"   1. 在iGameGod中搜索当前健康数值");
+        writeLog(@"   2. 找到地址后修改为 999");
+        writeLog(@"   3. 健康地址 = 金钱地址 + 72字节");
     }
     
     if (mood > 0) {
-        g_modifiedMood = mood;
-        writeLog([NSString stringWithFormat:@"😊 设置心情目标值: %ld", (long)mood]);
+        writeLog(@"😊 心情修改：");
+        writeLog(@"   1. 在iGameGod中搜索当前心情数值");
+        writeLog(@"   2. 找到地址后修改为 999");
+        writeLog(@"   3. 心情地址 = 金钱地址 + 104字节");
     }
     
-    writeLog(@"🎯 实时内存修改系统已激活");
-    writeLog(@"📊 开始搜索内存中的游戏数据结构");
-    writeLog(@"💡 提示：系统将自动搜索并持续修改内存数值");
+    writeLog(@"");
+    writeLog(@"💡 重要提示：");
+    writeLog(@"   • 游戏重启后地址会变化，需要重新搜索");
+    writeLog(@"   • 建议先搜索金钱，然后用偏移找其他数值");
+    writeLog(@"   • 偏移关系：体力+24，健康+72，心情+104");
+    writeLog(@"");
+    writeLog(@"🔧 高级技巧：");
+    writeLog(@"   • 可以在iGameGod中保存地址列表");
+    writeLog(@"   • 使用批量修改功能一次改多个数值");
+    writeLog(@"   • 设置自动锁定防止数值变回去");
     
-    // 启动实时修改系统
-    startRealTimeMemoryModification();
-    
-    // 延迟检查修改效果
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        writeLog([NSString stringWithFormat:@"📈 10秒内内存修改次数: %ld", (long)g_memoryModifyCount]);
-        
-        if (g_foundMoneyAddress != 0) {
-            writeLog([NSString stringWithFormat:@"✅ 已找到游戏数据结构，基地址: 0x%lx", g_foundMoneyAddress]);
-            writeLog(@"🔄 实时修改系统正在运行，每秒自动修改数值");
-        } else {
-            writeLog(@"⚠️ 未找到游戏数据结构");
-            writeLog(@"💡 建议：确保游戏正在运行且数值界面可见");
-            writeLog(@"🔍 可能需要调整搜索范围或数值");
-        }
-    });
-    
-    writeLog(@"========== 实时内存搜索修改完成 ==========");
+    writeLog(@"========== 手动指导修改完成 ==========");
     
     return YES;
 }
@@ -409,7 +233,7 @@ static BOOL modifyGameDataByRealTimeMemory(NSInteger money, NSInteger stamina, N
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v15.2";
+    title.text = @"🏠 我独自生活 v15.3";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -419,7 +243,7 @@ static BOOL modifyGameDataByRealTimeMemory(NSInteger money, NSInteger stamina, N
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"🚀 实时内存修改器";
+    info.text = @"📋 手动修改指导";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -441,7 +265,7 @@ static BOOL modifyGameDataByRealTimeMemory(NSInteger money, NSInteger stamina, N
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"v15.2: 实时内存修改\n自动搜索+持续修改内存数值";
+    tip.text = @"v15.3: 手动修改指导\n配合iGameGod使用，绝不闪退";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -475,7 +299,7 @@ static BOOL modifyGameDataByRealTimeMemory(NSInteger money, NSInteger stamina, N
     [self.contentView addSubview:btn5];
     y += 43;
     
-    UIButton *btn6 = [self createButtonWithTitle:@"🚀 内存状态" tag:6];
+    UIButton *btn6 = [self createButtonWithTitle:@"📋 修改统计" tag:6];
     btn6.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn6];
     y += 48;
@@ -508,8 +332,8 @@ static BOOL modifyGameDataByRealTimeMemory(NSInteger money, NSInteger stamina, N
 
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
-    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🚀 实时内存修改 v15.2" 
-        message:@"激进策略：\n• 直接搜索内存中的游戏数值\n• 自动找到数据结构基地址\n• 每秒持续修改内存数值\n• 基于已知偏移关系定位\n• 类似iGameGod的工作原理\n\n⚠️ 启用后将持续修改内存\n\n确认继续？" 
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"📋 手动修改指导 v15.3" 
+        message:@"最稳定方案：\n• 不进行任何自动修改\n• 提供详细的手动修改指导\n• 配合iGameGod使用\n• 绝对不会闪退\n• 包含偏移地址计算\n\n⚠️ 需要配合iGameGod手动修改\n\n确认查看指导？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -531,38 +355,37 @@ static BOOL modifyGameDataByRealTimeMemory(NSInteger money, NSInteger stamina, N
     switch (tag) {
         case 1:
             writeLog(@"功能：无限金钱");
-            success = modifyGameDataByRealTimeMemory(999999999, 0, 0, 0, 0);
-            message = success ? @"💰 实时金钱修改已启用！\n\n自动搜索内存中的金钱数据\n每秒持续修改，无需手动操作" : @"❌ 内存修改启动失败，请查看日志";
+            success = modifyGameDataByManualGuide(999999999, 0, 0, 0, 0);
+            message = success ? @"💰 金钱修改指导已生成！\n\n请查看日志获取详细步骤\n配合iGameGod进行手动修改" : @"❌ 指导生成失败";
             break;
         case 2:
             writeLog(@"功能：无限体力");
-            success = modifyGameDataByRealTimeMemory(0, 999999, 0, 0, 0);
-            message = success ? @"⚡ 实时体力修改已启用！\n\n自动搜索内存中的体力数据\n每秒持续修改，无需手动操作" : @"❌ 内存修改启动失败，请查看日志";
+            success = modifyGameDataByManualGuide(0, 999999, 0, 0, 0);
+            message = success ? @"⚡ 体力修改指导已生成！\n\n请查看日志获取详细步骤\n配合iGameGod进行手动修改" : @"❌ 指导生成失败";
             break;
         case 3:
             writeLog(@"功能：无限健康");
-            success = modifyGameDataByRealTimeMemory(0, 0, 999, 0, 0);
-            message = success ? @"❤️ 实时健康修改已启用！\n\n自动搜索内存中的健康数据\n每秒持续修改，无需手动操作" : @"❌ 内存修改启动失败，请查看日志";
+            success = modifyGameDataByManualGuide(0, 0, 999, 0, 0);
+            message = success ? @"❤️ 健康修改指导已生成！\n\n请查看日志获取详细步骤\n配合iGameGod进行手动修改" : @"❌ 指导生成失败";
             break;
         case 4:
             writeLog(@"功能：无限心情");
-            success = modifyGameDataByRealTimeMemory(0, 0, 0, 999, 0);
-            message = success ? @"😊 实时心情修改已启用！\n\n自动搜索内存中的心情数据\n每秒持续修改，无需手动操作" : @"❌ 内存修改启动失败，请查看日志";
+            success = modifyGameDataByManualGuide(0, 0, 0, 999, 0);
+            message = success ? @"😊 心情修改指导已生成！\n\n请查看日志获取详细步骤\n配合iGameGod进行手动修改" : @"❌ 指导生成失败";
             break;
         case 5:
             writeLog(@"功能：一键全开");
-            success = modifyGameDataByRealTimeMemory(999999999, 999999, 999, 999, 0);
-            message = success ? @"🎁 实时全能修改已启用！\n\n💰金钱、⚡体力、❤️健康、😊心情\n所有数值每秒自动修改！" : @"❌ 内存修改启动失败，请查看日志";
+            success = modifyGameDataByManualGuide(999999999, 999999, 999, 999, 0);
+            message = success ? @"🎁 全属性修改指导已生成！\n\n💰金钱、⚡体力、❤️健康、😊心情\n请查看日志获取详细步骤" : @"❌ 指导生成失败";
             break;
         case 6:
-            writeLog(@"功能：内存状态");
-            writeLog([NSString stringWithFormat:@"🚀 内存搜索: %@", g_memorySearchEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"🔄 实时修改: %@", g_realTimeModifyEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"📈 内存修改次数: %ld", (long)g_memoryModifyCount]);
-            writeLog([NSString stringWithFormat:@"📍 找到的地址: 金钱=0x%lx, 体力=0x%lx, 健康=0x%lx, 心情=0x%lx", 
-                      g_foundMoneyAddress, g_foundStaminaAddress, g_foundHealthAddress, g_foundMoodAddress]);
+            writeLog(@"功能：修改统计");
+            writeLog([NSString stringWithFormat:@"📋 指导生成次数: %ld", (long)g_modifyCount]);
+            writeLog(@"📱 推荐工具: iGameGod");
+            writeLog(@"🎯 修改原理: 内存地址偏移");
+            writeLog(@"💡 关键信息: 体力+24, 健康+72, 心情+104");
             success = YES;
-            message = @"🚀 内存状态检查完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含内存搜索和修改信息";
+            message = @"📋 修改统计完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n包含完整修改指导";
             break;
     }
     
@@ -744,7 +567,7 @@ static void WDZCheatInit(void) {
         // 设置全局异常处理器（防闪退保护）
         NSSetUncaughtExceptionHandler(&handleUncaughtException);
         
-        writeLog(@"🛡️ WoduziCheat v15.2 初始化完成 - 实时内存修改已启用");
+        writeLog(@"🛡️ WoduziCheat v15.3 初始化完成 - 手动修改指导已启用");
         
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             setupFloatingButton();
