@@ -279,13 +279,19 @@
                 return;
             }
             
-            // 策略2：商店价格锚点
+            // 策略2：浮点误差搜索（新增）
+            if (tryFloatErrorSearch()) {
+                alert("🎁 浮点误差搜索成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！");
+                return;
+            }
+            
+            // 策略3：商店价格锚点
             if (tryShopPriceAnchor()) {
                 alert("🎁 商店价格锚点成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！");
                 return;
             }
             
-            // 策略3：默认数值锚点
+            // 策略4：默认数值锚点
             if (tryDefaultValueAnchor()) {
                 alert("🎁 默认数值锚点成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！");
                 return;
@@ -339,7 +345,183 @@
             return false;
         }
         
-        // 策略2：商店价格锚点
+        // 策略2：浮点误差搜索（利用h5gg的浮点误差功能）
+        function tryFloatErrorSearch() {
+            try {
+                alert("🔍 尝试浮点误差搜索...\n游戏数值可能以浮点数存储");
+                
+                // 可能的游戏数值（作为浮点数搜索）
+                var floatValues = [
+                    {val: '500.0', desc: '默认金钱（浮点）'},
+                    {val: '474.0', desc: '当前金钱（浮点）'},
+                    {val: '136.0', desc: '当前体力（浮点）'},
+                    {val: '100.0', desc: '默认体力/健康/心情（浮点）'},
+                    {val: '93.0', desc: '当前健康（浮点）'},
+                    {val: '88.0', desc: '当前心情（浮点）'}
+                ];
+                
+                for (var i = 0; i < floatValues.length; i++) {
+                    var floatVal = floatValues[i];
+                    
+                    h5gg.clearResults();
+                    
+                    // 使用浮点误差搜索（误差范围0.1）
+                    // 注意：h5gg可能没有searchFloat函数，所以用普通搜索F32类型
+                    var count = h5gg.searchNumber(floatVal.val, 'F32', '0x00000000', '0x20000000000');
+                    
+                    if (count > 0 && count < 100) {
+                        alert("🎯 浮点搜索发现 " + floatVal.desc + ": " + count + "个\n验证数据结构...");
+                        
+                        var results = h5gg.getResults(count);
+                        
+                        for (var j = 0; j < results.length; j++) {
+                            var floatAddr = results[j].address;
+                            
+                            // 测试这个地址是否为金钱地址（浮点版本）
+                            if (testAsFloatMoneyAddress(floatAddr)) {
+                                return true;
+                            }
+                            
+                            // 测试偏移地址（可能是体力、健康、心情）
+                            var possibleMoneyAddrs = [
+                                '0x' + (parseInt(floatAddr, 16) - 24).toString(16),  // 如果当前是体力
+                                '0x' + (parseInt(floatAddr, 16) - 72).toString(16),  // 如果当前是健康
+                                '0x' + (parseInt(floatAddr, 16) - 104).toString(16)  // 如果当前是心情
+                            ];
+                            
+                            for (var k = 0; k < possibleMoneyAddrs.length; k++) {
+                                if (testAsFloatMoneyAddress(possibleMoneyAddrs[k])) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // 如果精确浮点搜索失败，尝试手动误差搜索
+                return tryManualFloatErrorSearch();
+                
+            } catch (e) {
+                // 忽略错误，尝试下一个策略
+            }
+            
+            return false;
+        }
+        
+        // 手动浮点误差搜索（模拟h5gg浮点误差功能）
+        function tryManualFloatErrorSearch() {
+            try {
+                alert("🔍 尝试手动浮点误差搜索...\n搜索数值的浮点变体");
+                
+                // 搜索可能的浮点数值（带误差）
+                var floatSearches = [
+                    {base: 500, variants: ['499.9', '500.0', '500.1'], desc: '金钱浮点变体'},
+                    {base: 474, variants: ['473.9', '474.0', '474.1'], desc: '当前金钱浮点变体'},
+                    {base: 136, variants: ['135.9', '136.0', '136.1'], desc: '当前体力浮点变体'},
+                    {base: 100, variants: ['99.9', '100.0', '100.1'], desc: '默认值浮点变体'},
+                    {base: 93, variants: ['92.9', '93.0', '93.1'], desc: '当前健康浮点变体'},
+                    {base: 88, variants: ['87.9', '88.0', '88.1'], desc: '当前心情浮点变体'}
+                ];
+                
+                for (var i = 0; i < floatSearches.length; i++) {
+                    var search = floatSearches[i];
+                    
+                    for (var j = 0; j < search.variants.length; j++) {
+                        h5gg.clearResults();
+                        var count = h5gg.searchNumber(search.variants[j], 'F32', '0x00000000', '0x20000000000');
+                        
+                        if (count > 0 && count < 50) {
+                            alert("🎯 发现 " + search.desc + ": " + search.variants[j] + " (" + count + "个)");
+                            
+                            var results = h5gg.getResults(count);
+                            
+                            for (var k = 0; k < results.length; k++) {
+                                var addr = results[k].address;
+                                
+                                if (testAsFloatMoneyAddress(addr)) {
+                                    return true;
+                                }
+                                
+                                // 测试偏移地址
+                                var possibleMoneyAddrs = [
+                                    '0x' + (parseInt(addr, 16) - 24).toString(16),
+                                    '0x' + (parseInt(addr, 16) - 72).toString(16),
+                                    '0x' + (parseInt(addr, 16) - 104).toString(16)
+                                ];
+                                
+                                for (var l = 0; l < possibleMoneyAddrs.length; l++) {
+                                    if (testAsFloatMoneyAddress(possibleMoneyAddrs[l])) {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // 忽略错误
+            }
+            
+            return false;
+        }
+        
+        // 测试地址是否为浮点金钱地址
+        function testAsFloatMoneyAddress(moneyAddr) {
+            try {
+                var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
+                var healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
+                var moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
+                
+                // 尝试读取为浮点数
+                var moneyValue = h5gg.getValue(moneyAddr, 'F32');
+                var staminaValue = h5gg.getValue(staminaAddr, 'F32');
+                var healthValue = h5gg.getValue(healthAddr, 'F32');
+                var moodValue = h5gg.getValue(moodAddr, 'F32');
+                
+                // 验证浮点数据结构的合理性
+                if (moneyValue >= 0 && moneyValue <= 100000000 &&      // 金钱：合理范围
+                    staminaValue >= 0 && staminaValue <= 100000000 &&   // 体力：合理范围  
+                    healthValue >= 0 && healthValue <= 100 &&           // 健康：0-100
+                    moodValue >= 0 && moodValue <= 100) {               // 心情：0-100
+                    
+                    // 执行浮点修改
+                    h5gg.setValue(moneyAddr, 2100000000.0, 'F32');
+                    h5gg.setValue(staminaAddr, 2100000000.0, 'F32');
+                    h5gg.setValue(healthAddr, 100.0, 'F32');
+                    h5gg.setValue(moodAddr, 100.0, 'F32');
+                    
+                    alert("🎉 浮点数据修改成功！\n地址: " + moneyAddr + "\n类型: F32浮点数");
+                    return true;
+                }
+                
+                // 如果浮点验证失败，尝试整数验证（混合数据类型）
+                var moneyValueInt = h5gg.getValue(moneyAddr, 'I32');
+                var staminaValueInt = h5gg.getValue(staminaAddr, 'I32');
+                var healthValueInt = h5gg.getValue(healthAddr, 'I32');
+                var moodValueInt = h5gg.getValue(moodAddr, 'I32');
+                
+                if (moneyValueInt >= 0 && moneyValueInt <= 100000000 &&
+                    staminaValueInt >= 0 && staminaValueInt <= 100000000 &&
+                    healthValueInt >= 0 && healthValueInt <= 100 &&
+                    moodValueInt >= 0 && moodValueInt <= 100) {
+                    
+                    // 执行整数修改
+                    h5gg.setValue(moneyAddr, 2100000000, 'I32');
+                    h5gg.setValue(staminaAddr, 2100000000, 'I32');
+                    h5gg.setValue(healthAddr, 100, 'I32');
+                    h5gg.setValue(moodAddr, 100, 'I32');
+                    
+                    alert("🎉 整数数据修改成功！\n地址: " + moneyAddr + "\n类型: I32整数");
+                    return true;
+                }
+            } catch (e) {
+                // 忽略无效地址
+            }
+            
+            return false;
+        }
+        
+        // 策略3：商店价格锚点
         function tryShopPriceAnchor() {
             try {
                 // 商店固定价格
@@ -376,7 +558,7 @@
             return false;
         }
         
-        // 策略3：默认数值锚点
+        // 策略4：默认数值锚点
         function tryDefaultValueAnchor() {
             try {
                 // 直接搜索默认值组合
@@ -710,6 +892,145 @@
             }
             
             alert("❌ 所有范围搜索完毕\n未找到有效的游戏数据\n\n可能原因：\n1. 游戏有反调试保护\n2. 数据被加密存储\n3. 内存结构发生变化");
+        }
+        
+        // 诊断工具 - 帮助用户了解浮点误差和搜索策略
+        function diagnosticTool() {
+            var choice = prompt("🔧 诊断工具菜单\n\n请选择功能：\n1 - 浮点误差说明\n2 - 搜索策略说明\n3 - 数据类型检测\n4 - 内存范围测试\n\n请输入数字 1-4：", "1");
+            
+            if (choice === null) return;
+            
+            switch(choice) {
+                case '1':
+                    showFloatErrorInfo();
+                    break;
+                case '2':
+                    showSearchStrategyInfo();
+                    break;
+                case '3':
+                    detectDataTypes();
+                    break;
+                case '4':
+                    testMemoryRanges();
+                    break;
+                default:
+                    alert("❌ 无效选择，请输入 1-4");
+            }
+        }
+        
+        // 浮点误差说明
+        function showFloatErrorInfo() {
+            alert("🔍 浮点误差功能说明\n\n" +
+                  "💡 什么是浮点误差？\n" +
+                  "• 游戏可能将整数存储为浮点数\n" +
+                  "• 例如：500 可能存储为 500.0 或 499.999\n" +
+                  "• 浮点误差搜索可以找到这些变体\n\n" +
+                  "🎯 使用场景：\n" +
+                  "• 精确搜索找不到数值时\n" +
+                  "• 游戏使用Unity引擎（常用浮点数）\n" +
+                  "• 数值显示为整数但实际是浮点数\n\n" +
+                  "⚙️ h5gg设置：\n" +
+                  "• 邻近范围：0x100（默认）\n" +
+                  "• 浮点误差：0.1-1.0（推荐0.1）\n" +
+                  "• 数据类型：F32（32位浮点）");
+        }
+        
+        // 搜索策略说明
+        function showSearchStrategyInfo() {
+            alert("🎯 搜索策略说明\n\n" +
+                  "策略1：Unity重力锚点\n" +
+                  "• 搜索 -9.81 重力常数\n" +
+                  "• 在附近搜索游戏数据\n" +
+                  "• 最稳定的方法\n\n" +
+                  "策略2：浮点误差搜索\n" +
+                  "• 搜索数值的浮点变体\n" +
+                  "• 支持F32和I32混合验证\n" +
+                  "• 适合Unity游戏\n\n" +
+                  "策略3：商店价格锚点\n" +
+                  "• 搜索固定商店价格\n" +
+                  "• 配置数据不受保护\n" +
+                  "• 需要打开商店界面\n\n" +
+                  "策略4：默认数值锚点\n" +
+                  "• 搜索游戏默认值组合\n" +
+                  "• 验证完整数据结构\n" +
+                  "• 适合新进游戏");
+        }
+        
+        // 数据类型检测
+        function detectDataTypes() {
+            var testValue = prompt("🔍 数据类型检测\n\n请输入要检测的数值：", "474");
+            if (testValue === null || testValue === "") return;
+            
+            alert("🔍 开始检测数值: " + testValue + "\n搜索 I32 和 F32 类型...");
+            
+            try {
+                // 搜索整数类型
+                h5gg.clearResults();
+                var i32Count = h5gg.searchNumber(testValue, 'I32', '0x00000000', '0x20000000000');
+                
+                // 搜索浮点类型
+                h5gg.clearResults();
+                var f32Count = h5gg.searchNumber(testValue + '.0', 'F32', '0x00000000', '0x20000000000');
+                
+                var report = "📊 检测结果：\n\n";
+                report += "I32 (整数): " + i32Count + " 个地址\n";
+                report += "F32 (浮点): " + f32Count + " 个地址\n\n";
+                
+                if (i32Count > 0 && f32Count > 0) {
+                    report += "💡 建议：数据可能同时存在整数和浮点格式\n使用浮点误差搜索策略";
+                } else if (i32Count > 0) {
+                    report += "💡 建议：数据主要为整数格式\n使用默认搜索策略";
+                } else if (f32Count > 0) {
+                    report += "💡 建议：数据主要为浮点格式\n使用浮点误差搜索策略";
+                } else {
+                    report += "❌ 未找到数据\n可能需要：\n1. 确认数值正确\n2. 尝试其他内存范围\n3. 检查游戏状态";
+                }
+                
+                alert(report);
+                
+            } catch (e) {
+                alert("❌ 检测失败: " + e.message);
+            }
+        }
+        
+        // 内存范围测试
+        function testMemoryRanges() {
+            alert("🧪 内存范围测试\n\n将测试不同内存范围的搜索效果\n使用数值 500 进行测试...");
+            
+            var ranges = [
+                {start: '0x00000000', end: '0x100000000', name: '低位内存'},
+                {start: '0x100000000', end: '0x200000000', name: '中位内存'},
+                {start: '0x200000000', end: '0x300000000', name: '高位内存'},
+                {start: '0x00000000', end: '0x20000000000', name: '全范围'}
+            ];
+            
+            var results = [];
+            
+            for (var i = 0; i < ranges.length; i++) {
+                try {
+                    h5gg.clearResults();
+                    var count = h5gg.searchNumber('500', 'I32', ranges[i].start, ranges[i].end);
+                    results.push({
+                        name: ranges[i].name,
+                        count: count,
+                        range: ranges[i].start + ' - ' + ranges[i].end
+                    });
+                } catch (e) {
+                    results.push({
+                        name: ranges[i].name,
+                        count: 'ERROR',
+                        range: ranges[i].start + ' - ' + ranges[i].end
+                    });
+                }
+            }
+            
+            var report = "📊 内存范围测试结果：\n\n";
+            for (var j = 0; j < results.length; j++) {
+                report += results[j].name + ": " + results[j].count + " 个\n";
+            }
+            
+            report += "\n💡 建议使用数量适中的范围（10-100个地址）";
+            alert(report);
         }
     </script>
 </body>
