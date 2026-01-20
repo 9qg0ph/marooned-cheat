@@ -285,48 +285,30 @@
         function smartSearch() {
             var modifiedCount = 0;
             
-            // 方法1：搜索可能的数值组合
-            var commonValues = [100, 200, 300, 500, 1000, 1500, 2000, 3000, 5000];
+            // 搜索当前游戏中可能的数值（根据截图中的实际数值）
+            var gameValues = [474, 100, 94, 92, 50, 75, 150, 200, 300, 500];
             
-            for (var v = 0; v < commonValues.length; v++) {
-                h5gg.clearResults();
-                var count = h5gg.searchNumber(commonValues[v].toString(), 'I32', '0x100000000', '0x200000000');
-                
-                if (count > 0 && count < 50) {
-                    var results = h5gg.getResults(count);
+            for (var v = 0; v < gameValues.length; v++) {
+                try {
+                    h5gg.clearResults();
+                    var count = h5gg.searchNumber(gameValues[v].toString(), 'I32', '0x00000000', '0x20000000000');
                     
-                    for (var i = 0; i < results.length; i++) {
-                        var baseAddr = results[i].address;
+                    if (count > 0 && count < 200) {
+                        var results = h5gg.getResults(Math.min(count, 100));
                         
-                        if (tryModifyAtAddress(baseAddr)) {
-                            modifiedCount++;
-                        }
-                    }
-                }
-                
-                if (modifiedCount > 0) break;
-            }
-            
-            // 方法2：如果方法1失败，尝试搜索更大范围
-            if (modifiedCount === 0) {
-                h5gg.clearResults();
-                var count = h5gg.searchNumber('*', 'I32', '0x100000000', '0x200000000');
-                
-                if (count > 0) {
-                    var results = h5gg.getResults(Math.min(count, 100));
-                    
-                    for (var i = 0; i < results.length; i++) {
-                        var baseAddr = results[i].address;
-                        var value = parseInt(results[i].value);
-                        
-                        // 只处理合理范围的数值
-                        if (value >= 50 && value <= 50000) {
+                        for (var i = 0; i < results.length; i++) {
+                            var baseAddr = results[i].address;
+                            
                             if (tryModifyAtAddress(baseAddr)) {
                                 modifiedCount++;
-                                if (modifiedCount >= 3) break; // 限制修改数量
+                                if (modifiedCount >= 2) break; // 找到2个有效地址就够了
                             }
                         }
                     }
+                    
+                    if (modifiedCount > 0) break;
+                } catch (e) {
+                    continue; // 忽略搜索错误，继续下一个数值
                 }
             }
             
