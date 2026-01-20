@@ -109,33 +109,28 @@ static void writeLog(NSString *message) {
 static uintptr_t g_moneyBaseAddress = 0;
 static BOOL g_isModificationActive = NO;
 
-// iOS兼容的内存搜索（基于堆栈扫描）
-static NSArray* smartMemorySearch(NSInteger targetValue) {
+// 高效内存搜索（优化版本）
+static NSArray* fastMemorySearch(NSInteger targetValue) {
     NSMutableArray *results = [NSMutableArray array];
     
-    writeLog([NSString stringWithFormat:@"🎯 智能搜索数值: %ld", (long)targetValue]);
+    writeLog([NSString stringWithFormat:@"🎯 高效搜索数值: %ld", (long)targetValue]);
     
     // 获取当前进程的内存映射信息
-    // 在iOS上，我们主要搜索堆区域和数据段
-    
-    // 方法1: 搜索当前线程栈附近的堆区域
-    void *stackPtr = &results;  // 获取栈指针作为参考
+    void *stackPtr = &results;
     uintptr_t stackAddr = (uintptr_t)stackPtr;
     
     writeLog([NSString stringWithFormat:@"📍 栈地址参考: 0x%lx", stackAddr]);
     
-    // 基于栈地址推算可能的堆区域
+    // 使用更合理的搜索范围和步长
     NSArray *searchRanges = @[
-        // 基于实际iOS内存布局的搜索范围
-        @[@0x100000000, @0x110000000], // 主要堆区域1
-        @[@0x110000000, @0x120000000], // 主要堆区域2
-        @[@0x120000000, @0x130000000], // 主要堆区域3
-        @[@0x130000000, @0x140000000], // 主要堆区域4
-        @[@0x140000000, @0x150000000], // 扩展堆区域1
-        @[@0x150000000, @0x160000000], // 扩展堆区域2
+        // 缩小搜索范围，使用更大的步长
+        @[@0x100000000, @0x108000000], // 128MB范围
+        @[@0x110000000, @0x118000000], // 128MB范围
+        @[@0x120000000, @0x128000000], // 128MB范围
     ];
     
     NSInteger foundCount = 0;
+    NSTimeInterval startTime = [[NSDate date] timeIntervalSince1970];
     
     for (NSArray *range in searchRanges) {
         uintptr_t searchStart = [range[0] unsignedLongValue];
@@ -143,76 +138,64 @@ static NSArray* smartMemorySearch(NSInteger targetValue) {
         
         writeLog([NSString stringWithFormat:@"🔍 搜索范围: 0x%lx - 0x%lx", searchStart, searchEnd]);
         
-        // 使用更小的步长进行精确搜索
-        for (uintptr_t addr = searchStart; addr < searchEnd; addr += sizeof(NSInteger)) {
+        // 使用页面对齐的大步长搜索（4KB步长）
+        for (uintptr_t pageAddr = searchStart; pageAddr < searchEnd; pageAddr += 0x1000) {
+            
+            // 检查搜索时间，避免无限等待
+            NSTimeInterval currentTime = [[NSDate date] timeIntervalSince1970];
+            if (currentTime - startTime > 10.0) { // 10秒超时
+                writeLog(@"⏰ 搜索超时，停止搜索");
+                goto search_timeout;
+            }
+            
             @try {
-                // 安全的内存读取
-                NSInteger *ptr = (NSInteger*)addr;
-                volatile NSInteger value = *ptr;
+                // 测试页面是否可访问
+                volatile NSInteger testRead = *(NSInteger*)pageAddr;
+                (void)testRead;
                 
-                if (value == targetValue) {
-                    [results addObject:@(addr)];
-                    foundCount++;
-                    
-                    writeLog([NSString stringWithFormat:@"✅ 找到匹配: 0x%lx = %ld", addr, (long)value]);
-                    
-                    // 限制结果数量，避免搜索时间过长
-                    if (foundCount >= 50) {
-                        writeLog(@"⏰ 达到搜索限制，停止搜索");
-                        goto search_complete;
+                // 如果页面可访问，在页面内进行精细搜索
+                for (uintptr_t addr = pageAddr; addr < pageAddr + 0x1000 - sizeof(NSInteger); addr += sizeof(NSInteger)) {
+                    @try {
+                        NSInteger *ptr = (NSInteger*)addr;
+                        volatile NSInteger value = *ptr;
+                        
+                        if (value == targetValue) {
+                            [results addObject:@(addr)];
+                            foundCount++;
+                            
+                            writeLog([NSString stringWithFormat:@"✅ 找到匹配: 0x%lx = %ld", addr, (long)value]);
+                            
+                            // 找到足够的结果就停止
+                            if (foundCount >= 20) {
+                                writeLog(@"🎉 找到足够结果，停止搜索");
+                                goto search_complete;
+                            }
+                        }
+                    } @catch (NSException *exception) {
+                        // 跳过不可访问的地址
+                        continue;
                     }
                 }
             } @catch (NSException *exception) {
-                // 跳过不可访问的内存地址
+                // 跳过不可访问的页面
                 continue;
             }
         }
         
-        // 如果在当前范围找到了一些结果，记录一下
+        // 如果在当前范围找到了结果，记录一下
         if (results.count > 0) {
             writeLog([NSString stringWithFormat:@"📊 当前范围找到 %lu 个地址", (unsigned long)results.count]);
+            // 如果已经找到一些结果，就不用继续搜索其他范围了
+            break;
         }
     }
     
 search_complete:
-    writeLog([NSString stringWithFormat:@"🎉 搜索完成，共找到 %lu 个候选地址", (unsigned long)results.count]);
+search_timeout:
     
-    // 如果找到的地址太少，尝试扩大搜索范围
-    if (results.count < 5) {
-        writeLog(@"⚠️ 候选地址较少，尝试扩大搜索...");
-        
-        // 扩大搜索范围
-        NSArray *extendedRanges = @[
-            @[@0x160000000, @0x170000000],
-            @[@0x170000000, @0x180000000],
-            @[@0x180000000, @0x190000000],
-        ];
-        
-        for (NSArray *range in extendedRanges) {
-            uintptr_t searchStart = [range[0] unsignedLongValue];
-            uintptr_t searchEnd = [range[1] unsignedLongValue];
-            
-            for (uintptr_t addr = searchStart; addr < searchEnd; addr += sizeof(NSInteger)) {
-                @try {
-                    NSInteger *ptr = (NSInteger*)addr;
-                    volatile NSInteger value = *ptr;
-                    
-                    if (value == targetValue) {
-                        [results addObject:@(addr)];
-                        
-                        if (results.count >= 20) {
-                            goto extended_complete;
-                        }
-                    }
-                } @catch (NSException *exception) {
-                    continue;
-                }
-            }
-        }
-        
-extended_complete:
-        writeLog([NSString stringWithFormat:@"🔄 扩展搜索完成，总共找到 %lu 个候选地址", (unsigned long)results.count]);
-    }
+    NSTimeInterval endTime = [[NSDate date] timeIntervalSince1970];
+    writeLog([NSString stringWithFormat:@"🎉 搜索完成，耗时 %.2f 秒，共找到 %lu 个候选地址", 
+             endTime - startTime, (unsigned long)results.count]);
     
     return results;
 }
@@ -289,7 +272,7 @@ static BOOL writeMemoryValue(uintptr_t address, NSInteger value, NSString *name)
 
 // 核心修改函数：智能搜索并修改
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始智能内存修改 v14.0 ==========");
+    writeLog(@"========== 开始智能内存修改 v14.1 ==========");
     
     uintptr_t baseAddress = 0;
     
@@ -322,7 +305,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
             
             writeLog([NSString stringWithFormat:@"🔍 搜索 %@: %ld", valueName, (long)searchValue]);
             
-            NSArray *candidates = smartMemorySearch(searchValue);
+            NSArray *candidates = fastMemorySearch(searchValue);
             
             writeLog([NSString stringWithFormat:@"📊 %@ 找到 %lu 个候选地址", valueName, (unsigned long)candidates.count]);
             
@@ -354,7 +337,7 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
             
             for (NSNumber *valueNum in commonValues) {
                 NSInteger searchValue = [valueNum integerValue];
-                NSArray *candidates = smartMemorySearch(searchValue);
+                NSArray *candidates = fastMemorySearch(searchValue);
                 
                 for (NSNumber *addrNum in candidates) {
                     uintptr_t candidateAddr = [addrNum unsignedLongValue];
@@ -505,7 +488,7 @@ found_base:
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v14.0";
+    title.text = @"🏠 我独自生活 v14.1";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -537,7 +520,7 @@ found_base:
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"v14.0: iOS兼容内存搜索引擎\n智能识别游戏数据结构，精准修改";
+    tip.text = @"v14.1: 高效内存搜索引擎\n10秒超时保护，4KB页面扫描";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -604,8 +587,8 @@ found_base:
 
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
-    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🧠 智能修改 v14.0" 
-        message:@"新版本特性：\n• iOS兼容内存搜索引擎\n• 智能数据结构识别\n• 自适应地址变化\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🧠 智能修改 v14.1" 
+        message:@"新版本特性：\n• 高效内存搜索引擎\n• 10秒超时保护机制\n• 4KB页面扫描优化\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
