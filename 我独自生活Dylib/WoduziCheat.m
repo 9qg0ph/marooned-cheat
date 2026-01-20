@@ -12,6 +12,13 @@ static vm_region_func_t vm_region_ptr = NULL;
 static task_for_pid_func_t task_for_pid_ptr = NULL;
 static BOOL mach_available = NO;
 
+#pragma mark - 函数前向声明
+
+static void showMenu(void);
+static void writeLog(NSString *message);
+static UIWindow* getKeyWindow(void);
+static UIViewController* getRootViewController(void);
+
 // 全局异常处理（防闪退保护）
 static void handleUncaughtException(NSException *exception) {
     writeLog([NSString stringWithFormat:@"🚨 捕获异常: %@", exception.reason]);
@@ -37,13 +44,6 @@ static void handleUncaughtException(NSException *exception) {
 @class WDZMenuView;
 static UIButton *g_floatButton = nil;
 static WDZMenuView *g_menuView = nil;
-
-#pragma mark - 函数前向声明
-
-static void showMenu(void);
-static void writeLog(NSString *message);
-static UIWindow* getKeyWindow(void);
-static UIViewController* getRootViewController(void);
 
 #pragma mark - 版权保护
 
@@ -212,6 +212,7 @@ static NSArray* fastMemorySearch(NSInteger targetValue) {
     
 search_complete:
 search_timeout:
+    ; // 空语句避免C23扩展警告
     
     NSTimeInterval endTime = [[NSDate date] timeIntervalSince1970];
     writeLog([NSString stringWithFormat:@"🎉 搜索完成，耗时 %.2f 秒，共找到 %lu 个候选地址", 
