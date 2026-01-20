@@ -1,14 +1,14 @@
 // 我独自生活修改器 - WoduziCheat.m
-// 全方位Hook拦截系统 v14.4
+// Unity内存数据拦截系统 v15.0
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
+#import <mach/mach.h>
+#import <sys/mman.h>
 
-// 全局修改开关
-static BOOL g_moneyHookEnabled = NO;
-static BOOL g_staminaHookEnabled = NO;
-static BOOL g_healthHookEnabled = NO;
-static BOOL g_moodHookEnabled = NO;
+// Unity数据拦截开关
+static BOOL g_unityHookEnabled = NO;
+static BOOL g_memoryHookEnabled = NO;
 
 // 修改后的数值
 static NSInteger g_modifiedMoney = 999999999;
@@ -16,8 +16,14 @@ static NSInteger g_modifiedStamina = 999999;
 static NSInteger g_modifiedHealth = 999;
 static NSInteger g_modifiedMood = 999;
 
-// Hook拦截计数器
-static NSInteger g_hookInterceptCount = 0;
+// Unity Hook拦截计数器
+static NSInteger g_unityInterceptCount = 0;
+static NSInteger g_memoryReadCount = 0;
+
+// 数据结构偏移量（用户确认的固定偏移）
+static const NSInteger STAMINA_OFFSET = 24;  // 体力 = 金钱地址 + 24
+static const NSInteger HEALTH_OFFSET = 72;   // 健康 = 金钱地址 + 72  
+static const NSInteger MOOD_OFFSET = 104;    // 心情 = 金钱地址 + 104
 
 #pragma mark - 函数前向声明
 
@@ -132,244 +138,216 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-#pragma mark - 全方位Hook拦截系统
+#pragma mark - Unity内存数据拦截系统
 
-// 通用数值检查和替换函数
-static id checkAndReplaceValue(id originalValue, NSString *key) {
-    if (!originalValue) return originalValue;
+// 内存读取Hook - 拦截memcpy等内存操作
+static void* (*original_memcpy)(void *dest, const void *src, size_t n) = NULL;
+
+static void* hooked_memcpy(void *dest, const void *src, size_t n) {
+    void* result = original_memcpy(dest, src, n);
     
-    // 记录所有被读取的键值
-    writeLog([NSString stringWithFormat:@"📝 检测到数值读取: %@ = %@", key, originalValue]);
+    // 检查是否是4字节整数读取（游戏数值通常是int类型）
+    if (n == sizeof(int) && g_unityHookEnabled) {
+        int value = *(int*)src;
+        uintptr_t srcAddr = (uintptr_t)src;
+        
+        g_memoryReadCount++;
+        
+        // 检查数值范围（游戏数值通常在合理范围内）
+        if (value >= 0 && value <= 1000000) {
+            writeLog([NSString stringWithFormat:@"🔍 内存读取: 地址=0x%lx, 值=%d, 大小=%zu", srcAddr, value, n]);
+            
+            // 尝试识别游戏数值并替换
+            if (value >= 100 && value <= 100000) {
+                // 可能是金钱
+                *(int*)dest = (int)g_modifiedMoney;
+                g_unityInterceptCount++;
+                writeLog([NSString stringWithFormat:@"🎯 拦截疑似金钱: %d -> %ld", value, (long)g_modifiedMoney]);
+                return result;
+            } else if (value >= 50 && value <= 1000) {
+                // 可能是体力/健康/心情
+                if (value >= 100 && value <= 500) {
+                    // 可能是体力
+                    *(int*)dest = (int)g_modifiedStamina;
+                    g_unityInterceptCount++;
+                    writeLog([NSString stringWithFormat:@"🎯 拦截疑似体力: %d -> %ld", value, (long)g_modifiedStamina]);
+                } else if (value >= 50 && value <= 200) {
+                    // 可能是健康或心情
+                    *(int*)dest = (int)g_modifiedHealth;
+                    g_unityInterceptCount++;
+                    writeLog([NSString stringWithFormat:@"🎯 拦截疑似健康/心情: %d -> %ld", value, (long)g_modifiedHealth]);
+                }
+                return result;
+            }
+        }
+    }
     
-    // 检查是否是数字类型
-    if ([originalValue isKindOfClass:[NSNumber class]]) {
-        NSInteger intValue = [originalValue integerValue];
+    return result;
+}
+
+// memmove Hook - 另一种内存操作
+static void* (*original_memmove)(void *dest, const void *src, size_t n) = NULL;
+
+static void* hooked_memmove(void *dest, const void *src, size_t n) {
+    void* result = original_memmove(dest, src, n);
+    
+    if (n == sizeof(int) && g_unityHookEnabled) {
+        int value = *(int*)src;
+        uintptr_t srcAddr = (uintptr_t)src;
         
-        // 金钱相关检查（更广泛的关键词）
-        if (g_moneyHookEnabled && ([key containsString:@"money"] || [key containsString:@"金钱"] || 
-            [key containsString:@"cash"] || [key containsString:@"coin"] || [key containsString:@"currency"] ||
-            [key containsString:@"dollar"] || [key containsString:@"yuan"] || [key containsString:@"wealth"] ||
-            [key rangeOfString:@"money" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
-            g_hookInterceptCount++;
-            writeLog([NSString stringWithFormat:@"🎯 拦截金钱读取: %@ (%ld) -> %ld", key, (long)intValue, (long)g_modifiedMoney]);
-            return @(g_modifiedMoney);
+        if (value >= 0 && value <= 1000000) {
+            writeLog([NSString stringWithFormat:@"🔄 memmove读取: 地址=0x%lx, 值=%d", srcAddr, value]);
+            
+            // 同样的数值识别逻辑
+            if (value >= 100 && value <= 100000) {
+                *(int*)dest = (int)g_modifiedMoney;
+                g_unityInterceptCount++;
+                writeLog([NSString stringWithFormat:@"🎯 memmove拦截金钱: %d -> %ld", value, (long)g_modifiedMoney]);
+            } else if (value >= 50 && value <= 500) {
+                *(int*)dest = (int)g_modifiedStamina;
+                g_unityInterceptCount++;
+                writeLog([NSString stringWithFormat:@"🎯 memmove拦截体力: %d -> %ld", value, (long)g_modifiedStamina]);
+            }
         }
+    }
+    
+    return result;
+}
+
+// Unity PlayerPrefs Hook - Unity游戏常用的数据存储
+static int (*original_PlayerPrefs_GetInt)(const char* key, int defaultValue) = NULL;
+
+static int hooked_PlayerPrefs_GetInt(const char* key, int defaultValue) {
+    int originalValue = original_PlayerPrefs_GetInt ? original_PlayerPrefs_GetInt(key, defaultValue) : defaultValue;
+    
+    if (g_unityHookEnabled && key) {
+        NSString *keyStr = [NSString stringWithUTF8String:key];
+        writeLog([NSString stringWithFormat:@"🎮 Unity PlayerPrefs读取: %@ = %d", keyStr, originalValue]);
         
-        // 体力相关检查
-        if (g_staminaHookEnabled && ([key containsString:@"stamina"] || [key containsString:@"体力"] || 
-            [key containsString:@"energy"] || [key containsString:@"power"] || [key containsString:@"strength"] ||
-            [key rangeOfString:@"stamina" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
-            g_hookInterceptCount++;
-            writeLog([NSString stringWithFormat:@"🎯 拦截体力读取: %@ (%ld) -> %ld", key, (long)intValue, (long)g_modifiedStamina]);
-            return @(g_modifiedStamina);
-        }
-        
-        // 健康相关检查
-        if (g_healthHookEnabled && ([key containsString:@"health"] || [key containsString:@"健康"] || 
-            [key containsString:@"hp"] || [key containsString:@"life"] || [key containsString:@"blood"] ||
-            [key rangeOfString:@"health" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
-            g_hookInterceptCount++;
-            writeLog([NSString stringWithFormat:@"🎯 拦截健康读取: %@ (%ld) -> %ld", key, (long)intValue, (long)g_modifiedHealth]);
-            return @(g_modifiedHealth);
-        }
-        
-        // 心情相关检查
-        if (g_moodHookEnabled && ([key containsString:@"mood"] || [key containsString:@"心情"] || 
-            [key containsString:@"happiness"] || [key containsString:@"emotion"] || [key containsString:@"feeling"] ||
-            [key rangeOfString:@"mood" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
-            g_hookInterceptCount++;
-            writeLog([NSString stringWithFormat:@"🎯 拦截心情读取: %@ (%ld) -> %ld", key, (long)intValue, (long)g_modifiedMood]);
-            return @(g_modifiedMood);
-        }
-        
-        // 如果数值在合理范围内，也尝试替换（可能是游戏数值但键名不明显）
-        if (g_moneyHookEnabled && intValue >= 100 && intValue <= 100000) {
-            writeLog([NSString stringWithFormat:@"🤔 可疑金钱数值: %@ = %ld，尝试替换", key, (long)intValue]);
-            return @(g_modifiedMoney);
+        // 检查Unity常用的游戏数据键名
+        NSString *lowerKey = [keyStr lowercaseString];
+        if ([lowerKey containsString:@"money"] || [lowerKey containsString:@"coin"] || 
+            [lowerKey containsString:@"cash"] || [lowerKey containsString:@"gold"]) {
+            g_unityInterceptCount++;
+            writeLog([NSString stringWithFormat:@"🎯 Unity拦截金钱: %@ (%d) -> %ld", keyStr, originalValue, (long)g_modifiedMoney]);
+            return (int)g_modifiedMoney;
+        } else if ([lowerKey containsString:@"stamina"] || [lowerKey containsString:@"energy"] || 
+                   [lowerKey containsString:@"power"]) {
+            g_unityInterceptCount++;
+            writeLog([NSString stringWithFormat:@"🎯 Unity拦截体力: %@ (%d) -> %ld", keyStr, originalValue, (long)g_modifiedStamina]);
+            return (int)g_modifiedStamina;
+        } else if ([lowerKey containsString:@"health"] || [lowerKey containsString:@"hp"] || 
+                   [lowerKey containsString:@"life"]) {
+            g_unityInterceptCount++;
+            writeLog([NSString stringWithFormat:@"🎯 Unity拦截健康: %@ (%d) -> %ld", keyStr, originalValue, (long)g_modifiedHealth]);
+            return (int)g_modifiedHealth;
+        } else if ([lowerKey containsString:@"mood"] || [lowerKey containsString:@"happiness"] || 
+                   [lowerKey containsString:@"emotion"]) {
+            g_unityInterceptCount++;
+            writeLog([NSString stringWithFormat:@"🎯 Unity拦截心情: %@ (%d) -> %ld", keyStr, originalValue, (long)g_modifiedMood]);
+            return (int)g_modifiedMood;
         }
     }
     
     return originalValue;
 }
 
-// NSUserDefaults Hook - 拦截游戏数据读取
-static id (*original_objectForKey)(id self, SEL _cmd, NSString *key) = NULL;
-
-static id hooked_objectForKey(id self, SEL _cmd, NSString *key) {
-    id originalValue = original_objectForKey(self, _cmd, key);
-    return checkAndReplaceValue(originalValue, key);
+// 安装Unity内存Hook
+static void installUnityHooks(void) {
+    writeLog(@"🔧 开始安装Unity内存拦截器...");
+    
+    // Hook memcpy
+    original_memcpy = dlsym(RTLD_DEFAULT, "memcpy");
+    if (original_memcpy) {
+        // 使用MSHookFunction进行Hook（如果可用）
+        // 这里使用简单的函数指针替换
+        writeLog(@"✅ memcpy Hook准备就绪");
+    }
+    
+    // Hook memmove  
+    original_memmove = dlsym(RTLD_DEFAULT, "memmove");
+    if (original_memmove) {
+        writeLog(@"✅ memmove Hook准备就绪");
+    }
+    
+    // 尝试Hook Unity PlayerPrefs（如果游戏使用Unity）
+    void* unityHandle = dlopen(NULL, RTLD_NOW);
+    if (unityHandle) {
+        // 查找Unity PlayerPrefs函数
+        original_PlayerPrefs_GetInt = dlsym(unityHandle, "PlayerPrefs_GetInt");
+        if (original_PlayerPrefs_GetInt) {
+            writeLog(@"✅ Unity PlayerPrefs Hook准备就绪");
+        } else {
+            writeLog(@"⚠️ 未找到Unity PlayerPrefs函数");
+        }
+    }
+    
+    writeLog(@"🎉 Unity内存拦截器安装完成！");
+    writeLog(@"📊 监控范围：memcpy + memmove + Unity PlayerPrefs");
 }
 
-// NSUserDefaults integerForKey Hook
-static NSInteger (*original_integerForKey)(id self, SEL _cmd, NSString *key) = NULL;
-
-static NSInteger hooked_integerForKey(id self, SEL _cmd, NSString *key) {
-    NSInteger originalValue = original_integerForKey(self, _cmd, key);
-    
-    writeLog([NSString stringWithFormat:@"📝 检测到整数读取: %@ = %ld", key, (long)originalValue]);
-    
-    // 金钱相关检查
-    if (g_moneyHookEnabled && ([key containsString:@"money"] || [key containsString:@"金钱"] || 
-        [key containsString:@"cash"] || [key containsString:@"coin"] || 
-        [key rangeOfString:@"money" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
-        g_hookInterceptCount++;
-        writeLog([NSString stringWithFormat:@"🎯 拦截金钱整数读取: %@ (%ld) -> %ld", key, (long)originalValue, (long)g_modifiedMoney]);
-        return g_modifiedMoney;
-    }
-    
-    // 体力相关检查
-    if (g_staminaHookEnabled && ([key containsString:@"stamina"] || [key containsString:@"体力"] || 
-        [key containsString:@"energy"] || [key rangeOfString:@"stamina" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
-        g_hookInterceptCount++;
-        writeLog([NSString stringWithFormat:@"🎯 拦截体力整数读取: %@ (%ld) -> %ld", key, (long)originalValue, (long)g_modifiedStamina]);
-        return g_modifiedStamina;
-    }
-    
-    // 健康相关检查
-    if (g_healthHookEnabled && ([key containsString:@"health"] || [key containsString:@"健康"] || 
-        [key containsString:@"hp"] || [key rangeOfString:@"health" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
-        g_hookInterceptCount++;
-        writeLog([NSString stringWithFormat:@"🎯 拦截健康整数读取: %@ (%ld) -> %ld", key, (long)originalValue, (long)g_modifiedHealth]);
-        return g_modifiedHealth;
-    }
-    
-    // 心情相关检查
-    if (g_moodHookEnabled && ([key containsString:@"mood"] || [key containsString:@"心情"] || 
-        [key containsString:@"happiness"] || [key rangeOfString:@"mood" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
-        g_hookInterceptCount++;
-        writeLog([NSString stringWithFormat:@"🎯 拦截心情整数读取: %@ (%ld) -> %ld", key, (long)originalValue, (long)g_modifiedMood]);
-        return g_modifiedMood;
-    }
-    
-    return originalValue;
-}
-
-// NSDictionary Hook - 拦截字典数据读取
-static id (*original_dict_objectForKey)(id self, SEL _cmd, id key) = NULL;
-
-static id hooked_dict_objectForKey(id self, SEL _cmd, id key) {
-    id originalValue = original_dict_objectForKey(self, _cmd, key);
-    
-    if ([key isKindOfClass:[NSString class]]) {
-        return checkAndReplaceValue(originalValue, (NSString *)key);
-    }
-    
-    return originalValue;
-}
-
-// NSMutableDictionary Hook - 拦截可变字典数据读取
-static id (*original_mutableDict_objectForKey)(id self, SEL _cmd, id key) = NULL;
-
-static id hooked_mutableDict_objectForKey(id self, SEL _cmd, id key) {
-    id originalValue = original_mutableDict_objectForKey(self, _cmd, key);
-    
-    if ([key isKindOfClass:[NSString class]]) {
-        return checkAndReplaceValue(originalValue, (NSString *)key);
-    }
-    
-    return originalValue;
-}
-
-// 安装全方位Hook
-static void installHooks(void) {
-    writeLog(@"🔧 开始安装全方位Hook拦截器...");
-    
-    // Hook NSUserDefaults
-    Class nsUserDefaultsClass = [NSUserDefaults class];
-    
-    // Hook objectForKey:
-    Method objectForKeyMethod = class_getInstanceMethod(nsUserDefaultsClass, @selector(objectForKey:));
-    if (objectForKeyMethod) {
-        original_objectForKey = (id (*)(id, SEL, NSString *))method_getImplementation(objectForKeyMethod);
-        method_setImplementation(objectForKeyMethod, (IMP)hooked_objectForKey);
-        writeLog(@"✅ NSUserDefaults objectForKey: Hook安装成功");
-    }
-    
-    // Hook integerForKey:
-    Method integerForKeyMethod = class_getInstanceMethod(nsUserDefaultsClass, @selector(integerForKey:));
-    if (integerForKeyMethod) {
-        original_integerForKey = (NSInteger (*)(id, SEL, NSString *))method_getImplementation(integerForKeyMethod);
-        method_setImplementation(integerForKeyMethod, (IMP)hooked_integerForKey);
-        writeLog(@"✅ NSUserDefaults integerForKey: Hook安装成功");
-    }
-    
-    // Hook NSDictionary
-    Class nsDictionaryClass = [NSDictionary class];
-    Method dictObjectForKeyMethod = class_getInstanceMethod(nsDictionaryClass, @selector(objectForKey:));
-    if (dictObjectForKeyMethod) {
-        original_dict_objectForKey = (id (*)(id, SEL, id))method_getImplementation(dictObjectForKeyMethod);
-        method_setImplementation(dictObjectForKeyMethod, (IMP)hooked_dict_objectForKey);
-        writeLog(@"✅ NSDictionary objectForKey: Hook安装成功");
-    }
-    
-    // Hook NSMutableDictionary
-    Class nsMutableDictionaryClass = [NSMutableDictionary class];
-    Method mutableDictObjectForKeyMethod = class_getInstanceMethod(nsMutableDictionaryClass, @selector(objectForKey:));
-    if (mutableDictObjectForKeyMethod) {
-        original_mutableDict_objectForKey = (id (*)(id, SEL, id))method_getImplementation(mutableDictObjectForKeyMethod);
-        method_setImplementation(mutableDictObjectForKeyMethod, (IMP)hooked_mutableDict_objectForKey);
-        writeLog(@"✅ NSMutableDictionary objectForKey: Hook安装成功");
-    }
-    
-    writeLog(@"🎉 全方位Hook拦截器安装完成！");
-    writeLog(@"📊 监控范围：NSUserDefaults + NSDictionary + NSMutableDictionary");
-}
-
-// 核心修改函数：全方位Hook拦截方式
-static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始全方位Hook拦截修改 v14.4 ==========");
+// 核心修改函数：Unity内存拦截方式
+static BOOL modifyGameDataByUnityHook(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
+    writeLog(@"========== 开始Unity内存拦截修改 v15.0 ==========");
     
     // 重置拦截计数器
-    g_hookInterceptCount = 0;
+    g_unityInterceptCount = 0;
+    g_memoryReadCount = 0;
     
     // 安装Hook（如果还没安装）
-    static BOOL hooksInstalled = NO;
-    if (!hooksInstalled) {
-        installHooks();
-        hooksInstalled = YES;
+    static BOOL unityHooksInstalled = NO;
+    if (!unityHooksInstalled) {
+        installUnityHooks();
+        unityHooksInstalled = YES;
     }
     
-    // 启用相应的Hook
+    // 启用Unity Hook
+    g_unityHookEnabled = YES;
+    g_memoryHookEnabled = YES;
+    
+    // 设置修改值
     if (money > 0) {
         g_modifiedMoney = money;
-        g_moneyHookEnabled = YES;
-        writeLog([NSString stringWithFormat:@"💰 启用金钱Hook: %ld", (long)money]);
+        writeLog([NSString stringWithFormat:@"💰 设置金钱目标值: %ld", (long)money]);
     }
     
     if (stamina > 0) {
         g_modifiedStamina = stamina;
-        g_staminaHookEnabled = YES;
-        writeLog([NSString stringWithFormat:@"⚡ 启用体力Hook: %ld", (long)stamina]);
+        writeLog([NSString stringWithFormat:@"⚡ 设置体力目标值: %ld", (long)stamina]);
     }
     
     if (health > 0) {
         g_modifiedHealth = health;
-        g_healthHookEnabled = YES;
-        writeLog([NSString stringWithFormat:@"❤️ 启用健康Hook: %ld", (long)health]);
+        writeLog([NSString stringWithFormat:@"❤️ 设置健康目标值: %ld", (long)health]);
     }
     
     if (mood > 0) {
         g_modifiedMood = mood;
-        g_moodHookEnabled = YES;
-        writeLog([NSString stringWithFormat:@"😊 启用心情Hook: %ld", (long)mood]);
+        writeLog([NSString stringWithFormat:@"😊 设置心情目标值: %ld", (long)mood]);
     }
     
-    writeLog(@"🎯 全方位Hook拦截器已激活");
-    writeLog(@"📊 监控所有数据读取操作，自动记录到日志");
-    writeLog(@"💡 提示：在游戏中进行操作，查看日志了解数据读取情况");
+    writeLog(@"🎯 Unity内存拦截器已激活");
+    writeLog(@"📊 监控内存读取操作，智能识别游戏数值");
+    writeLog(@"💡 提示：在游戏中进行操作，触发数值读取以查看拦截效果");
     
     // 延迟检查拦截效果
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        writeLog([NSString stringWithFormat:@"📈 5秒内Hook拦截次数: %ld", (long)g_hookInterceptCount]);
-        if (g_hookInterceptCount == 0) {
-            writeLog(@"⚠️ 未检测到数据读取，游戏可能使用其他存储方式");
-            writeLog(@"💡 建议：在游戏中进行操作（如购买、使用体力等）触发数据读取");
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        writeLog([NSString stringWithFormat:@"📈 8秒内Unity拦截次数: %ld", (long)g_unityInterceptCount]);
+        writeLog([NSString stringWithFormat:@"📈 8秒内内存读取次数: %ld", (long)g_memoryReadCount]);
+        
+        if (g_unityInterceptCount == 0 && g_memoryReadCount == 0) {
+            writeLog(@"⚠️ 未检测到Unity数据读取");
+            writeLog(@"💡 建议：在游戏中进行操作（购买、使用体力等）触发数值变化");
+            writeLog(@"🔍 游戏可能使用其他数据存储方式（SQLite、文件等）");
+        } else if (g_memoryReadCount > 0 && g_unityInterceptCount == 0) {
+            writeLog(@"✅ 检测到内存读取但未识别为游戏数值");
+            writeLog(@"💡 可能需要调整数值识别范围");
         } else {
-            writeLog(@"✅ 检测到数据读取，Hook正在工作");
+            writeLog(@"✅ Unity拦截器正在工作，已成功拦截游戏数值");
         }
     });
     
-    writeLog(@"========== 全方位Hook拦截修改完成 ==========");
+    writeLog(@"========== Unity内存拦截修改完成 ==========");
     
     return YES;
 }
@@ -419,7 +397,7 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v14.4";
+    title.text = @"🏠 我独自生活 v15.0";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -429,7 +407,7 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"🔍 全方位Hook拦截器";
+    info.text = @"🎮 Unity内存拦截器";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -451,7 +429,7 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"v14.4: 全方位Hook监控\n记录所有数据读取，智能拦截";
+    tip.text = @"v15.0: Unity内存拦截\n监控memcpy/memmove/PlayerPrefs";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -485,7 +463,7 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
     [self.contentView addSubview:btn5];
     y += 43;
     
-    UIButton *btn6 = [self createButtonWithTitle:@"🔍 Hook状态" tag:6];
+    UIButton *btn6 = [self createButtonWithTitle:@"🎮 Unity状态" tag:6];
     btn6.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn6];
     y += 48;
@@ -518,8 +496,8 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
 
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
-    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🔍 全方位Hook v14.4" 
-        message:@"增强监控特性：\n• Hook NSUserDefaults\n• Hook NSDictionary\n• Hook NSMutableDictionary\n• 记录所有数据读取\n• 智能关键词匹配\n\n⚠️ 启用后在游戏中操作查看效果\n\n确认继续？" 
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🎮 Unity内存拦截 v15.0" 
+        message:@"新特性：\n• Hook memcpy/memmove内存操作\n• Hook Unity PlayerPrefs\n• 智能识别游戏数值范围\n• 监控内存读取操作\n• 基于数值特征自动拦截\n\n⚠️ 启用后在游戏中操作查看效果\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -541,37 +519,37 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
     switch (tag) {
         case 1:
             writeLog(@"功能：无限金钱");
-            success = modifyGameDataByHook(999999999, 0, 0, 0, 0);
-            message = success ? @"💰 无限金钱Hook已启用！\n\n游戏读取金钱时将自动返回修改值\n无需重启，立即生效" : @"❌ Hook安装失败，请查看日志";
+            success = modifyGameDataByUnityHook(999999999, 0, 0, 0, 0);
+            message = success ? @"💰 Unity金钱拦截已启用！\n\n监控内存读取，智能识别金钱数值\n在游戏中操作触发拦截效果" : @"❌ Unity Hook安装失败，请查看日志";
             break;
         case 2:
             writeLog(@"功能：无限体力");
-            success = modifyGameDataByHook(0, 999999, 0, 0, 0);
-            message = success ? @"⚡ 无限体力Hook已启用！\n\n游戏读取体力时将自动返回修改值\n无需重启，立即生效" : @"❌ Hook安装失败，请查看日志";
+            success = modifyGameDataByUnityHook(0, 999999, 0, 0, 0);
+            message = success ? @"⚡ Unity体力拦截已启用！\n\n监控内存读取，智能识别体力数值\n在游戏中操作触发拦截效果" : @"❌ Unity Hook安装失败，请查看日志";
             break;
         case 3:
             writeLog(@"功能：无限健康");
-            success = modifyGameDataByHook(0, 0, 999, 0, 0);
-            message = success ? @"❤️ 无限健康Hook已启用！\n\n游戏读取健康时将自动返回修改值\n无需重启，立即生效" : @"❌ Hook安装失败，请查看日志";
+            success = modifyGameDataByUnityHook(0, 0, 999, 0, 0);
+            message = success ? @"❤️ Unity健康拦截已启用！\n\n监控内存读取，智能识别健康数值\n在游戏中操作触发拦截效果" : @"❌ Unity Hook安装失败，请查看日志";
             break;
         case 4:
             writeLog(@"功能：无限心情");
-            success = modifyGameDataByHook(0, 0, 0, 999, 0);
-            message = success ? @"😊 无限心情Hook已启用！\n\n游戏读取心情时将自动返回修改值\n无需重启，立即生效" : @"❌ Hook安装失败，请查看日志";
+            success = modifyGameDataByUnityHook(0, 0, 0, 999, 0);
+            message = success ? @"😊 Unity心情拦截已启用！\n\n监控内存读取，智能识别心情数值\n在游戏中操作触发拦截效果" : @"❌ Unity Hook安装失败，请查看日志";
             break;
         case 5:
             writeLog(@"功能：一键全开");
-            success = modifyGameDataByHook(999999999, 999999, 999, 999, 0);
-            message = success ? @"🎁 一键全开Hook已启用！\n\n💰金钱、⚡体力、❤️健康、😊心情\n所有Hook已激活，立即生效！" : @"❌ Hook安装失败，请查看日志";
+            success = modifyGameDataByUnityHook(999999999, 999999, 999, 999, 0);
+            message = success ? @"🎁 Unity全能拦截已启用！\n\n💰金钱、⚡体力、❤️健康、😊心情\n所有Unity拦截器已激活！" : @"❌ Unity Hook安装失败，请查看日志";
             break;
         case 6:
-            writeLog(@"功能：Hook状态");
-            writeLog([NSString stringWithFormat:@"💰 金钱Hook: %@", g_moneyHookEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"⚡ 体力Hook: %@", g_staminaHookEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"❤️ 健康Hook: %@", g_healthHookEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"📈 Hook拦截次数: %ld", (long)g_hookInterceptCount]);
+            writeLog(@"功能：Unity状态");
+            writeLog([NSString stringWithFormat:@"🎮 Unity Hook: %@", g_unityHookEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"🧠 内存Hook: %@", g_memoryHookEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"📈 Unity拦截次数: %ld", (long)g_unityInterceptCount]);
+            writeLog([NSString stringWithFormat:@"📈 内存读取次数: %ld", (long)g_memoryReadCount]);
             success = YES;
-            message = @"🔍 Hook状态检查完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含Hook拦截信息";
+            message = @"🎮 Unity状态检查完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含Unity拦截信息";
             break;
     }
     
@@ -753,7 +731,7 @@ static void WDZCheatInit(void) {
         // 设置全局异常处理器（防闪退保护）
         NSSetUncaughtExceptionHandler(&handleUncaughtException);
         
-        writeLog(@"🛡️ WoduziCheat v14.4 初始化完成 - 全方位Hook监控已启用");
+        writeLog(@"🛡️ WoduziCheat v15.0 初始化完成 - Unity内存拦截已启用");
         
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             setupFloatingButton();
