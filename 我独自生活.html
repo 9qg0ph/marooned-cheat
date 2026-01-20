@@ -282,48 +282,51 @@
             }
         }
         
-        // 使用锚点搜索法（基于健康/心情上限100）
+        // 使用锚点搜索法（基于游戏默认值）
         function findGameDataByAnchor() {
-            // 尝试多种锚点策略
+            // 基于新进游戏的默认值：现金500，体力100，健康100，心情100
             
-            // 策略1：搜索100（心情上限）
-            if (tryAnchorValue('100', '心情上限')) return true;
+            // 策略1：搜索500（默认现金）- 最独特的值
+            if (tryDefaultValueAnchor('500', '默认现金')) return true;
             
-            // 策略2：搜索94（当前健康值，从截图观察）
-            if (tryAnchorValue('94', '当前健康值')) return true;
+            // 策略2：搜索100（体力/健康/心情的默认值和上限）
+            if (tryDefaultValueAnchor('100', '默认体力/健康/心情')) return true;
             
-            // 策略3：搜索500（当前金钱，从截图观察）
-            if (tryAnchorValue('500', '当前金钱')) return true;
-            
-            // 策略4：搜索其他可能的固定值
-            var otherValues = ['50', '75', '25', '200', '1000', '10', '20', '30'];
-            for (var i = 0; i < otherValues.length; i++) {
-                if (tryAnchorValue(otherValues[i], '其他固定值')) return true;
-            }
+            // 策略3：联合搜索 - 同时搜索500和100的组合
+            if (tryComboAnchor()) return true;
             
             return false;
         }
         
-        // 尝试特定数值作为锚点
-        function tryAnchorValue(value, description) {
+        // 尝试默认值作为锚点
+        function tryDefaultValueAnchor(value, description) {
             try {
                 h5gg.clearResults();
                 var count = h5gg.searchNumber(value, 'I32', '0x00000000', '0x20000000000');
                 
-                if (count > 0 && count < 500) { // 放宽限制
-                    var results = h5gg.getResults(Math.min(count, 50));
+                if (count > 0) {
+                    var results = h5gg.getResults(Math.min(count, 100));
                     
                     for (var i = 0; i < results.length; i++) {
                         var anchorAddr = results[i].address;
                         
-                        // 尝试不同的偏移可能性
-                        var offsets = [-104, -72, -24, 0, 24, 48, 72, 96, 104, 128];
-                        
-                        for (var j = 0; j < offsets.length; j++) {
-                            var testBaseAddr = '0x' + (parseInt(anchorAddr, 16) + offsets[j]).toString(16);
-                            
-                            if (testGameDataStructure(testBaseAddr)) {
+                        if (value === '500') {
+                            // 如果是500（现金），直接测试作为基础地址
+                            if (testGameDataStructure(anchorAddr)) {
                                 return true;
+                            }
+                        } else if (value === '100') {
+                            // 如果是100，可能是体力(+24)、健康(+72)或心情(+104)
+                            var possibleBases = [
+                                '0x' + (parseInt(anchorAddr, 16) - 24).toString(16),  // 体力位置
+                                '0x' + (parseInt(anchorAddr, 16) - 72).toString(16),  // 健康位置
+                                '0x' + (parseInt(anchorAddr, 16) - 104).toString(16)  // 心情位置
+                            ];
+                            
+                            for (var j = 0; j < possibleBases.length; j++) {
+                                if (testGameDataStructure(possibleBases[j])) {
+                                    return true;
+                                }
                             }
                         }
                     }
@@ -333,6 +336,65 @@
             }
             
             return false;
+        }
+        
+        // 联合搜索策略
+        function tryComboAnchor() {
+            try {
+                // 先搜索500（现金）
+                h5gg.clearResults();
+                var count500 = h5gg.searchNumber('500', 'I32', '0x00000000', '0x20000000000');
+                
+                if (count500 > 0 && count500 < 50) { // 500应该比较少见
+                    var results500 = h5gg.getResults(count500);
+                    
+                    for (var i = 0; i < results500.length; i++) {
+                        var moneyAddr = results500[i].address;
+                        
+                        // 验证这个500是否真的是现金地址
+                        if (validateDefaultGameData(moneyAddr)) {
+                            // 执行修改
+                            var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
+                            var healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
+                            var moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
+                            
+                            h5gg.setValue(moneyAddr, 2100000000, 'I32');     // 21亿现金
+                            h5gg.setValue(staminaAddr, 2100000000, 'I32');   // 21亿体力
+                            h5gg.setValue(healthAddr, 100, 'I32');           // 100健康
+                            h5gg.setValue(moodAddr, 100, 'I32');             // 100心情
+                            
+                            return true;
+                        }
+                    }
+                }
+            } catch (e) {
+                // 忽略错误
+            }
+            
+            return false;
+        }
+        
+        // 验证默认游戏数据（新进游戏的特征）
+        function validateDefaultGameData(baseAddr) {
+            try {
+                var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
+                var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
+                var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
+                
+                var moneyValue = h5gg.getValue(baseAddr, 'I32');
+                var staminaValue = h5gg.getValue(staminaAddr, 'I32');
+                var healthValue = h5gg.getValue(healthAddr, 'I32');
+                var moodValue = h5gg.getValue(moodAddr, 'I32');
+                
+                // 验证是否符合新进游戏的默认值特征
+                return (moneyValue === 500 &&           // 现金必须是500
+                        staminaValue === 100 &&         // 体力必须是100
+                        healthValue === 100 &&          // 健康必须是100
+                        moodValue === 100);             // 心情必须是100
+                        
+            } catch (e) {
+                return false;
+            }
         }
         
         // 测试游戏数据结构是否正确
