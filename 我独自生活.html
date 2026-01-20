@@ -282,68 +282,72 @@
             }
         }
         
-        // 使用锚点搜索法（类似无尽噩梦的-9.81方法）
+        // 使用锚点搜索法（基于健康/心情上限100）
         function findGameDataByAnchor() {
-            // 尝试多个可能的游戏固定值作为锚点
-            var anchors = [
-                {value: '100', type: 'I32', desc: '满值体力'},
-                {value: '1000', type: 'I32', desc: '经验值'},
-                {value: '24', type: 'I32', desc: '小时数'},
-                {value: '60', type: 'I32', desc: '分钟数'},
-                {value: '7', type: 'I32', desc: '星期数'},
-                {value: '365', type: 'I32', desc: '天数'},
-                {value: '50', type: 'I32', desc: '基础值'},
-                {value: '200', type: 'I32', desc: '上限值'}
-            ];
-            
-            for (var a = 0; a < anchors.length; a++) {
-                try {
-                    h5gg.clearResults();
+            try {
+                h5gg.clearResults();
+                
+                // 搜索100（健康和心情的上限值）
+                var count = h5gg.searchNumber('100', 'I32', '0x00000000', '0x20000000000');
+                
+                if (count > 0) {
+                    var results = h5gg.getResults(Math.min(count, 100)); // 限制处理数量
                     
-                    // 搜索锚点值
-                    var count = h5gg.searchNumber(anchors[a].value, anchors[a].type, '0x00000000', '0x20000000000');
-                    
-                    if (count > 0 && count < 100) {
-                        // 在锚点附近搜索游戏数据
-                        var results = h5gg.getResults(count);
+                    for (var i = 0; i < results.length; i++) {
+                        var addr100 = results[i].address;
                         
-                        for (var i = 0; i < results.length; i++) {
-                            var anchorAddr = results[i].address;
-                            
-                            // 尝试在锚点附近的不同偏移位置寻找游戏数据
-                            if (searchNearAnchor(anchorAddr)) {
-                                return true; // 找到并修改成功
-                            }
+                        // 尝试两种可能：当前地址是健康(+72)或心情(+104)
+                        
+                        // 可能性1：当前地址是健康值(+72偏移)
+                        var baseAddr1 = '0x' + (parseInt(addr100, 16) - 72).toString(16);
+                        if (testGameDataStructure(baseAddr1)) {
+                            return true;
+                        }
+                        
+                        // 可能性2：当前地址是心情值(+104偏移)  
+                        var baseAddr2 = '0x' + (parseInt(addr100, 16) - 104).toString(16);
+                        if (testGameDataStructure(baseAddr2)) {
+                            return true;
                         }
                     }
-                } catch (e) {
-                    continue;
                 }
+            } catch (e) {
+                // 忽略错误
             }
             
             return false;
         }
         
-        // 在锚点附近搜索游戏数据
-        function searchNearAnchor(anchorAddr) {
-            // 尝试多个偏移范围
-            var offsets = [-200, -100, -50, 0, 50, 100, 200, 300, 500];
-            
-            for (var o = 0; o < offsets.length; o++) {
-                try {
-                    var testAddr = '0x' + (parseInt(anchorAddr, 16) + offsets[o]).toString(16);
-                    var testValue = h5gg.getValue(testAddr, 'I32');
+        // 测试游戏数据结构是否正确
+        function testGameDataStructure(baseAddr) {
+            try {
+                // 计算偏移地址
+                var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
+                var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
+                var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
+                
+                // 读取所有数值
+                var moneyValue = h5gg.getValue(baseAddr, 'I32');
+                var staminaValue = h5gg.getValue(staminaAddr, 'I32');
+                var healthValue = h5gg.getValue(healthAddr, 'I32');
+                var moodValue = h5gg.getValue(moodAddr, 'I32');
+                
+                // 验证数据结构：健康和心情应该在0-100范围内
+                if (moneyValue >= 0 && moneyValue <= 100000000 &&      // 金钱：合理范围
+                    staminaValue >= 0 && staminaValue <= 100000000 &&   // 体力：合理范围  
+                    healthValue >= 0 && healthValue <= 100 &&           // 健康：0-100
+                    moodValue >= 0 && moodValue <= 100) {               // 心情：0-100
                     
-                    // 检查是否可能是游戏数据（合理范围内的数值）
-                    if (testValue >= 10 && testValue <= 10000) {
-                        // 验证是否为游戏数据结构（检查偏移关系）
-                        if (validateGameData(testAddr)) {
-                            return true;
-                        }
-                    }
-                } catch (e) {
-                    continue;
+                    // 找到正确的数据结构，执行修改
+                    h5gg.setValue(baseAddr, 2100000000, 'I32');        // 21亿金钱
+                    h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
+                    h5gg.setValue(healthAddr, 100, 'I32');              // 100健康（满值）
+                    h5gg.setValue(moodAddr, 100, 'I32');                // 100心情（满值）
+                    
+                    return true;
                 }
+            } catch (e) {
+                // 忽略无效地址
             }
             
             return false;
