@@ -453,11 +453,30 @@
         function modifyByOffset(currentMoney, currentStamina, currentHealth, currentMood) {
             h5gg.clearResults();
             
-            // 搜索当前金钱数值
-            var searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', '0x100000000', '0x200000000');
+            // 尝试多个搜索范围
+            var searchRanges = [
+                ['0x100000000', '0x200000000'],  // 原始范围
+                ['0x00000000', '0x20000000000'], // 全范围
+                ['0x80000000', '0x180000000'],   // 中间范围
+                ['0x200000000', '0x300000000']   // 高位范围
+            ];
+            
+            var searchCount = 0;
+            var results = null;
+            
+            // 依次尝试不同的搜索范围
+            for (var r = 0; r < searchRanges.length; r++) {
+                h5gg.clearResults();
+                searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', searchRanges[r][0], searchRanges[r][1]);
+                
+                if (searchCount > 0) {
+                    results = h5gg.getResults(searchCount);
+                    alert("🔍 在范围 " + searchRanges[r][0] + "-" + searchRanges[r][1] + " 找到 " + searchCount + " 个地址");
+                    break;
+                }
+            }
             
             if (searchCount > 0) {
-                var results = h5gg.getResults(searchCount);
                 var modifiedCount = 0;
                 
                 for (var i = 0; i < results.length && i < 50; i++) {
@@ -496,10 +515,10 @@
                 if (modifiedCount > 0) {
                     alert("🎁 一键全开成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n修改了 " + modifiedCount + " 个地址");
                 } else {
-                    alert("❌ 修改失败\n请确保：\n1. 游戏正在运行\n2. 输入的数值正确\n3. 在游戏界面能看到数值");
+                    alert("❌ 修改失败\n找到了金钱地址但偏移验证失败\n可能偏移量不正确或数据结构不同");
                 }
             } else {
-                alert("❌ 未找到金钱地址\n请确保输入的金钱数值正确");
+                alert("❌ 未找到金钱地址\n已尝试多个内存范围\n请确保：\n1. 游戏正在运行\n2. 输入的金钱数值正确\n3. 数值在游戏界面可见");
             }
         }
     </script>
