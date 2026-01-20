@@ -25,6 +25,19 @@ window.addEventListener('message', function(event) {
     // 显示成功提示
     showNotification('🎯 扩展成功拦截！\nshortLink: ' + event.data.shortLink, 'success');
   }
+  
+  if (event.data.type === 'START_IMMEDIATE_BYPASS') {
+    console.log('[扩展] 立即开始绕过尝试...');
+    
+    // 立即开始绕过，使用inject.js提供的信息
+    const data = {
+      shortLink: event.data.shortLink,
+      appId: event.data.pageInfo?.appId,
+      token: event.data.pageInfo?.token
+    };
+    
+    startBypassAttempts(data);
+  }
 });
 
 // 监听来自background script的消息

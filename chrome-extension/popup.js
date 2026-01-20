@@ -229,11 +229,13 @@ function showMessage(message, type = 'info') {
 function updateStatus() {
   // 检查扩展权限
   chrome.permissions.contains({
-    permissions: ['webRequest', 'webRequestBlocking'],
+    permissions: ['webRequest', 'storage', 'tabs', 'scripting'],
     origins: ['https://*.ios80.com/*']
   }, function(result) {
     if (result) {
       console.log('[扩展] 权限检查通过');
+      elements.extensionStatus.textContent = '已激活';
+      elements.extensionStatus.className = 'status-value success';
     } else {
       elements.extensionStatus.textContent = '权限不足';
       elements.extensionStatus.className = 'status-value error';

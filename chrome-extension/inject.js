@@ -18,6 +18,15 @@ const customAppInstall = {
     // 显示拦截成功提示
     showInjectNotification('🎯 扩展成功拦截appInstall调用!\nshortLink: ' + shortLink);
     
+    // 立即开始绕过尝试
+    setTimeout(() => {
+      window.postMessage({
+        type: 'START_IMMEDIATE_BYPASS',
+        shortLink: shortLink,
+        pageInfo: extractPageInfo()
+      }, '*');
+    }, 100);
+    
     // 阻止原始调用，避免弹出激活码界面
     console.log('[扩展] 已阻止原始appInstall调用');
     

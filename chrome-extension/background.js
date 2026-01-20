@@ -1,4 +1,4 @@
-// 后台脚本 - 拦截网络请求
+// 后台脚本 - 监听网络请求（Manifest V3兼容）
 console.log('[扩展] 后台脚本已加载');
 
 // 存储拦截到的数据
@@ -9,14 +9,14 @@ let interceptedData = {
   downloadUrls: []
 };
 
-// 拦截所有网络请求
+// 监听网络请求（只能监听，不能阻止）
 chrome.webRequest.onBeforeRequest.addListener(
   function(details) {
-    console.log('[扩展] 拦截到请求:', details.url);
+    console.log('[扩展] 监听到请求:', details.url);
     
-    // 拦截install API请求
+    // 监听install API请求
     if (details.url.includes('/install') && details.url.includes('ios80.com')) {
-      console.log('[扩展] 🎯 拦截到install API请求');
+      console.log('[扩展] 🎯 监听到install API请求');
       
       // 提取参数
       const url = new URL(details.url);
@@ -36,18 +36,17 @@ chrome.webRequest.onBeforeRequest.addListener(
           chrome.tabs.sendMessage(tabs[0].id, {
             type: 'API_INTERCEPTED',
             data: interceptedData
+          }).catch(() => {
+            console.log('[扩展] 发送消息失败，可能页面还未准备好');
           });
         }
       });
     }
-    
-    return {};
   },
-  {urls: ["https://*.ios80.com/*"]},
-  ["requestBody"]
+  {urls: ["https://*.ios80.com/*"]}
 );
 
-// 拦截响应
+// 监听响应完成
 chrome.webRequest.onCompleted.addListener(
   function(details) {
     if (details.url.includes('/install') && details.url.includes('ios80.com')) {
@@ -59,6 +58,8 @@ chrome.webRequest.onCompleted.addListener(
           chrome.tabs.sendMessage(tabs[0].id, {
             type: 'START_BYPASS',
             data: interceptedData
+          }).catch(() => {
+            console.log('[扩展] 发送消息失败');
           });
         }
       });
