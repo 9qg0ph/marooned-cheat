@@ -295,120 +295,119 @@
             });
         });
 
-        // 获取当前输入的数值
-        function getCurrentValues() {
-            return {
-                money: parseInt(document.getElementById('currentMoney').value) || 474,
-                stamina: parseInt(document.getElementById('currentStamina').value) || 136,
-                health: parseInt(document.getElementById('currentHealth').value) || 93,
-                mood: parseInt(document.getElementById('currentMood').value) || 88
-            };
-        }
-
         // 开始修改流程 - 依次弹出输入框
         function startModify() {
-            // 第一步：输入当前金钱
-            const currentMoney = prompt("💰 请输入当前金钱数值：", "474");
-            if (currentMoney === null) return; // 用户取消
-            
-            const moneyValue = parseInt(currentMoney);
-            if (isNaN(moneyValue) || moneyValue <= 0) {
-                alert("❌ 请输入有效的金钱数值！");
-                return;
-            }
-            
-            // 第二步：输入当前体力
-            const currentStamina = prompt("⚡ 请输入当前体力数值：", "136");
-            if (currentStamina === null) return; // 用户取消
-            
-            const staminaValue = parseInt(currentStamina);
-            if (isNaN(staminaValue) || staminaValue < 0) {
-                alert("❌ 请输入有效的体力数值！");
-                return;
-            }
-            
-            // 第三步：输入当前健康
-            const currentHealth = prompt("❤️ 请输入当前健康数值：", "93");
-            if (currentHealth === null) return; // 用户取消
-            
-            const healthValue = parseInt(currentHealth);
-            if (isNaN(healthValue) || healthValue < 0) {
-                alert("❌ 请输入有效的健康数值！");
-                return;
-            }
-            
-            // 第四步：输入当前心情
-            const currentMood = prompt("😊 请输入当前心情数值：", "88");
-            if (currentMood === null) return; // 用户取消
-            
-            const moodValue = parseInt(currentMood);
-            if (isNaN(moodValue) || moodValue < 0) {
-                alert("❌ 请输入有效的心情数值！");
-                return;
-            }
-            
-            // 确认修改
-            const confirmMsg = `确认修改以下数值？\n\n💰 金钱: ${moneyValue} → 2,100,000,000\n⚡ 体力: ${staminaValue} → 2,100,000,000\n❤️ 健康: ${healthValue} → 10,000\n😊 心情: ${moodValue} → 10,000`;
-            
-            if (confirm(confirmMsg)) {
-                // 执行修改
-                const count = modifyByOffset(moneyValue, staminaValue, healthValue, moodValue);
-                if (count > 0) {
-                    alert("🎁 一键全开成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n修改了 " + count + " 个地址");
-                } else {
-                    alert("❌ 修改失败\n请确保：\n1. 游戏正在运行\n2. 输入的数值正确\n3. 在游戏界面能看到数值");
+            try {
+                // 第一步：输入当前金钱
+                const currentMoney = prompt("💰 请输入当前金钱数值：", "474");
+                if (currentMoney === null) return; // 用户取消
+                
+                const moneyValue = parseInt(currentMoney);
+                if (isNaN(moneyValue) || moneyValue <= 0) {
+                    alert("❌ 请输入有效的金钱数值！");
+                    return;
                 }
+                
+                // 第二步：输入当前体力
+                const currentStamina = prompt("⚡ 请输入当前体力数值：", "136");
+                if (currentStamina === null) return; // 用户取消
+                
+                const staminaValue = parseInt(currentStamina);
+                if (isNaN(staminaValue) || staminaValue < 0) {
+                    alert("❌ 请输入有效的体力数值！");
+                    return;
+                }
+                
+                // 第三步：输入当前健康
+                const currentHealth = prompt("❤️ 请输入当前健康数值：", "93");
+                if (currentHealth === null) return; // 用户取消
+                
+                const healthValue = parseInt(currentHealth);
+                if (isNaN(healthValue) || healthValue < 0) {
+                    alert("❌ 请输入有效的健康数值！");
+                    return;
+                }
+                
+                // 第四步：输入当前心情
+                const currentMood = prompt("😊 请输入当前心情数值：", "88");
+                if (currentMood === null) return; // 用户取消
+                
+                const moodValue = parseInt(currentMood);
+                if (isNaN(moodValue) || moodValue < 0) {
+                    alert("❌ 请输入有效的心情数值！");
+                    return;
+                }
+                
+                // 确认修改
+                const confirmMsg = "确认修改以下数值？\n\n💰 金钱: " + moneyValue + " → 2,100,000,000\n⚡ 体力: " + staminaValue + " → 2,100,000,000\n❤️ 健康: " + healthValue + " → 10,000\n😊 心情: " + moodValue + " → 10,000";
+                
+                if (confirm(confirmMsg)) {
+                    // 执行修改
+                    const count = modifyByOffset(moneyValue, staminaValue, healthValue, moodValue);
+                    if (count > 0) {
+                        alert("🎁 一键全开成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n修改了 " + count + " 个地址");
+                    } else {
+                        alert("❌ 修改失败\n请确保：\n1. 游戏正在运行\n2. 输入的数值正确\n3. 在游戏界面能看到数值");
+                    }
+                }
+            } catch (error) {
+                alert("❌ 脚本执行出错：" + error.message);
             }
         }
 
         // 基于金钱地址修改所有数值（使用偏移关系）
         function modifyByOffset(currentMoney, currentStamina, currentHealth, currentMood) {
-            h5gg.clearResults();
-            
-            // 搜索当前金钱数值
-            const searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', '0x100000000', '0x200000000');
-            
-            if (searchCount > 0) {
-                const results = h5gg.getResults(searchCount);
-                let modifiedCount = 0;
+            try {
+                h5gg.clearResults();
                 
-                for (let i = 0; i < results.length && i < 50; i++) {
-                    const moneyAddr = results[i].address;
+                // 搜索当前金钱数值
+                const searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', '0x100000000', '0x200000000');
+                
+                if (searchCount > 0) {
+                    const results = h5gg.getResults(searchCount);
+                    let modifiedCount = 0;
                     
-                    try {
-                        // 验证是否是正确的数据结构
-                        const staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
-                        const healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
-                        const moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
+                    for (let i = 0; i < results.length && i < 50; i++) {
+                        const moneyAddr = results[i].address;
                         
-                        // 读取偏移地址的值进行验证
-                        const staminaValue = h5gg.getValue(staminaAddr, 'I32');
-                        const healthValue = h5gg.getValue(healthAddr, 'I32');
-                        const moodValue = h5gg.getValue(moodAddr, 'I32');
-                        
-                        // 验证数值是否在合理范围内
-                        if (staminaValue >= 0 && staminaValue <= 10000000 &&
-                            healthValue >= 0 && healthValue <= 100000 &&
-                            moodValue >= 0 && moodValue <= 100000) {
+                        try {
+                            // 验证是否是正确的数据结构
+                            const staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
+                            const healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
+                            const moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
                             
-                            // 修改数值
-                            h5gg.setValue(moneyAddr, 2100000000, 'I32');        // 21亿金钱
-                            h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
-                            h5gg.setValue(healthAddr, 10000, 'I32');            // 10000健康
-                            h5gg.setValue(moodAddr, 10000, 'I32');              // 10000心情
+                            // 读取偏移地址的值进行验证
+                            const staminaValue = h5gg.getValue(staminaAddr, 'I32');
+                            const healthValue = h5gg.getValue(healthAddr, 'I32');
+                            const moodValue = h5gg.getValue(moodAddr, 'I32');
                             
-                            modifiedCount++;
+                            // 验证数值是否在合理范围内
+                            if (staminaValue >= 0 && staminaValue <= 10000000 &&
+                                healthValue >= 0 && healthValue <= 100000 &&
+                                moodValue >= 0 && moodValue <= 100000) {
+                                
+                                // 修改数值
+                                h5gg.setValue(moneyAddr, 2100000000, 'I32');        // 21亿金钱
+                                h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
+                                h5gg.setValue(healthAddr, 10000, 'I32');            // 10000健康
+                                h5gg.setValue(moodAddr, 10000, 'I32');              // 10000心情
+                                
+                                modifiedCount++;
+                            }
+                        } catch (e) {
+                            // 忽略无效地址
+                            continue;
                         }
-                    } catch (e) {
-                        // 忽略无效地址
-                        continue;
                     }
+                    
+                    return modifiedCount;
                 }
                 
-                return modifiedCount;
+                return 0;
+            } catch (error) {
+                alert("❌ 修改过程出错：" + error.message);
+                return 0;
             }
-            
-            return 0;
         }
     </script>
 </body>
