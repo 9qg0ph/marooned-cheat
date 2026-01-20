@@ -1,5 +1,5 @@
 // 我独自生活修改器 - WoduziCheat.m
-// Hook拦截修改系统 v14.3
+// 全方位Hook拦截系统 v14.4
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
@@ -15,6 +15,9 @@ static NSInteger g_modifiedMoney = 999999999;
 static NSInteger g_modifiedStamina = 999999;
 static NSInteger g_modifiedHealth = 999;
 static NSInteger g_modifiedMood = 999;
+
+// Hook拦截计数器
+static NSInteger g_hookInterceptCount = 0;
 
 #pragma mark - 函数前向声明
 
@@ -129,45 +132,72 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-#pragma mark - Hook拦截系统
+#pragma mark - 全方位Hook拦截系统
+
+// 通用数值检查和替换函数
+static id checkAndReplaceValue(id originalValue, NSString *key) {
+    if (!originalValue) return originalValue;
+    
+    // 记录所有被读取的键值
+    writeLog([NSString stringWithFormat:@"📝 检测到数值读取: %@ = %@", key, originalValue]);
+    
+    // 检查是否是数字类型
+    if ([originalValue isKindOfClass:[NSNumber class]]) {
+        NSInteger intValue = [originalValue integerValue];
+        
+        // 金钱相关检查（更广泛的关键词）
+        if (g_moneyHookEnabled && ([key containsString:@"money"] || [key containsString:@"金钱"] || 
+            [key containsString:@"cash"] || [key containsString:@"coin"] || [key containsString:@"currency"] ||
+            [key containsString:@"dollar"] || [key containsString:@"yuan"] || [key containsString:@"wealth"] ||
+            [key rangeOfString:@"money" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+            g_hookInterceptCount++;
+            writeLog([NSString stringWithFormat:@"🎯 拦截金钱读取: %@ (%ld) -> %ld", key, (long)intValue, (long)g_modifiedMoney]);
+            return @(g_modifiedMoney);
+        }
+        
+        // 体力相关检查
+        if (g_staminaHookEnabled && ([key containsString:@"stamina"] || [key containsString:@"体力"] || 
+            [key containsString:@"energy"] || [key containsString:@"power"] || [key containsString:@"strength"] ||
+            [key rangeOfString:@"stamina" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+            g_hookInterceptCount++;
+            writeLog([NSString stringWithFormat:@"🎯 拦截体力读取: %@ (%ld) -> %ld", key, (long)intValue, (long)g_modifiedStamina]);
+            return @(g_modifiedStamina);
+        }
+        
+        // 健康相关检查
+        if (g_healthHookEnabled && ([key containsString:@"health"] || [key containsString:@"健康"] || 
+            [key containsString:@"hp"] || [key containsString:@"life"] || [key containsString:@"blood"] ||
+            [key rangeOfString:@"health" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+            g_hookInterceptCount++;
+            writeLog([NSString stringWithFormat:@"🎯 拦截健康读取: %@ (%ld) -> %ld", key, (long)intValue, (long)g_modifiedHealth]);
+            return @(g_modifiedHealth);
+        }
+        
+        // 心情相关检查
+        if (g_moodHookEnabled && ([key containsString:@"mood"] || [key containsString:@"心情"] || 
+            [key containsString:@"happiness"] || [key containsString:@"emotion"] || [key containsString:@"feeling"] ||
+            [key rangeOfString:@"mood" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+            g_hookInterceptCount++;
+            writeLog([NSString stringWithFormat:@"🎯 拦截心情读取: %@ (%ld) -> %ld", key, (long)intValue, (long)g_modifiedMood]);
+            return @(g_modifiedMood);
+        }
+        
+        // 如果数值在合理范围内，也尝试替换（可能是游戏数值但键名不明显）
+        if (g_moneyHookEnabled && intValue >= 100 && intValue <= 100000) {
+            writeLog([NSString stringWithFormat:@"🤔 可疑金钱数值: %@ = %ld，尝试替换", key, (long)intValue]);
+            return @(g_modifiedMoney);
+        }
+    }
+    
+    return originalValue;
+}
 
 // NSUserDefaults Hook - 拦截游戏数据读取
 static id (*original_objectForKey)(id self, SEL _cmd, NSString *key) = NULL;
 
 static id hooked_objectForKey(id self, SEL _cmd, NSString *key) {
-    // 调用原始方法获取原值
     id originalValue = original_objectForKey(self, _cmd, key);
-    
-    // 检查是否是游戏相关的数值键
-    if ([key containsString:@"money"] || [key containsString:@"金钱"] || [key containsString:@"cash"] || [key containsString:@"coin"]) {
-        if (g_moneyHookEnabled) {
-            writeLog([NSString stringWithFormat:@"🎯 拦截金钱读取: %@ -> %ld", key, (long)g_modifiedMoney]);
-            return @(g_modifiedMoney);
-        }
-    }
-    
-    if ([key containsString:@"stamina"] || [key containsString:@"体力"] || [key containsString:@"energy"]) {
-        if (g_staminaHookEnabled) {
-            writeLog([NSString stringWithFormat:@"🎯 拦截体力读取: %@ -> %ld", key, (long)g_modifiedStamina]);
-            return @(g_modifiedStamina);
-        }
-    }
-    
-    if ([key containsString:@"health"] || [key containsString:@"健康"] || [key containsString:@"hp"]) {
-        if (g_healthHookEnabled) {
-            writeLog([NSString stringWithFormat:@"🎯 拦截健康读取: %@ -> %ld", key, (long)g_modifiedHealth]);
-            return @(g_modifiedHealth);
-        }
-    }
-    
-    if ([key containsString:@"mood"] || [key containsString:@"心情"] || [key containsString:@"happiness"]) {
-        if (g_moodHookEnabled) {
-            writeLog([NSString stringWithFormat:@"🎯 拦截心情读取: %@ -> %ld", key, (long)g_modifiedMood]);
-            return @(g_modifiedMood);
-        }
-    }
-    
-    return originalValue;
+    return checkAndReplaceValue(originalValue, key);
 }
 
 // NSUserDefaults integerForKey Hook
@@ -176,41 +206,75 @@ static NSInteger (*original_integerForKey)(id self, SEL _cmd, NSString *key) = N
 static NSInteger hooked_integerForKey(id self, SEL _cmd, NSString *key) {
     NSInteger originalValue = original_integerForKey(self, _cmd, key);
     
-    if ([key containsString:@"money"] || [key containsString:@"金钱"] || [key containsString:@"cash"] || [key containsString:@"coin"]) {
-        if (g_moneyHookEnabled) {
-            writeLog([NSString stringWithFormat:@"🎯 拦截金钱整数读取: %@ -> %ld", key, (long)g_modifiedMoney]);
-            return g_modifiedMoney;
-        }
+    writeLog([NSString stringWithFormat:@"📝 检测到整数读取: %@ = %ld", key, (long)originalValue]);
+    
+    // 金钱相关检查
+    if (g_moneyHookEnabled && ([key containsString:@"money"] || [key containsString:@"金钱"] || 
+        [key containsString:@"cash"] || [key containsString:@"coin"] || 
+        [key rangeOfString:@"money" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+        g_hookInterceptCount++;
+        writeLog([NSString stringWithFormat:@"🎯 拦截金钱整数读取: %@ (%ld) -> %ld", key, (long)originalValue, (long)g_modifiedMoney]);
+        return g_modifiedMoney;
     }
     
-    if ([key containsString:@"stamina"] || [key containsString:@"体力"] || [key containsString:@"energy"]) {
-        if (g_staminaHookEnabled) {
-            writeLog([NSString stringWithFormat:@"🎯 拦截体力整数读取: %@ -> %ld", key, (long)g_modifiedStamina]);
-            return g_modifiedStamina;
-        }
+    // 体力相关检查
+    if (g_staminaHookEnabled && ([key containsString:@"stamina"] || [key containsString:@"体力"] || 
+        [key containsString:@"energy"] || [key rangeOfString:@"stamina" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+        g_hookInterceptCount++;
+        writeLog([NSString stringWithFormat:@"🎯 拦截体力整数读取: %@ (%ld) -> %ld", key, (long)originalValue, (long)g_modifiedStamina]);
+        return g_modifiedStamina;
     }
     
-    if ([key containsString:@"health"] || [key containsString:@"健康"] || [key containsString:@"hp"]) {
-        if (g_healthHookEnabled) {
-            writeLog([NSString stringWithFormat:@"🎯 拦截健康整数读取: %@ -> %ld", key, (long)g_modifiedHealth]);
-            return g_modifiedHealth;
-        }
+    // 健康相关检查
+    if (g_healthHookEnabled && ([key containsString:@"health"] || [key containsString:@"健康"] || 
+        [key containsString:@"hp"] || [key rangeOfString:@"health" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+        g_hookInterceptCount++;
+        writeLog([NSString stringWithFormat:@"🎯 拦截健康整数读取: %@ (%ld) -> %ld", key, (long)originalValue, (long)g_modifiedHealth]);
+        return g_modifiedHealth;
     }
     
-    if ([key containsString:@"mood"] || [key containsString:@"心情"] || [key containsString:@"happiness"]) {
-        if (g_moodHookEnabled) {
-            writeLog([NSString stringWithFormat:@"🎯 拦截心情整数读取: %@ -> %ld", key, (long)g_modifiedMood]);
-            return g_modifiedMood;
-        }
+    // 心情相关检查
+    if (g_moodHookEnabled && ([key containsString:@"mood"] || [key containsString:@"心情"] || 
+        [key containsString:@"happiness"] || [key rangeOfString:@"mood" options:NSCaseInsensitiveSearch].location != NSNotFound)) {
+        g_hookInterceptCount++;
+        writeLog([NSString stringWithFormat:@"🎯 拦截心情整数读取: %@ (%ld) -> %ld", key, (long)originalValue, (long)g_modifiedMood]);
+        return g_modifiedMood;
     }
     
     return originalValue;
 }
 
-// 安装Hook
-static void installHooks(void) {
-    writeLog(@"🔧 开始安装Hook拦截器...");
+// NSDictionary Hook - 拦截字典数据读取
+static id (*original_dict_objectForKey)(id self, SEL _cmd, id key) = NULL;
+
+static id hooked_dict_objectForKey(id self, SEL _cmd, id key) {
+    id originalValue = original_dict_objectForKey(self, _cmd, key);
     
+    if ([key isKindOfClass:[NSString class]]) {
+        return checkAndReplaceValue(originalValue, (NSString *)key);
+    }
+    
+    return originalValue;
+}
+
+// NSMutableDictionary Hook - 拦截可变字典数据读取
+static id (*original_mutableDict_objectForKey)(id self, SEL _cmd, id key) = NULL;
+
+static id hooked_mutableDict_objectForKey(id self, SEL _cmd, id key) {
+    id originalValue = original_mutableDict_objectForKey(self, _cmd, key);
+    
+    if ([key isKindOfClass:[NSString class]]) {
+        return checkAndReplaceValue(originalValue, (NSString *)key);
+    }
+    
+    return originalValue;
+}
+
+// 安装全方位Hook
+static void installHooks(void) {
+    writeLog(@"🔧 开始安装全方位Hook拦截器...");
+    
+    // Hook NSUserDefaults
     Class nsUserDefaultsClass = [NSUserDefaults class];
     
     // Hook objectForKey:
@@ -218,7 +282,7 @@ static void installHooks(void) {
     if (objectForKeyMethod) {
         original_objectForKey = (id (*)(id, SEL, NSString *))method_getImplementation(objectForKeyMethod);
         method_setImplementation(objectForKeyMethod, (IMP)hooked_objectForKey);
-        writeLog(@"✅ objectForKey: Hook安装成功");
+        writeLog(@"✅ NSUserDefaults objectForKey: Hook安装成功");
     }
     
     // Hook integerForKey:
@@ -226,15 +290,37 @@ static void installHooks(void) {
     if (integerForKeyMethod) {
         original_integerForKey = (NSInteger (*)(id, SEL, NSString *))method_getImplementation(integerForKeyMethod);
         method_setImplementation(integerForKeyMethod, (IMP)hooked_integerForKey);
-        writeLog(@"✅ integerForKey: Hook安装成功");
+        writeLog(@"✅ NSUserDefaults integerForKey: Hook安装成功");
     }
     
-    writeLog(@"🎉 Hook拦截器安装完成！");
+    // Hook NSDictionary
+    Class nsDictionaryClass = [NSDictionary class];
+    Method dictObjectForKeyMethod = class_getInstanceMethod(nsDictionaryClass, @selector(objectForKey:));
+    if (dictObjectForKeyMethod) {
+        original_dict_objectForKey = (id (*)(id, SEL, id))method_getImplementation(dictObjectForKeyMethod);
+        method_setImplementation(dictObjectForKeyMethod, (IMP)hooked_dict_objectForKey);
+        writeLog(@"✅ NSDictionary objectForKey: Hook安装成功");
+    }
+    
+    // Hook NSMutableDictionary
+    Class nsMutableDictionaryClass = [NSMutableDictionary class];
+    Method mutableDictObjectForKeyMethod = class_getInstanceMethod(nsMutableDictionaryClass, @selector(objectForKey:));
+    if (mutableDictObjectForKeyMethod) {
+        original_mutableDict_objectForKey = (id (*)(id, SEL, id))method_getImplementation(mutableDictObjectForKeyMethod);
+        method_setImplementation(mutableDictObjectForKeyMethod, (IMP)hooked_mutableDict_objectForKey);
+        writeLog(@"✅ NSMutableDictionary objectForKey: Hook安装成功");
+    }
+    
+    writeLog(@"🎉 全方位Hook拦截器安装完成！");
+    writeLog(@"📊 监控范围：NSUserDefaults + NSDictionary + NSMutableDictionary");
 }
 
-// 核心修改函数：Hook拦截方式
+// 核心修改函数：全方位Hook拦截方式
 static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始Hook拦截修改 v14.3 ==========");
+    writeLog(@"========== 开始全方位Hook拦截修改 v14.4 ==========");
+    
+    // 重置拦截计数器
+    g_hookInterceptCount = 0;
     
     // 安装Hook（如果还没安装）
     static BOOL hooksInstalled = NO;
@@ -268,8 +354,22 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
         writeLog([NSString stringWithFormat:@"😊 启用心情Hook: %ld", (long)mood]);
     }
     
-    writeLog(@"🎯 Hook拦截器已激活，游戏读取数值时将自动返回修改后的值");
-    writeLog(@"========== Hook拦截修改完成 ==========");
+    writeLog(@"🎯 全方位Hook拦截器已激活");
+    writeLog(@"📊 监控所有数据读取操作，自动记录到日志");
+    writeLog(@"💡 提示：在游戏中进行操作，查看日志了解数据读取情况");
+    
+    // 延迟检查拦截效果
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        writeLog([NSString stringWithFormat:@"📈 5秒内Hook拦截次数: %ld", (long)g_hookInterceptCount]);
+        if (g_hookInterceptCount == 0) {
+            writeLog(@"⚠️ 未检测到数据读取，游戏可能使用其他存储方式");
+            writeLog(@"💡 建议：在游戏中进行操作（如购买、使用体力等）触发数据读取");
+        } else {
+            writeLog(@"✅ 检测到数据读取，Hook正在工作");
+        }
+    });
+    
+    writeLog(@"========== 全方位Hook拦截修改完成 ==========");
     
     return YES;
 }
@@ -319,7 +419,7 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v14.3";
+    title.text = @"🏠 我独自生活 v14.4";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -329,7 +429,7 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"🎯 Hook拦截修改器";
+    info.text = @"🔍 全方位Hook拦截器";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -351,7 +451,7 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"v14.3: Hook拦截引擎\n无内存搜索，拦截数据读取";
+    tip.text = @"v14.4: 全方位Hook监控\n记录所有数据读取，智能拦截";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -418,8 +518,8 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
 
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
-    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🎯 Hook拦截 v14.3" 
-        message:@"全新Hook引擎：\n• 无内存搜索，避免触发保护\n• 拦截游戏数据读取\n• 立即生效，无需重启\n• 完全避免闪退问题\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🔍 全方位Hook v14.4" 
+        message:@"增强监控特性：\n• Hook NSUserDefaults\n• Hook NSDictionary\n• Hook NSMutableDictionary\n• 记录所有数据读取\n• 智能关键词匹配\n\n⚠️ 启用后在游戏中操作查看效果\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -469,7 +569,7 @@ static BOOL modifyGameDataByHook(NSInteger money, NSInteger stamina, NSInteger h
             writeLog([NSString stringWithFormat:@"💰 金钱Hook: %@", g_moneyHookEnabled ? @"已启用" : @"未启用"]);
             writeLog([NSString stringWithFormat:@"⚡ 体力Hook: %@", g_staminaHookEnabled ? @"已启用" : @"未启用"]);
             writeLog([NSString stringWithFormat:@"❤️ 健康Hook: %@", g_healthHookEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"😊 心情Hook: %@", g_moodHookEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"📈 Hook拦截次数: %ld", (long)g_hookInterceptCount]);
             success = YES;
             message = @"🔍 Hook状态检查完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含Hook拦截信息";
             break;
@@ -653,7 +753,7 @@ static void WDZCheatInit(void) {
         // 设置全局异常处理器（防闪退保护）
         NSSetUncaughtExceptionHandler(&handleUncaughtException);
         
-        writeLog(@"🛡️ WoduziCheat v14.3 初始化完成 - Hook拦截引擎已启用");
+        writeLog(@"🛡️ WoduziCheat v14.4 初始化完成 - 全方位Hook监控已启用");
         
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             setupFloatingButton();
