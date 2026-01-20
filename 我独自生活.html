@@ -284,30 +284,47 @@
         
         // 使用锚点搜索法（基于健康/心情上限100）
         function findGameDataByAnchor() {
+            // 尝试多种锚点策略
+            
+            // 策略1：搜索100（心情上限）
+            if (tryAnchorValue('100', '心情上限')) return true;
+            
+            // 策略2：搜索94（当前健康值，从截图观察）
+            if (tryAnchorValue('94', '当前健康值')) return true;
+            
+            // 策略3：搜索500（当前金钱，从截图观察）
+            if (tryAnchorValue('500', '当前金钱')) return true;
+            
+            // 策略4：搜索其他可能的固定值
+            var otherValues = ['50', '75', '25', '200', '1000', '10', '20', '30'];
+            for (var i = 0; i < otherValues.length; i++) {
+                if (tryAnchorValue(otherValues[i], '其他固定值')) return true;
+            }
+            
+            return false;
+        }
+        
+        // 尝试特定数值作为锚点
+        function tryAnchorValue(value, description) {
             try {
                 h5gg.clearResults();
+                var count = h5gg.searchNumber(value, 'I32', '0x00000000', '0x20000000000');
                 
-                // 搜索100（健康和心情的上限值）
-                var count = h5gg.searchNumber('100', 'I32', '0x00000000', '0x20000000000');
-                
-                if (count > 0) {
-                    var results = h5gg.getResults(Math.min(count, 100)); // 限制处理数量
+                if (count > 0 && count < 500) { // 放宽限制
+                    var results = h5gg.getResults(Math.min(count, 50));
                     
                     for (var i = 0; i < results.length; i++) {
-                        var addr100 = results[i].address;
+                        var anchorAddr = results[i].address;
                         
-                        // 尝试两种可能：当前地址是健康(+72)或心情(+104)
+                        // 尝试不同的偏移可能性
+                        var offsets = [-104, -72, -24, 0, 24, 48, 72, 96, 104, 128];
                         
-                        // 可能性1：当前地址是健康值(+72偏移)
-                        var baseAddr1 = '0x' + (parseInt(addr100, 16) - 72).toString(16);
-                        if (testGameDataStructure(baseAddr1)) {
-                            return true;
-                        }
-                        
-                        // 可能性2：当前地址是心情值(+104偏移)  
-                        var baseAddr2 = '0x' + (parseInt(addr100, 16) - 104).toString(16);
-                        if (testGameDataStructure(baseAddr2)) {
-                            return true;
+                        for (var j = 0; j < offsets.length; j++) {
+                            var testBaseAddr = '0x' + (parseInt(anchorAddr, 16) + offsets[j]).toString(16);
+                            
+                            if (testGameDataStructure(testBaseAddr)) {
+                                return true;
+                            }
                         }
                     }
                 }
