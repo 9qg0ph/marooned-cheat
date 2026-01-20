@@ -513,8 +513,8 @@ static void showDisclaimerAlert(void) {
 - (void)setupUI {
     self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
     
-    CGFloat contentHeight = 500;
-    CGFloat contentWidth = 300;
+    CGFloat contentHeight = 320;  // 进一步减小高度
+    CGFloat contentWidth = 280;
     CGFloat viewWidth = self.bounds.size.width;
     CGFloat viewHeight = self.bounds.size.height;
     
@@ -542,84 +542,72 @@ static void showDisclaimerAlert(void) {
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
     title.text = @"🎮 我独自生活 Unity v17.0";
-    title.font = [UIFont boldSystemFontOfSize:18];
+    title.font = [UIFont boldSystemFontOfSize:16];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
     [self.contentView addSubview:title];
     
-    CGFloat y = 45;
+    // 创建滚动视图 - 修复滚动问题
+    UIScrollView *scrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(10, 40, contentWidth - 20, contentHeight - 50)];
+    scrollView.backgroundColor = [UIColor clearColor];
+    scrollView.showsVerticalScrollIndicator = YES;
+    scrollView.showsHorizontalScrollIndicator = NO;
+    scrollView.alwaysBounceVertical = YES;
+    scrollView.bounces = YES;
+    scrollView.scrollEnabled = YES;
+    [self.contentView addSubview:scrollView];
+    
+    CGFloat y = 10;
     
     // 技术说明
-    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
+    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(10, y, contentWidth - 40, 30)];
     info.text = @"🎯 基于PlayGearLib逆向分析\n🎮 Unity Hook + PlayerPrefs拦截";
-    info.font = [UIFont systemFontOfSize:12];
+    info.font = [UIFont systemFontOfSize:11];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
     info.numberOfLines = 2;
-    [self.contentView addSubview:info];
+    [scrollView addSubview:info];
+    y += 40;
+    
+    // 只保留2个最重要的按钮
+    UIButton *btn1 = [self createButtonWithTitle:@"🎁 一键全开 (21亿+10万)" tag:5];
+    btn1.frame = CGRectMake(10, y, contentWidth - 40, 40);
+    [scrollView addSubview:btn1];
     y += 50;
     
-    // 免责声明
-    UITextView *disclaimer = [[UITextView alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 60)];
-    disclaimer.text = @"免责声明：本工具仅供技术研究与学习，严禁用于商业用途及非法途径。使用本工具修改游戏可能违反游戏服务条款，用户需自行承担一切风险和责任。严禁倒卖、传播或用于牟利，否则后果自负。继续使用即表示您已阅读并同意本声明。";
-    disclaimer.font = [UIFont systemFontOfSize:10];
-    disclaimer.textColor = [UIColor lightGrayColor];
-    disclaimer.backgroundColor = [UIColor colorWithWhite:0.97 alpha:1];
-    disclaimer.layer.cornerRadius = 8;
-    disclaimer.editable = NO;
-    disclaimer.scrollEnabled = YES;
-    disclaimer.showsVerticalScrollIndicator = YES;
-    [self.contentView addSubview:disclaimer];
-    y += 70;
-    
-    // 技术特性
-    UILabel *features = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    features.text = @"✅ Unity PlayerPrefs Hook\n✅ UnityAppController拦截\n✅ 智能数值识别 + 21亿/10万标准";
-    features.font = [UIFont systemFontOfSize:11];
-    features.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
-    features.textAlignment = NSTextAlignmentCenter;
-    features.numberOfLines = 3;
-    [self.contentView addSubview:features];
+    UIButton *btn2 = [self createButtonWithTitle:@"📊 查看Hook状态" tag:6];
+    btn2.frame = CGRectMake(10, y, contentWidth - 40, 40);
+    [scrollView addSubview:btn2];
     y += 50;
     
-    // 按钮
-    UIButton *btn1 = [self createButtonWithTitle:@"💰 无限金钱 (21亿)" tag:1];
-    btn1.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    [self.contentView addSubview:btn1];
-    y += 43;
-    
-    UIButton *btn2 = [self createButtonWithTitle:@"⚡ 无限体力 (21亿)" tag:2];
-    btn2.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    [self.contentView addSubview:btn2];
-    y += 43;
-    
-    UIButton *btn3 = [self createButtonWithTitle:@"❤️ 无限健康 (10万)" tag:3];
-    btn3.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    [self.contentView addSubview:btn3];
-    y += 43;
-    
-    UIButton *btn4 = [self createButtonWithTitle:@"😊 无限心情 (10万)" tag:4];
-    btn4.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    [self.contentView addSubview:btn4];
-    y += 43;
-    
-    UIButton *btn5 = [self createButtonWithTitle:@"🎁 一键全开 (Unity)" tag:5];
-    btn5.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    [self.contentView addSubview:btn5];
-    y += 43;
-    
-    UIButton *btn6 = [self createButtonWithTitle:@"📊 Unity状态查询" tag:6];
-    btn6.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    [self.contentView addSubview:btn6];
-    y += 48;
+    // 状态显示 - 简化内容
+    UILabel *status = [[UILabel alloc] initWithFrame:CGRectMake(10, y, contentWidth - 40, 80)];
+    status.text = @"📋 使用说明：\n1. 点击'一键全开'激活Hook\n2. 进入游戏查看效果\n3. 可查看Hook状态了解详情\n\n⚠️ 确保游戏已完全加载";
+    status.font = [UIFont systemFontOfSize:11];
+    status.textColor = [UIColor darkGrayColor];
+    status.textAlignment = NSTextAlignmentLeft;
+    status.numberOfLines = 0;
+    status.backgroundColor = [UIColor colorWithWhite:0.97 alpha:1];
+    status.layer.cornerRadius = 8;
+    [scrollView addSubview:status];
+    y += 90;
     
     // 版权
-    UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
+    UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(10, y, contentWidth - 40, 20)];
     copyright.text = getCopyrightText();
-    copyright.font = [UIFont systemFontOfSize:12];
+    copyright.font = [UIFont systemFontOfSize:10];
     copyright.textColor = [UIColor lightGrayColor];
     copyright.textAlignment = NSTextAlignmentCenter;
-    [self.contentView addSubview:copyright];
+    [scrollView addSubview:copyright];
+    y += 30;
+    
+    // 正确设置滚动视图内容大小
+    scrollView.contentSize = CGSizeMake(contentWidth - 20, y);
+    
+    // 确保滚动视图可以滚动
+    if (scrollView.contentSize.height > scrollView.frame.size.height) {
+        scrollView.scrollEnabled = YES;
+    }
 }
 
 - (void)closeMenu {
@@ -660,35 +648,13 @@ static void showDisclaimerAlert(void) {
     writeLog(@"========== Unity Hook操作开始 ==========");
     
     switch (tag) {
-        case 1:
-            writeLog(@"功能：Unity无限金钱");
-            [UnityController unlimitedMoney];
-            success = YES;
-            message = @"💰 Unity金钱Hook已激活！\n\n目标数值: 2,100,000,000 (21亿)\n基于PlayGearLib专业标准\n\n请进入游戏查看效果";
-            break;
-        case 2:
-            writeLog(@"功能：Unity无限体力");
-            [UnityController unlimitedStamina];
-            success = YES;
-            message = @"⚡ Unity体力Hook已激活！\n\n目标数值: 2,100,000,000 (21亿)\n基于PlayGearLib专业标准\n\n请进入游戏查看效果";
-            break;
-        case 3:
-            writeLog(@"功能：Unity无限健康");
-            [UnityController unlimitedHealth];
-            success = YES;
-            message = @"❤️ Unity健康Hook已激活！\n\n目标数值: 100,000 (10万)\n基于PlayGearLib专业标准\n\n请进入游戏查看效果";
-            break;
-        case 4:
-            writeLog(@"功能：Unity无限心情");
-            [UnityController unlimitedMood];
-            success = YES;
-            message = @"😊 Unity心情Hook已激活！\n\n目标数值: 100,000 (10万)\n基于PlayGearLib专业标准\n\n请进入游戏查看效果";
-            break;
         case 5:
             writeLog(@"功能：Unity一键全开");
+            // 自动启用Hook系统
+            [UnityController enableUnityHook];
             [UnityController unlimitedAll];
             success = YES;
-            message = @"🎁 Unity全属性Hook已激活！\n\n💰金钱: 21亿\n⚡体力: 21亿\n❤️健康: 10万\n😊心情: 10万\n\n基于PlayGearLib逆向分析";
+            message = @"🎁 Unity全属性Hook已激活！\n\n💰金钱: 21亿\n⚡体力: 21亿\n❤️健康: 10万\n😊心情: 10万\n\n✅ Hook系统已自动启用\n基于PlayGearLib逆向分析";
             break;
         case 6:
             writeLog(@"功能：Unity状态查询");
