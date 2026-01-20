@@ -37,6 +37,10 @@ static id (*original_UnityAppController_init)(id, SEL) = NULL;
 static NSInteger (*original_integerForKey)(id, SEL, NSString*) = NULL;
 static void (*original_setInteger)(id, SEL, NSInteger, NSString*) = NULL;
 
+// 类前向声明
+@class UnityGameManager;
+@class UnityMenuView;
+
 // 全局UI变量
 static UIButton *g_floatButton = nil;
 static UnityMenuView *g_menuView = nil;
@@ -47,10 +51,6 @@ static void writeLog(NSString *message);
 static void showMenu(void);
 static UIWindow* getKeyWindow(void);
 static UIViewController* getRootViewController(void);
-
-// 类前向声明
-@class UnityGameManager;
-@class UnityMenuView;
 
 #pragma mark - 日志系统
 
