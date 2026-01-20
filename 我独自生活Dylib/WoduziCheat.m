@@ -1,14 +1,14 @@
 // 我独自生活修改器 - WoduziCheat.m
-// 文件数据拦截系统 v15.1
+// 实时内存搜索修改系统 v15.2
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <mach/mach.h>
 #import <sys/mman.h>
 
-// 文件数据拦截开关
-static BOOL g_fileHookEnabled = NO;
-static BOOL g_sqliteHookEnabled = NO;
+// 实时内存搜索开关
+static BOOL g_memorySearchEnabled = NO;
+static BOOL g_realTimeModifyEnabled = NO;
 
 // 修改后的数值
 static NSInteger g_modifiedMoney = 999999999;
@@ -16,9 +16,15 @@ static NSInteger g_modifiedStamina = 999999;
 static NSInteger g_modifiedHealth = 999;
 static NSInteger g_modifiedMood = 999;
 
-// 文件Hook拦截计数器
-static NSInteger g_fileInterceptCount = 0;
-static NSInteger g_sqliteInterceptCount = 0;
+// 内存搜索计数器
+static NSInteger g_memorySearchCount = 0;
+static NSInteger g_memoryModifyCount = 0;
+
+// 找到的地址缓存
+static uintptr_t g_foundMoneyAddress = 0;
+static uintptr_t g_foundStaminaAddress = 0;
+static uintptr_t g_foundHealthAddress = 0;
+static uintptr_t g_foundMoodAddress = 0;
 
 #pragma mark - 函数前向声明
 
@@ -133,156 +139,183 @@ static void writeLog(NSString *message) {
     NSLog(@"[WDZ] %@", message);
 }
 
-#pragma mark - 文件数据拦截系统
+#pragma mark - 实时内存搜索修改系统
 
-// NSData Hook - 拦截数据读取操作
-static NSData* (*original_dataWithContentsOfFile)(Class cls, SEL _cmd, NSString *path) = NULL;
-
-static NSData* hooked_dataWithContentsOfFile(Class cls, SEL _cmd, NSString *path) {
-    NSData* originalData = original_dataWithContentsOfFile(cls, _cmd, path);
-    
-    if (g_fileHookEnabled && originalData && path) {
-        writeLog([NSString stringWithFormat:@"📁 文件读取: %@", path.lastPathComponent]);
+// 安全的内存读取函数
+static BOOL safeMemoryRead(uintptr_t address, void* buffer, size_t size) {
+    @try {
+        // 检查地址是否可读
+        if (address == 0 || address < 0x100000000 || address > 0x200000000) {
+            return NO;
+        }
         
-        // 检查是否是游戏数据文件
-        NSString *fileName = path.lastPathComponent.lowercaseString;
-        if ([fileName containsString:@"save"] || [fileName containsString:@"data"] || 
-            [fileName containsString:@"game"] || [fileName containsString:@"player"] ||
-            [fileName containsString:@"plist"] || [fileName containsString:@"json"]) {
-            
-            // 尝试解析文件内容
-            NSString *content = [[NSString alloc] initWithData:originalData encoding:NSUTF8StringEncoding];
-            if (content) {
-                writeLog([NSString stringWithFormat:@"📄 文件内容预览: %@", [content substringToIndex:MIN(200, content.length)]]);
-                
-                // 检查是否包含数值数据
-                if ([content containsString:@"474"] || [content containsString:@"136"] || 
-                    [content containsString:@"93"] || [content containsString:@"88"]) {
-                    
-                    g_fileInterceptCount++;
-                    writeLog([NSString stringWithFormat:@"🎯 发现疑似游戏数据文件: %@", path]);
-                    
-                    // 尝试修改数据
-                    NSMutableString *modifiedContent = [content mutableCopy];
-                    [modifiedContent replaceOccurrencesOfString:@"474" withString:@"999999999" options:0 range:NSMakeRange(0, modifiedContent.length)];
-                    [modifiedContent replaceOccurrencesOfString:@"136" withString:@"999999" options:0 range:NSMakeRange(0, modifiedContent.length)];
-                    [modifiedContent replaceOccurrencesOfString:@"93" withString:@"999" options:0 range:NSMakeRange(0, modifiedContent.length)];
-                    [modifiedContent replaceOccurrencesOfString:@"88" withString:@"999" options:0 range:NSMakeRange(0, modifiedContent.length)];
-                    
-                    NSData *modifiedData = [modifiedContent dataUsingEncoding:NSUTF8StringEncoding];
-                    if (modifiedData) {
-                        writeLog(@"✅ 文件数据已修改");
-                        return modifiedData;
-                    }
-                }
+        // 尝试读取内存
+        memcpy(buffer, (void*)address, size);
+        return YES;
+    } @catch (NSException *exception) {
+        return NO;
+    }
+}
+
+// 安全的内存写入函数
+static BOOL safeMemoryWrite(uintptr_t address, void* data, size_t size) {
+    @try {
+        // 检查地址是否可写
+        if (address == 0 || address < 0x100000000 || address > 0x200000000) {
+            return NO;
+        }
+        
+        // 尝试写入内存
+        memcpy((void*)address, data, size);
+        return YES;
+    } @catch (NSException *exception) {
+        return NO;
+    }
+}
+
+// 搜索特定数值的内存地址
+static NSArray* searchMemoryForValue(int targetValue) {
+    NSMutableArray *foundAddresses = [NSMutableArray array];
+    
+    writeLog([NSString stringWithFormat:@"🔍 开始搜索数值: %d", targetValue]);
+    
+    // 搜索范围：堆内存区域
+    uintptr_t startAddr = 0x100000000;
+    uintptr_t endAddr = 0x150000000;
+    uintptr_t stepSize = 4; // 4字节对齐
+    
+    int foundCount = 0;
+    for (uintptr_t addr = startAddr; addr < endAddr && foundCount < 50; addr += stepSize) {
+        int value = 0;
+        if (safeMemoryRead(addr, &value, sizeof(int))) {
+            if (value == targetValue) {
+                [foundAddresses addObject:@(addr)];
+                foundCount++;
+                writeLog([NSString stringWithFormat:@"📍 找到地址: 0x%lx = %d", addr, value]);
             }
         }
-    }
-    
-    return originalData;
-}
-
-// NSString Hook - 拦截字符串文件读取
-static NSString* (*original_stringWithContentsOfFile)(Class cls, SEL _cmd, NSString *path, NSStringEncoding encoding, NSError **error) = NULL;
-
-static NSString* hooked_stringWithContentsOfFile(Class cls, SEL _cmd, NSString *path, NSStringEncoding encoding, NSError **error) {
-    NSString* originalContent = original_stringWithContentsOfFile(cls, _cmd, path, encoding, error);
-    
-    if (g_fileHookEnabled && originalContent && path) {
-        writeLog([NSString stringWithFormat:@"📝 字符串文件读取: %@", path.lastPathComponent]);
         
-        // 检查是否包含游戏数值
-        if ([originalContent containsString:@"474"] || [originalContent containsString:@"136"] || 
-            [originalContent containsString:@"93"] || [originalContent containsString:@"88"]) {
-            
-            g_fileInterceptCount++;
-            writeLog([NSString stringWithFormat:@"🎯 发现游戏数值文件: %@", path]);
-            
-            // 修改数值
-            NSMutableString *modifiedContent = [originalContent mutableCopy];
-            [modifiedContent replaceOccurrencesOfString:@"474" withString:@"999999999" options:0 range:NSMakeRange(0, modifiedContent.length)];
-            [modifiedContent replaceOccurrencesOfString:@"136" withString:@"999999" options:0 range:NSMakeRange(0, modifiedContent.length)];
-            [modifiedContent replaceOccurrencesOfString:@"93" withString:@"999" options:0 range:NSMakeRange(0, modifiedContent.length)];
-            [modifiedContent replaceOccurrencesOfString:@"88" withString:@"999" options:0 range:NSMakeRange(0, modifiedContent.length)];
-            
-            writeLog(@"✅ 字符串文件数据已修改");
-            return [modifiedContent copy];
+        // 每搜索1000万个地址输出一次进度
+        if ((addr - startAddr) % 10000000 == 0) {
+            writeLog([NSString stringWithFormat:@"⏳ 搜索进度: 0x%lx", addr]);
         }
     }
     
-    return originalContent;
+    writeLog([NSString stringWithFormat:@"✅ 搜索完成，找到 %lu 个地址", (unsigned long)foundAddresses.count]);
+    return [foundAddresses copy];
 }
 
-// SQLite Hook - 拦截数据库查询
-static int (*original_sqlite3_step)(void *stmt) = NULL;
-
-static int hooked_sqlite3_step(void *stmt) {
-    int result = original_sqlite3_step(stmt);
+// 验证地址是否为游戏数据结构
+static BOOL verifyGameDataStructure(uintptr_t baseAddr) {
+    // 检查偏移地址的数值是否合理
+    int money = 0, stamina = 0, health = 0, mood = 0;
     
-    if (g_sqliteHookEnabled && result == 100) { // SQLITE_ROW
-        g_sqliteInterceptCount++;
-        writeLog([NSString stringWithFormat:@"🗄️ SQLite查询执行: 结果=%d", result]);
+    if (!safeMemoryRead(baseAddr, &money, sizeof(int))) return NO;
+    if (!safeMemoryRead(baseAddr + 24, &stamina, sizeof(int))) return NO;
+    if (!safeMemoryRead(baseAddr + 72, &health, sizeof(int))) return NO;
+    if (!safeMemoryRead(baseAddr + 104, &mood, sizeof(int))) return NO;
+    
+    writeLog([NSString stringWithFormat:@"🔍 验证地址 0x%lx: 金钱=%d, 体力=%d, 健康=%d, 心情=%d", 
+              baseAddr, money, stamina, health, mood]);
+    
+    // 检查数值是否在合理范围内
+    if (money >= 0 && money <= 100000000 &&
+        stamina >= 0 && stamina <= 1000000 &&
+        health >= 0 && health <= 1000 &&
+        mood >= 0 && mood <= 1000) {
+        return YES;
+    }
+    
+    return NO;
+}
+
+// 实时修改内存数值
+static void realTimeModifyMemory(void) {
+    if (!g_realTimeModifyEnabled) return;
+    
+    // 如果已经找到地址，直接修改
+    if (g_foundMoneyAddress != 0) {
+        int newMoney = (int)g_modifiedMoney;
+        if (safeMemoryWrite(g_foundMoneyAddress, &newMoney, sizeof(int))) {
+            g_memoryModifyCount++;
+            writeLog([NSString stringWithFormat:@"💰 修改金钱成功: 0x%lx = %d", g_foundMoneyAddress, newMoney]);
+        }
+    }
+    
+    if (g_foundStaminaAddress != 0) {
+        int newStamina = (int)g_modifiedStamina;
+        if (safeMemoryWrite(g_foundStaminaAddress, &newStamina, sizeof(int))) {
+            g_memoryModifyCount++;
+            writeLog([NSString stringWithFormat:@"⚡ 修改体力成功: 0x%lx = %d", g_foundStaminaAddress, newStamina]);
+        }
+    }
+    
+    if (g_foundHealthAddress != 0) {
+        int newHealth = (int)g_modifiedHealth;
+        if (safeMemoryWrite(g_foundHealthAddress, &newHealth, sizeof(int))) {
+            g_memoryModifyCount++;
+            writeLog([NSString stringWithFormat:@"❤️ 修改健康成功: 0x%lx = %d", g_foundHealthAddress, newHealth]);
+        }
+    }
+    
+    if (g_foundMoodAddress != 0) {
+        int newMood = (int)g_modifiedMood;
+        if (safeMemoryWrite(g_foundMoodAddress, &newMood, sizeof(int))) {
+            g_memoryModifyCount++;
+            writeLog([NSString stringWithFormat:@"😊 修改心情成功: 0x%lx = %d", g_foundMoodAddress, newMood]);
+        }
+    }
+}
+
+// 启动实时内存搜索和修改
+static void startRealTimeMemoryModification(void) {
+    writeLog(@"🚀 启动实时内存搜索和修改系统");
+    
+    g_memorySearchEnabled = YES;
+    g_realTimeModifyEnabled = YES;
+    
+    // 创建后台队列进行内存搜索
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        // 搜索已知的游戏数值
+        NSArray *moneyAddresses = searchMemoryForValue(474);  // 搜索金钱
+        NSArray *staminaAddresses = searchMemoryForValue(136); // 搜索体力
+        NSArray *healthAddresses = searchMemoryForValue(93);   // 搜索健康
+        NSArray *moodAddresses = searchMemoryForValue(88);     // 搜索心情
         
-        // 这里可以进一步分析SQLite结果
-        // 但需要更复杂的SQLite API调用来获取具体数据
-    }
-    
-    return result;
+        // 尝试找到正确的数据结构
+        for (NSNumber *addrNum in moneyAddresses) {
+            uintptr_t addr = [addrNum unsignedLongValue];
+            if (verifyGameDataStructure(addr)) {
+                g_foundMoneyAddress = addr;
+                g_foundStaminaAddress = addr + 24;
+                g_foundHealthAddress = addr + 72;
+                g_foundMoodAddress = addr + 104;
+                
+                writeLog([NSString stringWithFormat:@"🎯 找到游戏数据结构！基地址: 0x%lx", addr]);
+                break;
+            }
+        }
+        
+        // 启动实时修改定时器
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [NSTimer scheduledTimerWithTimeInterval:1.0 repeats:YES block:^(NSTimer * _Nonnull timer) {
+                if (g_realTimeModifyEnabled) {
+                    realTimeModifyMemory();
+                } else {
+                    [timer invalidate];
+                }
+            }];
+        });
+    });
 }
 
-// 安装文件数据Hook
-static void installFileHooks(void) {
-    writeLog(@"🔧 开始安装文件数据拦截器...");
+// 核心修改函数：实时内存搜索修改方式
+static BOOL modifyGameDataByRealTimeMemory(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
+    writeLog(@"========== 开始实时内存搜索修改 v15.2 ==========");
     
-    // Hook NSData dataWithContentsOfFile:
-    Class nsDataClass = [NSData class];
-    Method dataMethod = class_getClassMethod(nsDataClass, @selector(dataWithContentsOfFile:));
-    if (dataMethod) {
-        original_dataWithContentsOfFile = (NSData* (*)(Class, SEL, NSString *))method_getImplementation(dataMethod);
-        method_setImplementation(dataMethod, (IMP)hooked_dataWithContentsOfFile);
-        writeLog(@"✅ NSData文件读取Hook安装成功");
-    }
-    
-    // Hook NSString stringWithContentsOfFile:encoding:error:
-    Class nsStringClass = [NSString class];
-    Method stringMethod = class_getClassMethod(nsStringClass, @selector(stringWithContentsOfFile:encoding:error:));
-    if (stringMethod) {
-        original_stringWithContentsOfFile = (NSString* (*)(Class, SEL, NSString *, NSStringEncoding, NSError **))method_getImplementation(stringMethod);
-        method_setImplementation(stringMethod, (IMP)hooked_stringWithContentsOfFile);
-        writeLog(@"✅ NSString文件读取Hook安装成功");
-    }
-    
-    // 尝试Hook SQLite
-    original_sqlite3_step = dlsym(RTLD_DEFAULT, "sqlite3_step");
-    if (original_sqlite3_step) {
-        writeLog(@"✅ SQLite Hook准备就绪");
-        // 注意：实际的SQLite Hook需要更复杂的实现
-    } else {
-        writeLog(@"⚠️ 未找到SQLite函数");
-    }
-    
-    writeLog(@"🎉 文件数据拦截器安装完成！");
-    writeLog(@"📊 监控范围：NSData + NSString + SQLite");
-}
-
-// 核心修改函数：文件数据拦截方式
-static BOOL modifyGameDataByFileHook(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始文件数据拦截修改 v15.1 ==========");
-    
-    // 重置拦截计数器
-    g_fileInterceptCount = 0;
-    g_sqliteInterceptCount = 0;
-    
-    // 安装Hook（如果还没安装）
-    static BOOL fileHooksInstalled = NO;
-    if (!fileHooksInstalled) {
-        installFileHooks();
-        fileHooksInstalled = YES;
-    }
-    
-    // 启用文件Hook
-    g_fileHookEnabled = YES;
-    g_sqliteHookEnabled = YES;
+    // 重置计数器
+    g_memorySearchCount = 0;
+    g_memoryModifyCount = 0;
     
     // 设置修改值
     if (money > 0) {
@@ -305,27 +338,28 @@ static BOOL modifyGameDataByFileHook(NSInteger money, NSInteger stamina, NSInteg
         writeLog([NSString stringWithFormat:@"😊 设置心情目标值: %ld", (long)mood]);
     }
     
-    writeLog(@"🎯 文件数据拦截器已激活");
-    writeLog(@"📊 监控文件读取操作，智能识别游戏数据");
-    writeLog(@"💡 提示：在游戏中进行操作，触发数据文件读取以查看拦截效果");
+    writeLog(@"🎯 实时内存修改系统已激活");
+    writeLog(@"📊 开始搜索内存中的游戏数据结构");
+    writeLog(@"💡 提示：系统将自动搜索并持续修改内存数值");
     
-    // 延迟检查拦截效果
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        writeLog([NSString stringWithFormat:@"📈 8秒内文件拦截次数: %ld", (long)g_fileInterceptCount]);
-        writeLog([NSString stringWithFormat:@"📈 8秒内SQLite拦截次数: %ld", (long)g_sqliteInterceptCount]);
+    // 启动实时修改系统
+    startRealTimeMemoryModification();
+    
+    // 延迟检查修改效果
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        writeLog([NSString stringWithFormat:@"📈 10秒内内存修改次数: %ld", (long)g_memoryModifyCount]);
         
-        if (g_fileInterceptCount == 0 && g_sqliteInterceptCount == 0) {
-            writeLog(@"⚠️ 未检测到文件数据读取");
-            writeLog(@"💡 建议：在游戏中进行操作（购买、使用体力等）触发数据保存/读取");
-            writeLog(@"🔍 游戏可能使用内存缓存或其他存储方式");
-        } else if (g_fileInterceptCount > 0) {
-            writeLog(@"✅ 文件拦截器正在工作，已检测到数据文件读取");
-        } else if (g_sqliteInterceptCount > 0) {
-            writeLog(@"✅ SQLite拦截器正在工作，已检测到数据库操作");
+        if (g_foundMoneyAddress != 0) {
+            writeLog([NSString stringWithFormat:@"✅ 已找到游戏数据结构，基地址: 0x%lx", g_foundMoneyAddress]);
+            writeLog(@"🔄 实时修改系统正在运行，每秒自动修改数值");
+        } else {
+            writeLog(@"⚠️ 未找到游戏数据结构");
+            writeLog(@"💡 建议：确保游戏正在运行且数值界面可见");
+            writeLog(@"🔍 可能需要调整搜索范围或数值");
         }
     });
     
-    writeLog(@"========== 文件数据拦截修改完成 ==========");
+    writeLog(@"========== 实时内存搜索修改完成 ==========");
     
     return YES;
 }
@@ -375,7 +409,7 @@ static BOOL modifyGameDataByFileHook(NSInteger money, NSInteger stamina, NSInteg
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v15.1";
+    title.text = @"🏠 我独自生活 v15.2";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -385,7 +419,7 @@ static BOOL modifyGameDataByFileHook(NSInteger money, NSInteger stamina, NSInteg
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"📁 文件数据拦截器";
+    info.text = @"🚀 实时内存修改器";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -407,7 +441,7 @@ static BOOL modifyGameDataByFileHook(NSInteger money, NSInteger stamina, NSInteg
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"v15.1: 文件数据拦截\n监控NSData/NSString/SQLite";
+    tip.text = @"v15.2: 实时内存修改\n自动搜索+持续修改内存数值";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -441,7 +475,7 @@ static BOOL modifyGameDataByFileHook(NSInteger money, NSInteger stamina, NSInteg
     [self.contentView addSubview:btn5];
     y += 43;
     
-    UIButton *btn6 = [self createButtonWithTitle:@"📁 文件状态" tag:6];
+    UIButton *btn6 = [self createButtonWithTitle:@"🚀 内存状态" tag:6];
     btn6.frame = CGRectMake(20, y, contentWidth - 40, 35);
     [self.contentView addSubview:btn6];
     y += 48;
@@ -474,8 +508,8 @@ static BOOL modifyGameDataByFileHook(NSInteger money, NSInteger stamina, NSInteg
 
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
-    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"📁 文件数据拦截 v15.1" 
-        message:@"新特性：\n• Hook NSData文件读取\n• Hook NSString文件读取\n• Hook SQLite数据库操作\n• 智能识别游戏数据文件\n• 基于已知数值自动替换\n\n⚠️ 启用后在游戏中操作查看效果\n\n确认继续？" 
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🚀 实时内存修改 v15.2" 
+        message:@"激进策略：\n• 直接搜索内存中的游戏数值\n• 自动找到数据结构基地址\n• 每秒持续修改内存数值\n• 基于已知偏移关系定位\n• 类似iGameGod的工作原理\n\n⚠️ 启用后将持续修改内存\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
@@ -497,37 +531,38 @@ static BOOL modifyGameDataByFileHook(NSInteger money, NSInteger stamina, NSInteg
     switch (tag) {
         case 1:
             writeLog(@"功能：无限金钱");
-            success = modifyGameDataByFileHook(999999999, 0, 0, 0, 0);
-            message = success ? @"💰 文件金钱拦截已启用！\n\n监控文件读取，智能识别金钱数据\n在游戏中操作触发拦截效果" : @"❌ 文件Hook安装失败，请查看日志";
+            success = modifyGameDataByRealTimeMemory(999999999, 0, 0, 0, 0);
+            message = success ? @"💰 实时金钱修改已启用！\n\n自动搜索内存中的金钱数据\n每秒持续修改，无需手动操作" : @"❌ 内存修改启动失败，请查看日志";
             break;
         case 2:
             writeLog(@"功能：无限体力");
-            success = modifyGameDataByFileHook(0, 999999, 0, 0, 0);
-            message = success ? @"⚡ 文件体力拦截已启用！\n\n监控文件读取，智能识别体力数据\n在游戏中操作触发拦截效果" : @"❌ 文件Hook安装失败，请查看日志";
+            success = modifyGameDataByRealTimeMemory(0, 999999, 0, 0, 0);
+            message = success ? @"⚡ 实时体力修改已启用！\n\n自动搜索内存中的体力数据\n每秒持续修改，无需手动操作" : @"❌ 内存修改启动失败，请查看日志";
             break;
         case 3:
             writeLog(@"功能：无限健康");
-            success = modifyGameDataByFileHook(0, 0, 999, 0, 0);
-            message = success ? @"❤️ 文件健康拦截已启用！\n\n监控文件读取，智能识别健康数据\n在游戏中操作触发拦截效果" : @"❌ 文件Hook安装失败，请查看日志";
+            success = modifyGameDataByRealTimeMemory(0, 0, 999, 0, 0);
+            message = success ? @"❤️ 实时健康修改已启用！\n\n自动搜索内存中的健康数据\n每秒持续修改，无需手动操作" : @"❌ 内存修改启动失败，请查看日志";
             break;
         case 4:
             writeLog(@"功能：无限心情");
-            success = modifyGameDataByFileHook(0, 0, 0, 999, 0);
-            message = success ? @"😊 文件心情拦截已启用！\n\n监控文件读取，智能识别心情数据\n在游戏中操作触发拦截效果" : @"❌ 文件Hook安装失败，请查看日志";
+            success = modifyGameDataByRealTimeMemory(0, 0, 0, 999, 0);
+            message = success ? @"😊 实时心情修改已启用！\n\n自动搜索内存中的心情数据\n每秒持续修改，无需手动操作" : @"❌ 内存修改启动失败，请查看日志";
             break;
         case 5:
             writeLog(@"功能：一键全开");
-            success = modifyGameDataByFileHook(999999999, 999999, 999, 999, 0);
-            message = success ? @"🎁 文件全能拦截已启用！\n\n💰金钱、⚡体力、❤️健康、😊心情\n所有文件拦截器已激活！" : @"❌ 文件Hook安装失败，请查看日志";
+            success = modifyGameDataByRealTimeMemory(999999999, 999999, 999, 999, 0);
+            message = success ? @"🎁 实时全能修改已启用！\n\n💰金钱、⚡体力、❤️健康、😊心情\n所有数值每秒自动修改！" : @"❌ 内存修改启动失败，请查看日志";
             break;
         case 6:
-            writeLog(@"功能：文件状态");
-            writeLog([NSString stringWithFormat:@"📁 文件Hook: %@", g_fileHookEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"🗄️ SQLite Hook: %@", g_sqliteHookEnabled ? @"已启用" : @"未启用"]);
-            writeLog([NSString stringWithFormat:@"📈 文件拦截次数: %ld", (long)g_fileInterceptCount]);
-            writeLog([NSString stringWithFormat:@"📈 SQLite拦截次数: %ld", (long)g_sqliteInterceptCount]);
+            writeLog(@"功能：内存状态");
+            writeLog([NSString stringWithFormat:@"🚀 内存搜索: %@", g_memorySearchEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"🔄 实时修改: %@", g_realTimeModifyEnabled ? @"已启用" : @"未启用"]);
+            writeLog([NSString stringWithFormat:@"📈 内存修改次数: %ld", (long)g_memoryModifyCount]);
+            writeLog([NSString stringWithFormat:@"📍 找到的地址: 金钱=0x%lx, 体力=0x%lx, 健康=0x%lx, 心情=0x%lx", 
+                      g_foundMoneyAddress, g_foundStaminaAddress, g_foundHealthAddress, g_foundMoodAddress]);
             success = YES;
-            message = @"📁 文件状态检查完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含文件拦截信息";
+            message = @"🚀 内存状态检查完成！\n\n请用Filza查看详细日志：\n/var/mobile/Documents/woduzi_cheat.log\n\n日志包含内存搜索和修改信息";
             break;
     }
     
@@ -709,7 +744,7 @@ static void WDZCheatInit(void) {
         // 设置全局异常处理器（防闪退保护）
         NSSetUncaughtExceptionHandler(&handleUncaughtException);
         
-        writeLog(@"🛡️ WoduziCheat v15.1 初始化完成 - 文件数据拦截已启用");
+        writeLog(@"🛡️ WoduziCheat v15.2 初始化完成 - 实时内存修改已启用");
         
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             setupFloatingButton();
