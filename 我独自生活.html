@@ -453,72 +453,67 @@
         function modifyByOffset(currentMoney, currentStamina, currentHealth, currentMood) {
             h5gg.clearResults();
             
-            // 尝试多个搜索范围
-            var searchRanges = [
-                ['0x100000000', '0x200000000'],  // 原始范围
-                ['0x00000000', '0x20000000000'], // 全范围
-                ['0x80000000', '0x180000000'],   // 中间范围
-                ['0x200000000', '0x300000000']   // 高位范围
-            ];
+            // 方法1：联合搜索 - 先搜索金钱，再用体力进一步筛选
+            alert("🔍 开始联合搜索...\n第一步：搜索金钱 " + currentMoney);
             
-            var searchCount = 0;
-            var results = null;
-            
-            // 依次尝试不同的搜索范围
-            for (var r = 0; r < searchRanges.length; r++) {
-                h5gg.clearResults();
-                searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', searchRanges[r][0], searchRanges[r][1]);
-                
-                if (searchCount > 0) {
-                    results = h5gg.getResults(searchCount);
-                    alert("🔍 在范围 " + searchRanges[r][0] + "-" + searchRanges[r][1] + " 找到 " + searchCount + " 个地址");
-                    break;
-                }
-            }
+            var searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', '0x00000000', '0x20000000000');
             
             if (searchCount > 0) {
-                var modifiedCount = 0;
+                alert("💰 找到 " + searchCount + " 个金钱地址\n第二步：验证体力偏移");
                 
-                for (var i = 0; i < results.length && i < 50; i++) {
+                var results = h5gg.getResults(Math.min(searchCount, 200)); // 限制处理数量
+                var validAddresses = [];
+                
+                // 验证每个地址的偏移是否正确
+                for (var i = 0; i < results.length; i++) {
                     var moneyAddr = results[i].address;
                     
-                    // 计算偏移地址
-                    var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
-                    var healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
-                    var moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
-                    
                     try {
-                        // 读取偏移地址的值进行验证
+                        // 计算体力地址（+24偏移）
+                        var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
                         var staminaValue = h5gg.getValue(staminaAddr, 'I32');
-                        var healthValue = h5gg.getValue(healthAddr, 'I32');
-                        var moodValue = h5gg.getValue(moodAddr, 'I32');
                         
-                        // 验证数值是否在合理范围内
-                        if (staminaValue >= 0 && staminaValue <= 10000000 &&
-                            healthValue >= 0 && healthValue <= 100000 &&
-                            moodValue >= 0 && moodValue <= 100000) {
+                        // 如果体力值匹配，说明找到了正确的数据结构
+                        if (staminaValue === currentStamina) {
+                            validAddresses.push(moneyAddr);
+                            alert("✅ 找到匹配地址！\n💰 金钱地址: " + moneyAddr + "\n⚡ 体力值: " + staminaValue + " (匹配!)");
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+                
+                if (validAddresses.length > 0) {
+                    // 对所有有效地址进行修改
+                    var modifiedCount = 0;
+                    
+                    for (var j = 0; j < validAddresses.length; j++) {
+                        var baseAddr = validAddresses[j];
+                        
+                        try {
+                            // 计算所有偏移地址
+                            var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
+                            var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
+                            var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
                             
-                            // 修改数值
-                            h5gg.setValue(moneyAddr, 2100000000, 'I32');        // 21亿金钱
+                            // 执行修改
+                            h5gg.setValue(baseAddr, 2100000000, 'I32');        // 21亿金钱
                             h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
                             h5gg.setValue(healthAddr, 10000, 'I32');            // 10000健康
                             h5gg.setValue(moodAddr, 10000, 'I32');              // 10000心情
                             
                             modifiedCount++;
+                        } catch (e) {
+                            continue;
                         }
-                    } catch (e) {
-                        // 忽略无效地址
-                        continue;
                     }
-                }
-                
-                if (modifiedCount > 0) {
+                    
                     alert("🎁 一键全开成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n修改了 " + modifiedCount + " 个地址");
                 } else {
-                    alert("❌ 修改失败\n找到了金钱地址但偏移验证失败\n可能偏移量不正确或数据结构不同");
+                    alert("❌ 验证失败\n找到了 " + searchCount + " 个金钱地址\n但体力偏移验证都不匹配\n\n可能原因：\n1. 偏移量不是+24\n2. 数据结构不同\n3. 体力值输入错误");
                 }
             } else {
-                alert("❌ 未找到金钱地址\n已尝试多个内存范围\n请确保：\n1. 游戏正在运行\n2. 输入的金钱数值正确\n3. 数值在游戏界面可见");
+                alert("❌ 未找到金钱地址\n请确保：\n1. 游戏正在运行\n2. 输入的金钱数值正确\n3. 数值在游戏界面可见");
             }
         }
     </script>
