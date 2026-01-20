@@ -37,6 +37,10 @@ static id (*original_UnityAppController_init)(id, SEL) = NULL;
 static NSInteger (*original_integerForKey)(id, SEL, NSString*) = NULL;
 static void (*original_setInteger)(id, SEL, NSInteger, NSString*) = NULL;
 
+// 全局UI变量
+static UIButton *g_floatButton = nil;
+static UnityMenuView *g_menuView = nil;
+
 #pragma mark - 函数前向声明
 
 static void writeLog(NSString *message);
@@ -718,9 +722,6 @@ static void showDisclaimerAlert(void) {
 @end
 
 #pragma mark - 悬浮按钮系统
-
-static UIButton *g_floatButton = nil;
-static UnityMenuView *g_menuView = nil;
 
 static UIWindow* getKeyWindow(void) {
     UIWindow *keyWindow = nil;
