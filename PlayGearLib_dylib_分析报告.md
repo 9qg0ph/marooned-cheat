@@ -11,6 +11,25 @@
 - **架构**: ARM64 (iOS设备)
 - **编译时间**: 2026/1/21 3:41:08
 
+### 🔗 依赖框架分析
+通过依赖库分析发现PlayGearLib.dylib使用了完整的iOS系统框架：
+
+#### iOS系统框架
+- **QuartzCore** - 核心动画和图形渲染 (可能有动画UI效果)
+- **CoreFoundation** - 基础数据类型和服务
+- **Foundation** - Objective-C基础框架
+- **UIKit** - iOS用户界面框架 (确认有UI界面)
+- **CoreGraphics** - 2D图形绘制
+- **CoreServices** - 核心系统服务
+- **Security** - 安全和加密服务 (可能用于反检测)
+- **SystemConfiguration** - 系统配置管理 (可能用于网络)
+
+#### 系统库
+- **libobjc.A.dylib** - Objective-C运行时
+- **libc++.1.dylib** - C++标准库 (确认使用C++代码)
+- **libSystem.B.dylib** - 系统基础库
+- **libz.1.dylib** - 压缩库 (可能用于数据压缩)
+
 ## 🔍 核心技术发现
 
 ### 1. 主要修改类：`shenling`
@@ -50,7 +69,23 @@
 -[ImgTool setMultiple:]          // 设置倍数
 ```
 
-### 3. Hook技术实现
+### 3. 技术架构分析
+
+基于依赖框架分析，PlayGearLib.dylib采用了完整的技术栈：
+
+#### UI层技术
+- **UIKit + CoreGraphics** - 完整的用户界面系统
+- **QuartzCore** - 高级动画效果 (可能有炫酷的UI动画)
+
+#### 安全层技术  
+- **Security框架** - 加密和安全验证 (反检测保护)
+- **SystemConfiguration** - 系统配置访问 (可能检测越狱环境)
+
+#### 核心层技术
+- **C++标准库** - 高性能核心算法实现
+- **压缩库** - 数据压缩和解压 (可能用于配置文件)
+
+### 4. Hook技术实现
 
 发现了多种Hook技术的使用：
 
