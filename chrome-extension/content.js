@@ -70,14 +70,180 @@ function startBypassAttempts(data) {
   addResult('开始绕过尝试...', '🚀 状态');
   addResult(`shortLink: ${shortLink}`, '📱 拦截数据');
   
+  // 提取图标ID
+  const iconId = extractIconIdFromPage();
+  if (iconId) {
+    addResult(`iconId: ${iconId}`, '🎯 图标ID');
+  }
+  
+  // 策略0: 基于图标ID的新策略（优先级最高）
+  if (iconId) {
+    tryIconIdBasedUrls(iconId, shortLink, appId, token);
+  }
+  
   // 策略1: 直接尝试manifest URLs
-  tryManifestUrls(shortLink, appId, token);
+  setTimeout(() => tryManifestUrls(shortLink, appId, token), 500);
   
   // 策略2: 尝试IPA直接下载
   setTimeout(() => tryDirectIpaUrls(shortLink, appId, token), 1000);
   
   // 策略3: 尝试API端点
   setTimeout(() => tryApiEndpoints(shortLink, appId, token), 2000);
+}
+
+// 从页面提取图标ID
+function extractIconIdFromPage() {
+  try {
+    const iconElements = document.querySelectorAll('img[src*="static.ios80.com/icon/"]');
+    for (let img of iconElements) {
+      const iconUrl = img.src;
+      const iconMatch = iconUrl.match(/\/icon\/(\d+)_/);
+      if (iconMatch) {
+        console.log('[扩展] 🎯 从页面提取到图标ID:', iconMatch[1]);
+        return iconMatch[1];
+      }
+    }
+    
+    // 也检查CSS背景图片
+    const allElements = document.querySelectorAll('*');
+    for (let el of allElements) {
+      const bgImage = window.getComputedStyle(el).backgroundImage;
+      if (bgImage && bgImage.includes('static.ios80.com/icon/')) {
+        const iconMatch = bgImage.match(/\/icon\/(\d+)_/);
+        if (iconMatch) {
+          console.log('[扩展] 🎯 从背景图片提取到图标ID:', iconMatch[1]);
+          return iconMatch[1];
+        }
+      }
+    }
+  } catch (error) {
+    console.log('[扩展] 提取图标ID时出错:', error);
+  }
+  return null;
+}
+
+// 策略0: 基于图标ID的URL尝试
+function tryIconIdBasedUrls(iconId, shortLink, appId, token) {
+  console.log('[扩展] 策略0: 基于图标ID尝试下载...');
+  addResult('基于图标ID尝试...', '🔍 策略0 (新)');
+  
+  // 基于图标ID构造可能的下载URL
+  const iconBasedUrls = [
+    // 直接使用图标ID作为文件名
+    `https://static.ios80.com/ipa/${iconId}.ipa`,
+    `https://files.ios80.com/ipa/${iconId}.ipa`,
+    `https://cdn.ios80.com/apps/${iconId}.ipa`,
+    `https://storage.ios80.com/${iconId}.ipa`,
+    
+    // 图标ID + shortLink组合
+    `https://app.ios80.com/download/${iconId}/${shortLink}.ipa`,
+    `https://static.ios80.com/download/${iconId}.ipa`,
+    
+    // 基于图标ID的manifest文件
+    `https://static.ios80.com/manifest/${iconId}.plist`,
+    `https://app.ios80.com/manifest/${iconId}.plist`,
+    `https://files.ios80.com/manifest/${iconId}.plist`,
+    
+    // API端点使用图标ID
+    `https://app.ios80.com/api/download/${iconId}`,
+    `https://api.ios80.com/app/${iconId}/download`,
+    `https://app.ios80.com/internal/app/${iconId}`,
+    
+    // 组合路径
+    `https://app.ios80.com/${shortLink}/${iconId}.ipa`,
+    `https://static.ios80.com/${shortLink}/${iconId}.ipa`
+  ];
+  
+  iconBasedUrls.forEach((url, index) => {
+    setTimeout(() => {
+      console.log(`[扩展] 尝试图标ID URL ${index + 1}:`, url);
+      
+      // 先检查是否是manifest文件
+      if (url.includes('.plist')) {
+        fetch(url, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)',
+            'Accept': 'application/x-plist, */*'
+          }
+        })
+        .then(response => {
+          if (response.status === 200) {
+            return response.text();
+          }
+          throw new Error(`Status: ${response.status}`);
+        })
+        .then(text => {
+          if (text.includes('<plist')) {
+            console.log('[扩展] ✅ 找到基于图标ID的manifest!');
+            addResult(url, `✅ 图标ID Manifest ${index + 1}`);
+            
+            // 解析IPA URL
+            const ipaMatch = text.match(/<string>(https?:\/\/[^<]+\.ipa)<\/string>/);
+            if (ipaMatch) {
+              const ipaUrl = ipaMatch[1];
+              console.log('[扩展] 🎉 从图标ID manifest找到IPA地址:', ipaUrl);
+              foundIpaUrl(ipaUrl, '图标ID Manifest解析');
+            }
+          }
+        })
+        .catch(error => {
+          console.log(`[扩展] 图标ID Manifest ${index + 1} 失败:`, error.message);
+        });
+      } else if (url.includes('.ipa')) {
+        // 检查IPA文件
+        fetch(url, { method: 'HEAD' })
+        .then(response => {
+          console.log(`[扩展] 图标ID IPA ${index + 1} 响应:`, response.status);
+          
+          if (response.status === 200) {
+            const contentType = response.headers.get('content-type') || '';
+            const contentLength = response.headers.get('content-length');
+            
+            // 检查是否是有效的IPA文件
+            if (contentType.includes('application/octet-stream') || 
+                contentType.includes('application/zip') ||
+                contentType.includes('application/x-ios-app') ||
+                (contentLength && parseInt(contentLength) > 1024 * 1024)) { // 大于1MB
+              
+              console.log('[扩展] 🎉 基于图标ID找到IPA文件!');
+              foundIpaUrl(url, `图标ID直接下载 ${index + 1}`);
+            }
+          }
+        })
+        .catch(error => {
+          console.log(`[扩展] 图标ID IPA ${index + 1} 失败:`, error.message);
+        });
+      } else {
+        // API端点
+        fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-App-Id': appId,
+            'X-Icon-Id': iconId,
+            'X-Short-Link': shortLink
+          }
+        })
+        .then(response => {
+          if (response.status === 200) {
+            return response.text();
+          }
+          throw new Error(`Status: ${response.status}`);
+        })
+        .then(text => {
+          console.log(`[扩展] 图标ID API ${index + 1} 响应:`, text.substring(0, 200));
+          addResult(text.substring(0, 300), `图标ID API ${index + 1} 响应`);
+          
+          // 查找URL
+          findUrlsInText(text, `图标ID API ${index + 1}`);
+        })
+        .catch(error => {
+          console.log(`[扩展] 图标ID API ${index + 1} 失败:`, error.message);
+        });
+      }
+    }, index * 150); // 更快的间隔，因为这是优先策略
+  });
 }
 
 // 策略1: 尝试manifest URLs
@@ -140,6 +306,9 @@ function tryDirectIpaUrls(shortLink, appId, token) {
   console.log('[扩展] 策略2: 尝试IPA直接下载...');
   addResult('尝试IPA直接下载...', '🔍 策略2');
   
+  // 获取图标ID
+  const iconId = extractIconIdFromPage();
+  
   const ipaUrls = [
     `https://app.ios80.com/download/${shortLink}.ipa`,
     `https://cdn.ios80.com/apps/${shortLink}.ipa`,
@@ -148,6 +317,15 @@ function tryDirectIpaUrls(shortLink, appId, token) {
     `https://app.ios80.com/ipa/${shortLink}.ipa`,
     `https://app.ios80.com/files/${appId}.ipa`
   ];
+  
+  // 如果有图标ID，添加更多可能的URL
+  if (iconId) {
+    ipaUrls.push(
+      `https://app.ios80.com/files/${iconId}.ipa`,
+      `https://storage.ios80.com/apps/${iconId}.ipa`,
+      `https://cdn.ios80.com/${iconId}/${shortLink}.ipa`
+    );
+  }
   
   ipaUrls.forEach((url, index) => {
     setTimeout(() => {

@@ -122,7 +122,8 @@ function extractPageInfo() {
     appId: null,
     token: null,
     appName: null,
-    osName: null
+    osName: null,
+    iconId: null  // 新增：从图标URL提取ID
   };
   
   // 从URL提取参数
@@ -149,6 +150,17 @@ function extractPageInfo() {
     osElements.forEach(el => {
       if (el.style.display !== 'none') {
         info.osName = el.id.replace('container_', '');
+      }
+    });
+    
+    // 从图标URL提取ID
+    const iconElements = document.querySelectorAll('img[src*="static.ios80.com/icon/"]');
+    iconElements.forEach(img => {
+      const iconUrl = img.src;
+      const iconMatch = iconUrl.match(/\/icon\/(\d+)_/);
+      if (iconMatch) {
+        info.iconId = iconMatch[1];
+        console.log('[扩展] 🎯 从图标URL提取到ID:', info.iconId);
       }
     });
     
