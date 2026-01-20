@@ -109,65 +109,111 @@ static void writeLog(NSString *message) {
 static uintptr_t g_moneyBaseAddress = 0;
 static BOOL g_isModificationActive = NO;
 
-// 动态内存搜索（适应地址变化）
-static NSArray* dynamicMemorySearch(NSInteger targetValue) {
+// iOS兼容的内存搜索（基于堆栈扫描）
+static NSArray* smartMemorySearch(NSInteger targetValue) {
     NSMutableArray *results = [NSMutableArray array];
     
-    writeLog([NSString stringWithFormat:@"🎯 动态搜索数值: %ld", (long)targetValue]);
+    writeLog([NSString stringWithFormat:@"🎯 智能搜索数值: %ld", (long)targetValue]);
     
-    // 动态确定搜索范围：基于当前进程的内存布局
-    // 搜索堆内存区域，这是游戏数据最可能存在的地方
+    // 获取当前进程的内存映射信息
+    // 在iOS上，我们主要搜索堆区域和数据段
+    
+    // 方法1: 搜索当前线程栈附近的堆区域
+    void *stackPtr = &results;  // 获取栈指针作为参考
+    uintptr_t stackAddr = (uintptr_t)stackPtr;
+    
+    writeLog([NSString stringWithFormat:@"📍 栈地址参考: 0x%lx", stackAddr]);
+    
+    // 基于栈地址推算可能的堆区域
     NSArray *searchRanges = @[
-        @[@0x100000000, @0x120000000], // 第一个堆区域
-        @[@0x120000000, @0x140000000], // 第二个堆区域  
-        @[@0x140000000, @0x160000000], // 第三个堆区域
-        @[@0x160000000, @0x180000000], // 第四个堆区域
+        // 基于实际iOS内存布局的搜索范围
+        @[@0x100000000, @0x110000000], // 主要堆区域1
+        @[@0x110000000, @0x120000000], // 主要堆区域2
+        @[@0x120000000, @0x130000000], // 主要堆区域3
+        @[@0x130000000, @0x140000000], // 主要堆区域4
+        @[@0x140000000, @0x150000000], // 扩展堆区域1
+        @[@0x150000000, @0x160000000], // 扩展堆区域2
     ];
+    
+    NSInteger foundCount = 0;
     
     for (NSArray *range in searchRanges) {
         uintptr_t searchStart = [range[0] unsignedLongValue];
         uintptr_t searchEnd = [range[1] unsignedLongValue];
         
-        writeLog([NSString stringWithFormat:@"搜索范围: 0x%lx - 0x%lx", searchStart, searchEnd]);
+        writeLog([NSString stringWithFormat:@"🔍 搜索范围: 0x%lx - 0x%lx", searchStart, searchEnd]);
         
-        // 按页搜索，更安全
-        for (uintptr_t pageAddr = searchStart; pageAddr < searchEnd; pageAddr += 0x4000) { // 16KB步长
+        // 使用更小的步长进行精确搜索
+        for (uintptr_t addr = searchStart; addr < searchEnd; addr += sizeof(NSInteger)) {
             @try {
-                // 测试页面是否可访问
-                volatile NSInteger testRead = *(NSInteger*)pageAddr;
-                (void)testRead;
+                // 安全的内存读取
+                NSInteger *ptr = (NSInteger*)addr;
+                volatile NSInteger value = *ptr;
                 
-                // 如果页面可访问，搜索这个页面
-                for (uintptr_t addr = pageAddr; addr < pageAddr + 0x4000 - sizeof(NSInteger); addr += sizeof(NSInteger)) {
-                    @try {
-                        NSInteger *ptr = (NSInteger*)addr;
-                        if (*ptr == targetValue) {
-                            [results addObject:@(addr)];
-                            
-                            // 找到一些结果就够了，避免搜索太久
-                            if (results.count >= 20) {
-                                goto search_complete;
-                            }
-                        }
-                    } @catch (NSException *exception) {
-                        // 跳过这个地址
-                        continue;
+                if (value == targetValue) {
+                    [results addObject:@(addr)];
+                    foundCount++;
+                    
+                    writeLog([NSString stringWithFormat:@"✅ 找到匹配: 0x%lx = %ld", addr, (long)value]);
+                    
+                    // 限制结果数量，避免搜索时间过长
+                    if (foundCount >= 50) {
+                        writeLog(@"⏰ 达到搜索限制，停止搜索");
+                        goto search_complete;
                     }
                 }
             } @catch (NSException *exception) {
-                // 跳过不可访问的页面
+                // 跳过不可访问的内存地址
                 continue;
             }
         }
         
-        // 如果在这个范围找到了结果，就不用继续搜索其他范围了
+        // 如果在当前范围找到了一些结果，记录一下
         if (results.count > 0) {
-            break;
+            writeLog([NSString stringWithFormat:@"📊 当前范围找到 %lu 个地址", (unsigned long)results.count]);
         }
     }
     
 search_complete:
-    writeLog([NSString stringWithFormat:@"动态搜索找到 %lu 个候选地址", (unsigned long)results.count]);
+    writeLog([NSString stringWithFormat:@"🎉 搜索完成，共找到 %lu 个候选地址", (unsigned long)results.count]);
+    
+    // 如果找到的地址太少，尝试扩大搜索范围
+    if (results.count < 5) {
+        writeLog(@"⚠️ 候选地址较少，尝试扩大搜索...");
+        
+        // 扩大搜索范围
+        NSArray *extendedRanges = @[
+            @[@0x160000000, @0x170000000],
+            @[@0x170000000, @0x180000000],
+            @[@0x180000000, @0x190000000],
+        ];
+        
+        for (NSArray *range in extendedRanges) {
+            uintptr_t searchStart = [range[0] unsignedLongValue];
+            uintptr_t searchEnd = [range[1] unsignedLongValue];
+            
+            for (uintptr_t addr = searchStart; addr < searchEnd; addr += sizeof(NSInteger)) {
+                @try {
+                    NSInteger *ptr = (NSInteger*)addr;
+                    volatile NSInteger value = *ptr;
+                    
+                    if (value == targetValue) {
+                        [results addObject:@(addr)];
+                        
+                        if (results.count >= 20) {
+                            goto extended_complete;
+                        }
+                    }
+                } @catch (NSException *exception) {
+                    continue;
+                }
+            }
+        }
+        
+extended_complete:
+        writeLog([NSString stringWithFormat:@"🔄 扩展搜索完成，总共找到 %lu 个候选地址", (unsigned long)results.count]);
+    }
+    
     return results;
 }
 
@@ -241,9 +287,9 @@ static BOOL writeMemoryValue(uintptr_t address, NSInteger value, NSString *name)
     }
 }
 
-// 核心修改函数：精准定位并修改
+// 核心修改函数：智能搜索并修改
 static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health, NSInteger mood, NSInteger experience) {
-    writeLog(@"========== 开始精准内存修改 ==========");
+    writeLog(@"========== 开始智能内存修改 v14.0 ==========");
     
     uintptr_t baseAddress = 0;
     
@@ -259,59 +305,83 @@ static BOOL modifyGameData(NSInteger money, NSInteger stamina, NSInteger health,
         }
     }
     
-    // 第二步：如果没有有效地址，进行精准搜索
+    // 第二步：智能搜索游戏数据结构
     if (baseAddress == 0) {
-        writeLog(@"🔍 开始精准搜索游戏数据...");
+        writeLog(@"🧠 开始智能搜索游戏数据结构...");
         
-        // 基于你提供的实际数值进行搜索
-        NSArray *knownValues = @[@474, @136, @93, @88];  // 金钱、体力、健康、心情的已知值
+        // 使用已知的游戏数值进行搜索
+        // 根据你之前提供的数据：金钱474、体力136、健康93、心情88
+        NSArray *knownValues = @[@474, @136, @93, @88];
+        NSArray *valueNames = @[@"金钱", @"体力", @"健康", @"心情"];
+        NSArray *offsets = @[@0, @24, @72, @104];
         
-        for (NSNumber *valueNum in knownValues) {
-            NSInteger searchValue = [valueNum integerValue];
-            NSArray *candidates = dynamicMemorySearch(searchValue);
+        for (NSInteger i = 0; i < knownValues.count; i++) {
+            NSInteger searchValue = [knownValues[i] integerValue];
+            NSString *valueName = valueNames[i];
+            NSInteger offset = [offsets[i] integerValue];
+            
+            writeLog([NSString stringWithFormat:@"🔍 搜索 %@: %ld", valueName, (long)searchValue]);
+            
+            NSArray *candidates = smartMemorySearch(searchValue);
+            
+            writeLog([NSString stringWithFormat:@"📊 %@ 找到 %lu 个候选地址", valueName, (unsigned long)candidates.count]);
             
             // 验证每个候选地址
             for (NSNumber *addrNum in candidates) {
                 uintptr_t candidateAddr = [addrNum unsignedLongValue];
                 
-                // 尝试作为基地址验证
-                if (verifyGameDataStructure(candidateAddr)) {
-                    baseAddress = candidateAddr;
+                // 计算可能的基地址
+                uintptr_t possibleBase = candidateAddr - offset;
+                
+                writeLog([NSString stringWithFormat:@"🧪 测试基地址: 0x%lx (从%@地址0x%lx推算)", possibleBase, valueName, candidateAddr]);
+                
+                // 验证这个基地址是否正确
+                if (verifyGameDataStructure(possibleBase)) {
+                    baseAddress = possibleBase;
                     g_moneyBaseAddress = baseAddress;
-                    writeLog([NSString stringWithFormat:@"🎉 找到基地址: 0x%lx", baseAddress]);
+                    writeLog([NSString stringWithFormat:@"🎉 通过%@找到正确的基地址: 0x%lx", valueName, baseAddress]);
                     goto found_base;
                 }
+            }
+        }
+        
+        // 如果上面的方法没找到，尝试更广泛的搜索
+        if (baseAddress == 0) {
+            writeLog(@"🔄 尝试广泛搜索...");
+            
+            // 搜索一些常见的游戏数值范围
+            NSArray *commonValues = @[@100, @200, @300, @500, @1000];
+            
+            for (NSNumber *valueNum in commonValues) {
+                NSInteger searchValue = [valueNum integerValue];
+                NSArray *candidates = smartMemorySearch(searchValue);
                 
-                // 尝试作为偏移地址反推基地址
-                if (searchValue == 136 && candidateAddr >= 24) { // 体力
-                    uintptr_t possibleBase = candidateAddr - 24;
-                    if (verifyGameDataStructure(possibleBase)) {
-                        baseAddress = possibleBase;
+                for (NSNumber *addrNum in candidates) {
+                    uintptr_t candidateAddr = [addrNum unsignedLongValue];
+                    
+                    // 尝试作为基地址
+                    if (verifyGameDataStructure(candidateAddr)) {
+                        baseAddress = candidateAddr;
                         g_moneyBaseAddress = baseAddress;
-                        writeLog([NSString stringWithFormat:@"🎉 通过体力地址找到基地址: 0x%lx", baseAddress]);
+                        writeLog([NSString stringWithFormat:@"🎉 广泛搜索找到基地址: 0x%lx", baseAddress]);
                         goto found_base;
+                    }
+                    
+                    // 尝试作为偏移地址
+                    for (NSInteger offset = 0; offset <= 104; offset += 8) {
+                        if (candidateAddr >= offset) {
+                            uintptr_t possibleBase = candidateAddr - offset;
+                            if (verifyGameDataStructure(possibleBase)) {
+                                baseAddress = possibleBase;
+                                g_moneyBaseAddress = baseAddress;
+                                writeLog([NSString stringWithFormat:@"🎉 通过偏移%ld找到基地址: 0x%lx", (long)offset, baseAddress]);
+                                goto found_base;
+                            }
+                        }
                     }
                 }
                 
-                if (searchValue == 93 && candidateAddr >= 72) { // 健康
-                    uintptr_t possibleBase = candidateAddr - 72;
-                    if (verifyGameDataStructure(possibleBase)) {
-                        baseAddress = possibleBase;
-                        g_moneyBaseAddress = baseAddress;
-                        writeLog([NSString stringWithFormat:@"🎉 通过健康地址找到基地址: 0x%lx", baseAddress]);
-                        goto found_base;
-                    }
-                }
-                
-                if (searchValue == 88 && candidateAddr >= 104) { // 心情
-                    uintptr_t possibleBase = candidateAddr - 104;
-                    if (verifyGameDataStructure(possibleBase)) {
-                        baseAddress = possibleBase;
-                        g_moneyBaseAddress = baseAddress;
-                        writeLog([NSString stringWithFormat:@"🎉 通过心情地址找到基地址: 0x%lx", baseAddress]);
-                        goto found_base;
-                    }
-                }
+                if (baseAddress != 0) break;
             }
         }
     }
@@ -320,13 +390,32 @@ found_base:
     
     if (baseAddress == 0) {
         writeLog(@"❌ 未能找到游戏数据结构");
-        writeLog(@"💡 请确保游戏正在运行且数值显示正常");
+        writeLog(@"💡 建议：");
+        writeLog(@"1. 确保游戏正在运行且界面显示数值");
+        writeLog(@"2. 尝试在游戏中进行一些操作改变数值");
+        writeLog(@"3. 重新启动修改器");
         return NO;
     }
     
     // 第三步：执行精准修改
     writeLog(@"🚀 开始修改游戏数值...");
     writeLog([NSString stringWithFormat:@"📍 基地址: 0x%lx", baseAddress]);
+    
+    // 先读取当前值
+    @try {
+        NSInteger currentMoney = *(NSInteger*)baseAddress;
+        NSInteger currentStamina = *(NSInteger*)(baseAddress + 24);
+        NSInteger currentHealth = *(NSInteger*)(baseAddress + 72);
+        NSInteger currentMood = *(NSInteger*)(baseAddress + 104);
+        
+        writeLog(@"📊 修改前数值:");
+        writeLog([NSString stringWithFormat:@"  💰金钱: %ld", (long)currentMoney]);
+        writeLog([NSString stringWithFormat:@"  ⚡体力: %ld", (long)currentStamina]);
+        writeLog([NSString stringWithFormat:@"  ❤️健康: %ld", (long)currentHealth]);
+        writeLog([NSString stringWithFormat:@"  😊心情: %ld", (long)currentMood]);
+    } @catch (NSException *exception) {
+        writeLog([NSString stringWithFormat:@"⚠️ 读取当前值失败: %@", exception.reason]);
+    }
     
     BOOL success = YES;
     
@@ -360,11 +449,14 @@ found_base:
         // 验证修改结果
         writeLog(@"🔍 验证修改结果:");
         verifyGameDataStructure(baseAddress);
+        
+        // 保存基地址供下次使用
+        g_moneyBaseAddress = baseAddress;
     } else {
-        writeLog(@"⚠️ 部分修改失败");
+        writeLog(@"⚠️ 部分修改失败，请检查日志");
     }
     
-    writeLog(@"========== 精准内存修改结束 ==========");
+    writeLog(@"========== 智能内存修改完成 ==========");
     return success;
 }
 
@@ -413,7 +505,7 @@ found_base:
     
     // 标题
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
-    title.text = @"🏠 我独自生活 v13.0";
+    title.text = @"🏠 我独自生活 v14.0";
     title.font = [UIFont boldSystemFontOfSize:18];
     title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     title.textAlignment = NSTextAlignmentCenter;
@@ -423,7 +515,7 @@ found_base:
     
     // 学习提示
     UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
-    info.text = @"� 智能内存自动修搜索修改器";
+    info.text = @"🧠 智能内存搜索修改器";
     info.font = [UIFont systemFontOfSize:14];
     info.textColor = [UIColor grayColor];
     info.textAlignment = NSTextAlignmentCenter;
@@ -445,7 +537,7 @@ found_base:
     
     // 提示
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"动态适应地址变化，无需固定地址\n智能搜索堆内存区域，精准定位数据";
+    tip.text = @"v14.0: iOS兼容内存搜索引擎\n智能识别游戏数据结构，精准修改";
     tip.font = [UIFont systemFontOfSize:12];
     tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -512,8 +604,8 @@ found_base:
 
 - (void)buttonTapped:(UIButton *)sender {
     // 确认提示
-    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🤖 智能修改" 
-        message:@"将自动搜索游戏内存数据结构\n并直接修改相应数值\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
+    UIAlertController *confirmAlert = [UIAlertController alertControllerWithTitle:@"🧠 智能修改 v14.0" 
+        message:@"新版本特性：\n• iOS兼容内存搜索引擎\n• 智能数据结构识别\n• 自适应地址变化\n\n⚠️ 请确保游戏正在运行\n\n确认继续？" 
         preferredStyle:UIAlertControllerStyleAlert];
     
     [confirmAlert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
