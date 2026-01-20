@@ -257,6 +257,7 @@
                 
                 <!-- 功能按钮 -->
                 <a href="javascript:void(0);" onclick="autoModify()" class="button-style">🎁 一键全开修改</a>
+                <a href="javascript:void(0);" onclick="diagnosticTool()" class="button-style">🔧 诊断工具</a>
                 <a href="javascript:void(0);" onclick="findAnchors()" class="button-style">🔍 寻找锚点特征值</a>
                 <a href="javascript:void(0);" onclick="startModify()" class="button-style">📝 手动输入修改</a>
                 
@@ -690,72 +691,71 @@
         function modifyByOffset(currentMoney, currentStamina, currentHealth, currentMood) {
             h5gg.clearResults();
             
-            // 优化搜索策略 - 限制搜索范围，减少处理时间
-            alert("🔍 开始快速搜索...\n搜索金钱: " + currentMoney);
+            // 尝试多个内存范围进行搜索
+            var searchRanges = [
+                ['0x100000000', '0x200000000'],   // 原始范围
+                ['0x00000000', '0x100000000'],    // 低位内存
+                ['0x200000000', '0x300000000'],   // 高位内存1
+                ['0x300000000', '0x400000000'],   // 高位内存2
+                ['0x00000000', '0x20000000000']   // 全范围（最后尝试）
+            ];
             
-            // 使用更小的搜索范围，提高速度
-            var searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', '0x100000000', '0x200000000');
-            
-            if (searchCount > 0) {
-                alert("💰 找到 " + searchCount + " 个地址\n开始快速验证...");
+            for (var r = 0; r < searchRanges.length; r++) {
+                alert("🔍 搜索范围 " + (r + 1) + "/" + searchRanges.length + "\n" + searchRanges[r][0] + " - " + searchRanges[r][1] + "\n搜索金钱: " + currentMoney);
                 
-                // 大幅限制处理数量，只处理前50个结果
-                var results = h5gg.getResults(Math.min(searchCount, 50));
-                var validAddresses = [];
-                var processedCount = 0;
-                
-                // 快速验证，最多只检查20个地址
-                for (var i = 0; i < results.length && processedCount < 20; i++) {
-                    var moneyAddr = results[i].address;
-                    processedCount++;
+                try {
+                    h5gg.clearResults();
+                    var searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', searchRanges[r][0], searchRanges[r][1]);
                     
-                    try {
-                        // 计算体力地址（+24偏移）
-                        var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
-                        var staminaValue = h5gg.getValue(staminaAddr, 'I32');
+                    if (searchCount > 0) {
+                        alert("💰 在范围" + (r + 1) + "找到 " + searchCount + " 个地址\n开始验证...");
                         
-                        // 如果体力值匹配，说明找到了正确的数据结构
-                        if (staminaValue === currentStamina) {
-                            validAddresses.push(moneyAddr);
-                            break; // 找到一个匹配的就停止搜索
-                        }
-                    } catch (e) {
-                        continue;
-                    }
-                }
-                
-                if (validAddresses.length > 0) {
-                    // 对找到的地址进行修改
-                    var modifiedCount = 0;
-                    
-                    for (var j = 0; j < validAddresses.length; j++) {
-                        var baseAddr = validAddresses[j];
+                        // 限制处理数量，但增加验证范围
+                        var results = h5gg.getResults(Math.min(searchCount, 100));
+                        var validAddresses = [];
                         
-                        try {
-                            // 计算所有偏移地址
-                            var staminaAddr = '0x' + (parseInt(baseAddr, 16) + 24).toString(16);
-                            var healthAddr = '0x' + (parseInt(baseAddr, 16) + 72).toString(16);
-                            var moodAddr = '0x' + (parseInt(baseAddr, 16) + 104).toString(16);
+                        for (var i = 0; i < results.length; i++) {
+                            var moneyAddr = results[i].address;
                             
-                            // 执行修改
-                            h5gg.setValue(baseAddr, 2100000000, 'I32');        // 21亿金钱
-                            h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
-                            h5gg.setValue(healthAddr, 10000, 'I32');            // 10000健康
-                            h5gg.setValue(moodAddr, 10000, 'I32');              // 10000心情
-                            
-                            modifiedCount++;
-                        } catch (e) {
-                            continue;
+                            try {
+                                // 计算体力地址（+24偏移）
+                                var staminaAddr = '0x' + (parseInt(moneyAddr, 16) + 24).toString(16);
+                                var staminaValue = h5gg.getValue(staminaAddr, 'I32');
+                                
+                                // 如果体力值匹配，说明找到了正确的数据结构
+                                if (staminaValue === currentStamina) {
+                                    validAddresses.push(moneyAddr);
+                                    
+                                    // 立即执行修改
+                                    var healthAddr = '0x' + (parseInt(moneyAddr, 16) + 72).toString(16);
+                                    var moodAddr = '0x' + (parseInt(moneyAddr, 16) + 104).toString(16);
+                                    
+                                    h5gg.setValue(moneyAddr, 2100000000, 'I32');        // 21亿金钱
+                                    h5gg.setValue(staminaAddr, 2100000000, 'I32');      // 21亿体力
+                                    h5gg.setValue(healthAddr, 100, 'I32');              // 100健康
+                                    h5gg.setValue(moodAddr, 100, 'I32');                // 100心情
+                                    
+                                    alert("🎁 手动修改成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n地址: " + moneyAddr);
+                                    return;
+                                }
+                            } catch (e) {
+                                continue;
+                            }
                         }
+                        
+                        if (validAddresses.length === 0) {
+                            alert("⚠️ 范围" + (r + 1) + "验证失败\n找到" + searchCount + "个地址但无匹配\n继续搜索下一个范围...");
+                        }
+                    } else {
+                        alert("❌ 范围" + (r + 1) + "未找到数据\n继续搜索下一个范围...");
                     }
-                    
-                    alert("🎁 手动修改成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n修改了 " + modifiedCount + " 个地址");
-                } else {
-                    alert("❌ 验证失败\n在前" + processedCount + "个地址中未找到匹配\n\n建议：\n1. 确认体力值输入正确\n2. 尝试在游戏中操作后重试\n3. 检查数值是否在游戏界面显示");
+                } catch (e) {
+                    alert("❌ 范围" + (r + 1) + "搜索出错: " + e.message + "\n继续下一个范围...");
+                    continue;
                 }
-            } else {
-                alert("❌ 未找到金钱地址\n请确保：\n1. 游戏正在运行\n2. 输入的金钱数值正确\n3. 数值在游戏界面可见");
             }
+            
+            alert("❌ 所有范围搜索完毕\n未找到有效的游戏数据\n\n可能原因：\n1. 游戏有反调试保护\n2. 数据被加密存储\n3. 内存结构发生变化");
         }
     </script>
 </body>
