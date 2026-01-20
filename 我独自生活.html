@@ -437,13 +437,11 @@
                         return;
                     }
                     
-                    // 所有输入完成，确认修改
-                    var confirmMsg = "确认修改以下数值？\n\n💰 金钱: " + inputValues.money + " → 2,100,000,000\n⚡ 体力: " + inputValues.stamina + " → 2,100,000,000\n❤️ 健康: " + inputValues.health + " → 10,000\n😊 心情: " + inputValues.mood + " → 10,000";
+                    // 所有输入完成，直接执行修改
+                    alert("🎮 开始修改数值...\n💰 金钱: " + inputValues.money + " → 2,100,000,000\n⚡ 体力: " + inputValues.stamina + " → 2,100,000,000\n❤️ 健康: " + inputValues.health + " → 10,000\n😊 心情: " + inputValues.mood + " → 10,000");
                     
-                    if (confirm(confirmMsg)) {
-                        // 执行修改
-                        modifyByOffset(inputValues.money, inputValues.stamina, inputValues.health, inputValues.mood);
-                    }
+                    // 直接执行修改，不需要确认
+                    modifyByOffset(inputValues.money, inputValues.stamina, inputValues.health, inputValues.mood);
                     return;
             }
             
