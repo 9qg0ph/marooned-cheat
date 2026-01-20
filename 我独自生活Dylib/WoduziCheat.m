@@ -127,12 +127,16 @@ static void* hooked_memmove(void *dest, const void *src, size_t n) {
 static NSInteger hooked_integerForKey(id self, SEL _cmd, NSString* key) {
     NSInteger originalValue = original_integerForKey(self, _cmd, key);
     
+    // 记录所有读取操作用于调试
+    writeAdvancedLog([NSString stringWithFormat:@"🔍 读取键值: %@ = %ld", key, (long)originalValue]);
+    
     if (g_advancedHookEnabled) {
         // 基于键名智能识别
         NSString *lowerKey = [key lowercaseString];
         
         if ([lowerKey containsString:@"money"] || [lowerKey containsString:@"cash"] || 
-            [lowerKey containsString:@"coin"] || [lowerKey containsString:@"gold"]) {
+            [lowerKey containsString:@"coin"] || [lowerKey containsString:@"gold"] ||
+            [lowerKey containsString:@"金钱"] || [lowerKey containsString:@"现金"]) {
             g_interceptCount++;
             writeAdvancedLog([NSString stringWithFormat:@"💰 金钱读取拦截: %@ = %ld -> %ld", 
                 key, (long)originalValue, (long)g_targetMoney]);
