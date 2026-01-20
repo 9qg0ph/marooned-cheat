@@ -468,33 +468,74 @@
             return false;
         }
         
-        // 锚点发现工具
+        // 锚点发现工具 - 专门搜索引擎级固定常数
         function findAnchors() {
-            alert("🔍 开始寻找游戏中的固定特征值...\n这将帮助我们找到稳定的锚点");
+            alert("🔍 搜索引擎级固定常数...\n类似无尽噩梦的-9.81重力值\n这些值不会被游戏保护影响");
             
-            // 常见的游戏固定值
-            var candidates = [
-                // 时间相关
-                {val: '24', desc: '小时数'},
-                {val: '60', desc: '分钟/秒数'},
-                {val: '7', desc: '星期数'},
-                {val: '12', desc: '月份数'},
+            // Unity引擎和游戏引擎的常见固定值
+            var engineConstants = [
+                // 物理引擎常数
+                {val: '-9.81', type: 'F32', desc: 'Unity重力值'},
+                {val: '9.81', type: 'F32', desc: '重力值(正数)'},
+                {val: '-9.8', type: 'F32', desc: '重力值(简化)'},
+                {val: '9.8', type: 'F32', desc: '重力值(简化正数)'},
                 
-                // 游戏机制
-                {val: '100', desc: '满值/百分比'},
-                {val: '1000', desc: '基础单位'},
-                {val: '50', desc: '中间值'},
-                {val: '200', desc: '双倍值'},
+                // 时间和帧率常数
+                {val: '60', type: 'F32', desc: '目标帧率'},
+                {val: '30', type: 'F32', desc: '最低帧率'},
+                {val: '0.016666', type: 'F32', desc: '60FPS时间间隔'},
+                {val: '0.033333', type: 'F32', desc: '30FPS时间间隔'},
                 
-                // 可能的引擎常数
-                {val: '30', desc: '帧率'},
-                {val: '16', desc: '像素单位'},
-                {val: '32', desc: '系统位数'},
+                // 数学常数
+                {val: '3.14159', type: 'F32', desc: 'PI值'},
+                {val: '2.71828', type: 'F32', desc: 'E值'},
+                {val: '1.41421', type: 'F32', desc: '根号2'},
                 
-                // Unity常见值
-                {val: '1', desc: '单位值'},
-                {val: '255', desc: '颜色最大值'}
+                // Unity特有常数
+                {val: '1', type: 'F32', desc: 'Unity单位'},
+                {val: '0', type: 'F32', desc: '零值'},
+                {val: '0.5', type: 'F32', desc: '中点值'},
+                
+                // 可能的游戏时间常数
+                {val: '24', type: 'F32', desc: '24小时'},
+                {val: '86400', type: 'F32', desc: '一天秒数'},
+                {val: '3600', type: 'F32', desc: '一小时秒数'}
             ];
+            
+            var foundConstants = [];
+            
+            for (var i = 0; i < engineConstants.length; i++) {
+                try {
+                    h5gg.clearResults();
+                    var count = h5gg.searchNumber(engineConstants[i].val, engineConstants[i].type, '0x00000000', '0x20000000000');
+                    
+                    if (count > 0 && count < 100) {
+                        foundConstants.push({
+                            value: engineConstants[i].val,
+                            type: engineConstants[i].type,
+                            desc: engineConstants[i].desc,
+                            count: count
+                        });
+                    }
+                } catch (e) {
+                    continue;
+                }
+            }
+            
+            if (foundConstants.length > 0) {
+                var report = "🎯 发现引擎常数：\n\n";
+                for (var j = 0; j < Math.min(foundConstants.length, 10); j++) {
+                    report += "• " + foundConstants[j].value + " (" + foundConstants[j].type + ") - " + foundConstants[j].desc + " [" + foundConstants[j].count + "个]\n";
+                }
+                report += "\n💡 这些可能是稳定的锚点";
+                alert(report);
+                
+                // 测试最有希望的常数
+                testEngineConstants(foundConstants);
+            } else {
+                alert("❌ 未发现引擎常数\n这个游戏可能：\n1. 使用了特殊的引擎\n2. 有强力的反调试保护\n3. 数据完全加密存储");
+            }
+        }
             
             var foundAnchors = [];
             
