@@ -285,30 +285,40 @@
         function smartSearch() {
             var modifiedCount = 0;
             
-            // 搜索当前游戏中可能的数值（根据截图中的实际数值）
-            var gameValues = [474, 100, 94, 92, 50, 75, 150, 200, 300, 500];
+            // 方法1：搜索常见的数值范围，而不是固定值
+            var searchRanges = [
+                {min: 50, max: 200},    // 小数值范围
+                {min: 200, max: 1000},  // 中等数值范围
+                {min: 1000, max: 5000}, // 大数值范围
+                {min: 10, max: 100}     // 很小数值范围
+            ];
             
-            for (var v = 0; v < gameValues.length; v++) {
+            for (var r = 0; r < searchRanges.length; r++) {
                 try {
-                    h5gg.clearResults();
-                    var count = h5gg.searchNumber(gameValues[v].toString(), 'I32', '0x00000000', '0x20000000000');
-                    
-                    if (count > 0 && count < 200) {
-                        var results = h5gg.getResults(Math.min(count, 100));
+                    // 搜索范围内的多个数值
+                    for (var val = searchRanges[r].min; val <= searchRanges[r].max; val += 25) {
+                        h5gg.clearResults();
+                        var count = h5gg.searchNumber(val.toString(), 'I32', '0x00000000', '0x20000000000');
                         
-                        for (var i = 0; i < results.length; i++) {
-                            var baseAddr = results[i].address;
+                        if (count > 0 && count < 100) {
+                            var results = h5gg.getResults(Math.min(count, 50));
                             
-                            if (tryModifyAtAddress(baseAddr)) {
-                                modifiedCount++;
-                                if (modifiedCount >= 2) break; // 找到2个有效地址就够了
+                            for (var i = 0; i < results.length; i++) {
+                                var baseAddr = results[i].address;
+                                
+                                if (tryModifyAtAddress(baseAddr)) {
+                                    modifiedCount++;
+                                    if (modifiedCount >= 1) break; // 找到1个有效地址就够了
+                                }
                             }
+                            
+                            if (modifiedCount > 0) break;
                         }
                     }
                     
                     if (modifiedCount > 0) break;
                 } catch (e) {
-                    continue; // 忽略搜索错误，继续下一个数值
+                    continue; // 忽略搜索错误，继续下一个范围
                 }
             }
             
