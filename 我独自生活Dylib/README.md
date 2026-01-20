@@ -2,7 +2,7 @@
 
 ## 📦 最新版本
 
-**WoduziCheat.m v16.0** - 基于PlayGearLib.dylib技术分析的高级版本（2026年1月21日更新）
+**WoduziCheat_Advanced.m v16.0** - 基于PlayGearLib.dylib技术分析的高级版本（2026年1月21日更新）
 
 ### 🚀 v16.0 革命性更新 - PlayGearLib技术融合
 - 🎯 **PlayGearLib技术分析**：深度分析PlayGearLib.dylib，学习其先进的Hook架构
