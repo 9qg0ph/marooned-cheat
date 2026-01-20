@@ -445,20 +445,24 @@
         function modifyByOffset(currentMoney, currentStamina, currentHealth, currentMood) {
             h5gg.clearResults();
             
-            // 方法1：联合搜索 - 先搜索金钱，再用体力进一步筛选
-            alert("🔍 开始联合搜索...\n第一步：搜索金钱 " + currentMoney);
+            // 优化搜索策略 - 限制搜索范围，减少处理时间
+            alert("🔍 开始快速搜索...\n搜索金钱: " + currentMoney);
             
-            var searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', '0x00000000', '0x20000000000');
+            // 使用更小的搜索范围，提高速度
+            var searchCount = h5gg.searchNumber(currentMoney.toString(), 'I32', '0x100000000', '0x200000000');
             
             if (searchCount > 0) {
-                alert("💰 找到 " + searchCount + " 个金钱地址\n第二步：验证体力偏移");
+                alert("💰 找到 " + searchCount + " 个地址\n开始快速验证...");
                 
-                var results = h5gg.getResults(Math.min(searchCount, 200)); // 限制处理数量
+                // 大幅限制处理数量，只处理前50个结果
+                var results = h5gg.getResults(Math.min(searchCount, 50));
                 var validAddresses = [];
+                var processedCount = 0;
                 
-                // 验证每个地址的偏移是否正确
-                for (var i = 0; i < results.length; i++) {
+                // 快速验证，最多只检查20个地址
+                for (var i = 0; i < results.length && processedCount < 20; i++) {
                     var moneyAddr = results[i].address;
+                    processedCount++;
                     
                     try {
                         // 计算体力地址（+24偏移）
@@ -468,7 +472,7 @@
                         // 如果体力值匹配，说明找到了正确的数据结构
                         if (staminaValue === currentStamina) {
                             validAddresses.push(moneyAddr);
-                            alert("✅ 找到匹配地址！\n💰 金钱地址: " + moneyAddr + "\n⚡ 体力值: " + staminaValue + " (匹配!)");
+                            break; // 找到一个匹配的就停止搜索
                         }
                     } catch (e) {
                         continue;
@@ -476,7 +480,7 @@
                 }
                 
                 if (validAddresses.length > 0) {
-                    // 对所有有效地址进行修改
+                    // 对找到的地址进行修改
                     var modifiedCount = 0;
                     
                     for (var j = 0; j < validAddresses.length; j++) {
@@ -500,9 +504,9 @@
                         }
                     }
                     
-                    alert("🎁 一键全开成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n修改了 " + modifiedCount + " 个地址");
+                    alert("🎁 手动修改成功！\n💰金钱、⚡体力、❤️健康、😊心情\n全部修改完成！\n修改了 " + modifiedCount + " 个地址");
                 } else {
-                    alert("❌ 验证失败\n找到了 " + searchCount + " 个金钱地址\n但体力偏移验证都不匹配\n\n可能原因：\n1. 偏移量不是+24\n2. 数据结构不同\n3. 体力值输入错误");
+                    alert("❌ 验证失败\n在前" + processedCount + "个地址中未找到匹配\n\n建议：\n1. 确认体力值输入正确\n2. 尝试在游戏中操作后重试\n3. 检查数值是否在游戏界面显示");
                 }
             } else {
                 alert("❌ 未找到金钱地址\n请确保：\n1. 游戏正在运行\n2. 输入的金钱数值正确\n3. 数值在游戏界面可见");
