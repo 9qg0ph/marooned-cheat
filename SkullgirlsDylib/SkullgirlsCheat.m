@@ -195,18 +195,12 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     [self.contentView addSubview:tip];
     y += 28;
     
-    // 按钮
-    UIButton *btn1 = [self createButtonWithTitle:@"⚔️ 互秒" tag:1];
-    btn1.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    [self.contentView addSubview:btn1];
-    y += 43;
+    // 功能开关
+    [self addSwitchWithTitle:@"⚔️ 互秒" tag:1 y:y];
+    y += 50;
     
-    UIButton *btn2 = [self createButtonWithTitle:@"🛡️ 无敌（未实现）" tag:2];
-    btn2.frame = CGRectMake(20, y, contentWidth - 40, 35);
-    btn2.enabled = NO;
-    btn2.alpha = 0.5;
-    [self.contentView addSubview:btn2];
-    y += 48;
+    [self addSwitchWithTitle:@"🛡️ 无敌（未实现）" tag:2 y:y enabled:NO];
+    y += 50;
     
     // 版权
     UILabel *copyright = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
@@ -222,51 +216,51 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     g_menuView = nil;
 }
 
-- (UIButton *)createButtonWithTitle:(NSString *)title tag:(NSInteger)tag {
-    UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-    [btn setTitle:title forState:UIControlStateNormal];
-    [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    btn.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    btn.backgroundColor = [UIColor colorWithRed:0.8 green:0.2 blue:0.4 alpha:1];
-    btn.layer.cornerRadius = 12;
-    btn.tag = tag;
-    [btn addTarget:self action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
-    return btn;
+- (void)addSwitchWithTitle:(NSString *)title tag:(NSInteger)tag y:(CGFloat)y {
+    [self addSwitchWithTitle:title tag:tag y:y enabled:YES];
 }
 
-- (void)buttonTapped:(UIButton *)sender {
+- (void)addSwitchWithTitle:(NSString *)title tag:(NSInteger)tag y:(CGFloat)y enabled:(BOOL)enabled {
+    CGFloat contentWidth = self.contentView.frame.size.width;
+    
+    // 标签
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 100, 40)];
+    label.text = title;
+    label.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+    label.textColor = [UIColor darkGrayColor];
+    [self.contentView addSubview:label];
+    
+    // 开关
+    UISwitch *switchControl = [[UISwitch alloc] initWithFrame:CGRectMake(contentWidth - 70, y + 5, 50, 30)];
+    switchControl.tag = tag;
+    switchControl.enabled = enabled;
+    switchControl.onTintColor = [UIColor colorWithRed:0.8 green:0.2 blue:0.4 alpha:1];
+    [switchControl addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
+    [self.contentView addSubview:switchControl];
+}
+
+- (void)switchChanged:(UISwitch *)sender {
+    BOOL isOn = sender.isOn;
+    
     switch (sender.tag) {
         case 1: // 互秒
             @try {
-                // 根据 Frida 捕获的参数：key=hook_int, value=999999999, type=undefined
                 NSString *key = @"hook_int";
-                NSNumber *value = @999999999;
+                NSNumber *value = isOn ? @999999999 : @0; // 开启时传 999999999，关闭时传 0
                 
-                NSLog(@"[SGCheat] 按钮点击 - 互秒");
+                NSLog(@"[SGCheat] 互秒开关 - %@", isOn ? @"开启" : @"关闭");
+                NSLog(@"[SGCheat] 参数: key=%@ value=%@ type=nil", key, value);
                 
-                // 尝试1: 使用 nil 作为 type（因为 Frida 显示 undefined）
-                NSLog(@"[SGCheat] 尝试1: type=nil");
                 setGameValue(key, value, nil);
                 
-                // 等待一下再尝试其他方式
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                    // 尝试2: 使用空字符串
-                    NSLog(@"[SGCheat] 尝试2: type=@\"\"");
-                    setGameValue(key, value, @"");
-                });
-                
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                    // 尝试3: 使用 "Number"
-                    NSLog(@"[SGCheat] 尝试3: type=@\"Number\"");
-                    setGameValue(key, value, @"Number");
-                });
-                
-                [self showAlert:@"⚔️ 互秒已开启！\n已尝试多种参数组合\n请查看控制台日志"];
+                [self showAlert:isOn ? @"⚔️ 互秒已开启！" : @"⚔️ 互秒已关闭！"];
             } @catch (NSException *exception) {
-                [self showAlert:[NSString stringWithFormat:@"❌ 开启失败: %@", exception.reason]];
+                sender.on = !isOn; // 恢复开关状态
+                [self showAlert:[NSString stringWithFormat:@"❌ 操作失败: %@", exception.reason]];
             }
             break;
         case 2: // 无敌（未实现）
+            sender.on = NO;
             [self showAlert:@"🛡️ 无敌功能暂未捕获到参数\n请等待后续更新"];
             break;
     }
