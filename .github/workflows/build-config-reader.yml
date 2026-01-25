@@ -1,0 +1,45 @@
+name: Build Config Reader IPA
+
+on:
+  push:
+    paths:
+      - 'ConfigReader/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Config Reader
+      run: |
+        cd ConfigReader
+        
+        # 编译应用
+        clang -arch arm64 \
+          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+          -miphoneos-version-min=14.0 \
+          -framework UIKit \
+          -framework Foundation \
+          -fobjc-arc \
+          -o ConfigReader \
+          main.m
+        
+        # 创建应用包结构
+        mkdir -p Payload/ConfigReader.app
+        
+        # 复制文件
+        cp ConfigReader Payload/ConfigReader.app/
+        cp Info.plist Payload/ConfigReader.app/
+        
+        # 签名（自签名）
+        codesign -f -s - Payload/ConfigReader.app/ConfigReader || true
+        
+        # 打包成 IPA
+        zip -r ConfigReader.ipa Payload
+        
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ConfigReader-IPA
+        path: ConfigReader/ConfigReader.ipa
