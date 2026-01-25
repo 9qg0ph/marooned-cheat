@@ -81,7 +81,7 @@ jobs:
         zip -r ConfigReader.ipa Payload
     
     - name: Upload IPA
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ConfigReader
         path: ConfigReader/ConfigReader.ipa
