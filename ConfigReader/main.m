@@ -164,24 +164,24 @@
     }
     
     // Hook NSString stringWithContentsOfURL
-    Class NSString = NSClassFromString(@"NSString");
-    if (NSString) {
-        Method method = class_getClassMethod(NSString, @selector(stringWithContentsOfURL:encoding:error:));
+    Class NSStringClass = NSClassFromString(@"NSString");
+    if (NSStringClass) {
+        Method method = class_getClassMethod(NSStringClass, @selector(stringWithContentsOfURL:encoding:error:));
         if (method) {
             IMP originalImp = method_getImplementation(method);
-            IMP newImp = imp_implementationWithBlock(^NSString*(NSURL *url, NSStringEncoding enc, NSError **error) {
+            IMP newImp = imp_implementationWithBlock(^id(NSURL *url, NSStringEncoding enc, NSError **error) {
                 [weakSelf log:[NSString stringWithFormat:@"\n[NSString 加载]"]];
                 [weakSelf log:[NSString stringWithFormat:@"URL: %@", url.absoluteString]];
                 
-                typedef NSString* (*OriginalFunc)(id, SEL, NSURL*, NSStringEncoding, NSError**);
-                NSString *content = ((OriginalFunc)originalImp)(NSString, @selector(stringWithContentsOfURL:encoding:error:), url, enc, error);
+                typedef id (*OriginalFunc)(id, SEL, NSURL*, NSStringEncoding, NSError**);
+                id result = ((OriginalFunc)originalImp)(NSStringClass, @selector(stringWithContentsOfURL:encoding:error:), url, enc, error);
                 
-                if (content && content.length < 5000) {
-                    [weakSelf log:[NSString stringWithFormat:@"内容: %@", content]];
+                if (result && [result length] < 5000) {
+                    [weakSelf log:[NSString stringWithFormat:@"内容: %@", result]];
                 }
                 [weakSelf log:@"==================\n"];
                 
-                return content;
+                return result;
             });
             method_setImplementation(method, newImp);
             [self log:@"✓ 已 Hook NSString stringWithContentsOfURL"];
