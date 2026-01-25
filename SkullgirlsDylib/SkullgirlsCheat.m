@@ -235,12 +235,23 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     switchControl.tag = tag;
     switchControl.enabled = enabled;
     switchControl.onTintColor = [UIColor colorWithRed:0.8 green:0.2 blue:0.4 alpha:1];
+    
+    // 恢复保存的开关状态
+    NSString *key = [NSString stringWithFormat:@"SGCheat_Switch_%ld", (long)tag];
+    BOOL savedState = [[NSUserDefaults standardUserDefaults] boolForKey:key];
+    switchControl.on = savedState;
+    
     [switchControl addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     [self.contentView addSubview:switchControl];
 }
 
 - (void)switchChanged:(UISwitch *)sender {
     BOOL isOn = sender.isOn;
+    
+    // 保存开关状态
+    NSString *stateKey = [NSString stringWithFormat:@"SGCheat_Switch_%ld", (long)sender.tag];
+    [[NSUserDefaults standardUserDefaults] setBool:isOn forKey:stateKey];
+    [[NSUserDefaults standardUserDefaults] synchronize];
     
     switch (sender.tag) {
         case 1: // 互秒
@@ -256,11 +267,16 @@ static void setGameValue(NSString *key, id value, NSString *type) {
                 [self showAlert:isOn ? @"⚔️ 互秒已开启！" : @"⚔️ 互秒已关闭！"];
             } @catch (NSException *exception) {
                 sender.on = !isOn; // 恢复开关状态
+                // 恢复保存的状态
+                [[NSUserDefaults standardUserDefaults] setBool:!isOn forKey:stateKey];
+                [[NSUserDefaults standardUserDefaults] synchronize];
                 [self showAlert:[NSString stringWithFormat:@"❌ 操作失败: %@", exception.reason]];
             }
             break;
         case 2: // 无敌（未实现）
             sender.on = NO;
+            [[NSUserDefaults standardUserDefaults] setBool:NO forKey:stateKey];
+            [[NSUserDefaults standardUserDefaults] synchronize];
             [self showAlert:@"🛡️ 无敌功能暂未捕获到参数\n请等待后续更新"];
             break;
     }
