@@ -55,6 +55,9 @@
     // Hook 网络请求
     [self hookNetworkRequests];
     
+    // Hook GameForFun 方法
+    [self hookGameForFunMethods];
+    
     [self log:@"[*] 监听已启动"];
     [self log:@"[*] 等待网络请求...\n"];
     
@@ -64,6 +67,45 @@
 - (void)hookNetworkRequests {
     AppDelegate *weakSelf = self;
     
+    [self log:@"--- Hook 网络请求 ---"];
+    
+    // Hook NSURLSession dataTaskWithURL
+    Class NSURLSession = NSClassFromString(@"NSURLSession");
+    if (NSURLSession) {
+        // Hook dataTaskWithURL:
+        Method method1 = class_getInstanceMethod(NSURLSession, @selector(dataTaskWithURL:));
+        if (method1) {
+            IMP originalImp = method_getImplementation(method1);
+            IMP newImp = imp_implementationWithBlock(^id(id session, NSURL *url) {
+                [weakSelf log:[NSString stringWithFormat:@"\n[NSURLSession dataTask]"]];
+                [weakSelf log:[NSString stringWithFormat:@"URL: %@", url.absoluteString]];
+                [weakSelf log:@"==================\n"];
+                
+                typedef id (*OriginalFunc)(id, SEL, NSURL*);
+                return ((OriginalFunc)originalImp)(session, @selector(dataTaskWithURL:), url);
+            });
+            method_setImplementation(method1, newImp);
+            [self log:@"✓ 已 Hook NSURLSession dataTaskWithURL"];
+        }
+        
+        // Hook dataTaskWithRequest:
+        Method method2 = class_getInstanceMethod(NSURLSession, @selector(dataTaskWithRequest:));
+        if (method2) {
+            IMP originalImp = method_getImplementation(method2);
+            IMP newImp = imp_implementationWithBlock(^id(id session, id request) {
+                NSString *url = [[request URL] absoluteString];
+                [weakSelf log:[NSString stringWithFormat:@"\n[NSURLSession dataTaskWithRequest]"]];
+                [weakSelf log:[NSString stringWithFormat:@"URL: %@", url]];
+                [weakSelf log:@"==================\n"];
+                
+                typedef id (*OriginalFunc)(id, SEL, id);
+                return ((OriginalFunc)originalImp)(session, @selector(dataTaskWithRequest:), request);
+            });
+            method_setImplementation(method2, newImp);
+            [self log:@"✓ 已 Hook NSURLSession dataTaskWithRequest"];
+        }
+    }
+    
     // Hook NSURLConnection
     Class NSURLConnection = NSClassFromString(@"NSURLConnection");
     if (NSURLConnection) {
@@ -72,25 +114,52 @@
             IMP originalImp = method_getImplementation(method);
             IMP newImp = imp_implementationWithBlock(^NSData*(id request, NSURLResponse **response, NSError **error) {
                 NSString *url = [[request URL] absoluteString];
-                [weakSelf log:[NSString stringWithFormat:@"\n[网络请求]"]];
+                [weakSelf log:[NSString stringWithFormat:@"\n[NSURLConnection 同步]"]];
                 [weakSelf log:[NSString stringWithFormat:@"URL: %@", url]];
-                [weakSelf log:[NSString stringWithFormat:@"==================\n"]];
                 
-                // 调用原始方法
                 typedef NSData* (*OriginalFunc)(id, SEL, id, NSURLResponse**, NSError**);
                 NSData *data = ((OriginalFunc)originalImp)(NSURLConnection, @selector(sendSynchronousRequest:returningResponse:error:), request, response, error);
                 
                 if (data && data.length < 5000) {
                     NSString *responseStr = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
                     if (responseStr) {
-                        [weakSelf log:[NSString stringWithFormat:@"响应: %@\n", responseStr]];
+                        [weakSelf log:[NSString stringWithFormat:@"响应: %@", responseStr]];
                     }
                 }
+                [weakSelf log:@"==================\n"];
                 
                 return data;
             });
             method_setImplementation(method, newImp);
-            [self log:@"[+] Hook NSURLConnection 成功"];
+            [self log:@"✓ 已 Hook NSURLConnection"];
+        }
+    }
+    
+    // Hook NSData dataWithContentsOfURL
+    Class NSData = NSClassFromString(@"NSData");
+    if (NSData) {
+        Method method = class_getClassMethod(NSData, @selector(dataWithContentsOfURL:));
+        if (method) {
+            IMP originalImp = method_getImplementation(method);
+            IMP newImp = imp_implementationWithBlock(^NSData*(NSURL *url) {
+                [weakSelf log:[NSString stringWithFormat:@"\n[NSData 加载]"]];
+                [weakSelf log:[NSString stringWithFormat:@"URL: %@", url.absoluteString]];
+                
+                typedef NSData* (*OriginalFunc)(id, SEL, NSURL*);
+                NSData *data = ((OriginalFunc)originalImp)(NSData, @selector(dataWithContentsOfURL:), url);
+                
+                if (data && data.length < 5000) {
+                    NSString *str = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                    if (str) {
+                        [weakSelf log:[NSString stringWithFormat:@"内容: %@", str]];
+                    }
+                }
+                [weakSelf log:@"==================\n"];
+                
+                return data;
+            });
+            method_setImplementation(method, newImp);
+            [self log:@"✓ 已 Hook NSData dataWithContentsOfURL"];
         }
     }
     
@@ -101,10 +170,9 @@
         if (method) {
             IMP originalImp = method_getImplementation(method);
             IMP newImp = imp_implementationWithBlock(^NSString*(NSURL *url, NSStringEncoding enc, NSError **error) {
-                [weakSelf log:[NSString stringWithFormat:@"\n[加载远程字符串]"]];
+                [weakSelf log:[NSString stringWithFormat:@"\n[NSString 加载]"]];
                 [weakSelf log:[NSString stringWithFormat:@"URL: %@", url.absoluteString]];
                 
-                // 调用原始方法
                 typedef NSString* (*OriginalFunc)(id, SEL, NSURL*, NSStringEncoding, NSError**);
                 NSString *content = ((OriginalFunc)originalImp)(NSString, @selector(stringWithContentsOfURL:encoding:error:), url, enc, error);
                 
@@ -116,11 +184,47 @@
                 return content;
             });
             method_setImplementation(method, newImp);
-            [self log:@"[+] Hook NSString 成功"];
+            [self log:@"✓ 已 Hook NSString stringWithContentsOfURL"];
         }
     }
     
     [self log:@""];
+}
+
+- (void)hookGameForFunMethods {
+    AppDelegate *weakSelf = self;
+    
+    [self log:@"--- Hook GameForFun 方法 ---"];
+    
+    Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
+    if (FanhanGGEngine) {
+        [self log:@"✓ 找到 FanhanGGEngine 类"];
+        
+        // Hook downloadAndReplaceFile
+        SEL downloadSel = NSSelectorFromString(@"downloadAndReplaceFile:fileName:type:");
+        Method downloadMethod = class_getInstanceMethod(FanhanGGEngine, downloadSel);
+        if (downloadMethod) {
+            IMP originalImp = method_getImplementation(downloadMethod);
+            IMP newImp = imp_implementationWithBlock(^(id obj, NSString *url, NSString *fileName, NSString *type) {
+                [weakSelf log:@"\n========== 发现下载请求 =========="];
+                [weakSelf log:[NSString stringWithFormat:@"URL: %@", url]];
+                [weakSelf log:[NSString stringWithFormat:@"文件名: %@", fileName]];
+                [weakSelf log:[NSString stringWithFormat:@"类型: %@", type]];
+                [weakSelf log:@"==================================\n"];
+                
+                // 调用原始方法
+                typedef void (*OriginalFunc)(id, SEL, NSString*, NSString*, NSString*);
+                ((OriginalFunc)originalImp)(obj, downloadSel, url, fileName, type);
+            });
+            method_setImplementation(downloadMethod, newImp);
+            [self log:@"✓ 已 Hook downloadAndReplaceFile"];
+        }
+        
+        [self log:@"正在监听网络请求，请稍候...\n"];
+    } else {
+        [self log:@"✗ 未找到 FanhanGGEngine 类"];
+        [self log:@"GameForFun.dylib 可能未注入\n"];
+    }
 }
 
 @end
