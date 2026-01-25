@@ -238,13 +238,30 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     switch (sender.tag) {
         case 1: // 互秒
             @try {
-                // 使用 NSNumber 包装数值
-                NSNumber *value = @999999999;
+                // 根据 Frida 捕获的参数：key=hook_int, value=999999999, type=undefined
                 NSString *key = @"hook_int";
-                NSString *type = @"Number";
+                NSNumber *value = @999999999;
                 
-                setGameValue(key, value, type);
-                [self showAlert:@"⚔️ 互秒已开启！"];
+                NSLog(@"[SGCheat] 按钮点击 - 互秒");
+                
+                // 尝试1: 使用 nil 作为 type（因为 Frida 显示 undefined）
+                NSLog(@"[SGCheat] 尝试1: type=nil");
+                setGameValue(key, value, nil);
+                
+                // 等待一下再尝试其他方式
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    // 尝试2: 使用空字符串
+                    NSLog(@"[SGCheat] 尝试2: type=@\"\"");
+                    setGameValue(key, value, @"");
+                });
+                
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    // 尝试3: 使用 "Number"
+                    NSLog(@"[SGCheat] 尝试3: type=@\"Number\"");
+                    setGameValue(key, value, @"Number");
+                });
+                
+                [self showAlert:@"⚔️ 互秒已开启！\n已尝试多种参数组合\n请查看控制台日志"];
             } @catch (NSException *exception) {
                 [self showAlert:[NSString stringWithFormat:@"❌ 开启失败: %@", exception.reason]];
             }
