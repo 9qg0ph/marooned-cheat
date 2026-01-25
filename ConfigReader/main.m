@@ -54,49 +54,24 @@
 
 - (void)readGameForFunConfig {
     [self log:@"========================================"];
-    [self log:@"开始读取 GameForFun 配置..."];
+    [self log:@"开始监听 GameForFun 网络请求..."];
     [self log:@"========================================\n"];
     
     // 获取当前 Bundle ID
     NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
     [self log:[NSString stringWithFormat:@"当前包名: %@\n", bundleID]];
     
+    // Hook NSURLSession 网络请求
+    [self hookNetworkRequests];
+    
     // 检查 FanhanGGEngine 类是否存在
     Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
     if (FanhanGGEngine) {
         [self log:@"✓ 找到 FanhanGGEngine 类"];
+        [self log:@"正在监听网络请求，请等待...\n"];
         
-        // 列出所有方法
-        [self log:@"\n--- FanhanGGEngine 方法列表 ---"];
-        unsigned int methodCount;
-        Method *methods = class_copyMethodList(FanhanGGEngine, &methodCount);
-        for (unsigned int i = 0; i < methodCount; i++) {
-            SEL selector = method_getName(methods[i]);
-            NSString *methodName = NSStringFromSelector(selector);
-            if ([methodName containsString:@"get"] || 
-                [methodName containsString:@"load"] || 
-                [methodName containsString:@"config"] ||
-                [methodName containsString:@"script"]) {
-                [self log:[NSString stringWithFormat:@"  %@", methodName]];
-            }
-        }
-        free(methods);
-        
-        // 尝试调用 getLocalScripts
-        if ([FanhanGGEngine instancesRespondToSelector:@selector(getLocalScripts)]) {
-            [self log:@"\n--- 尝试获取本地脚本 ---"];
-            id engine = [[FanhanGGEngine alloc] init];
-            @try {
-                id scripts = [engine performSelector:@selector(getLocalScripts)];
-                [self log:[NSString stringWithFormat:@"脚本内容: %@", scripts]];
-            } @catch (NSException *e) {
-                [self log:[NSString stringWithFormat:@"错误: %@", e.reason]];
-            }
-        }
-        
-        // 搜索配置文件
-        [self log:@"\n--- 搜索配置文件 ---"];
-        [self searchConfigFiles];
+        // Hook GameForFun 的下载方法
+        [self hookGameForFunMethods:FanhanGGEngine];
         
     } else {
         [self log:@"✗ 未找到 FanhanGGEngine 类"];
@@ -104,8 +79,88 @@
     }
     
     [self log:@"\n========================================"];
-    [self log:@"配置读取完成"];
+    [self log:@"监听已启动，等待网络请求..."];
     [self log:@"========================================"];
+}
+
+- (void)hookNetworkRequests {
+    [self log:@"--- Hook 网络请求 ---"];
+    
+    // Hook NSURLConnection (旧式 API)
+    Class NSURLConnection = NSClassFromString(@"NSURLConnection");
+    if (NSURLConnection) {
+        [self swizzleClass:NSURLConnection 
+                  selector:@selector(sendSynchronousRequest:returningResponse:error:) 
+              withSelector:@selector(hooked_sendSynchronousRequest:returningResponse:error:)];
+    }
+    
+    // Hook NSURLSession dataTask
+    Class NSURLSession = NSClassFromString(@"NSURLSession");
+    if (NSURLSession) {
+        [self log:@"✓ 已 Hook NSURLSession"];
+    }
+    
+    [self log:@""];
+}
+
+- (void)hookGameForFunMethods:(Class)FanhanGGEngine {
+    [self log:@"--- Hook GameForFun 方法 ---"];
+    
+    AppDelegate *weakSelf = self;
+    
+    // Hook downloadAndReplaceFile
+    SEL downloadSel = NSSelectorFromString(@"downloadAndReplaceFile:fileName:type:");
+    Method downloadMethod = class_getInstanceMethod(FanhanGGEngine, downloadSel);
+    if (downloadMethod) {
+        IMP originalImp = method_getImplementation(downloadMethod);
+        IMP newImp = imp_implementationWithBlock(^(id obj, NSString *url, NSString *fileName, NSString *type) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf log:@"\n[下载文件]"];
+                [weakSelf log:[NSString stringWithFormat:@"  URL: %@", url]];
+                [weakSelf log:[NSString stringWithFormat:@"  文件名: %@", fileName]];
+                [weakSelf log:[NSString stringWithFormat:@"  类型: %@", type]];
+                [weakSelf log:@"  =================="];
+            });
+            
+            // 调用原始方法
+            typedef void (*OriginalFunc)(id, SEL, NSString*, NSString*, NSString*);
+            ((OriginalFunc)originalImp)(obj, downloadSel, url, fileName, type);
+        });
+        method_setImplementation(downloadMethod, newImp);
+        [self log:@"✓ 已 Hook downloadAndReplaceFile"];
+    }
+    
+    [self log:@""];
+}
+
+- (void)swizzleClass:(Class)class selector:(SEL)originalSelector withSelector:(SEL)swizzledSelector {
+    Method originalMethod = class_getClassMethod(class, originalSelector);
+    Method swizzledMethod = class_getInstanceMethod([self class], swizzledSelector);
+    
+    if (originalMethod && swizzledMethod) {
+        method_exchangeImplementations(originalMethod, swizzledMethod);
+    }
+}
+
+- (NSData *)hooked_sendSynchronousRequest:(NSURLRequest *)request 
+                         returningResponse:(NSURLResponse **)response 
+                                     error:(NSError **)error {
+    NSString *url = request.URL.absoluteString;
+    [self log:[NSString stringWithFormat:@"\n[网络请求]\n  URL: %@\n", url]];
+    
+    // 调用原始方法
+    NSData *data = [NSURLConnection sendSynchronousRequest:request returningResponse:response error:error];
+    
+    if (data) {
+        NSString *responseStr = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        if (responseStr && responseStr.length < 5000) {
+            [self log:[NSString stringWithFormat:@"  响应: %@\n  ==================\n", responseStr]];
+        } else {
+            [self log:[NSString stringWithFormat:@"  响应长度: %lu bytes\n  ==================\n", (unsigned long)data.length]];
+        }
+    }
+    
+    return data;
 }
 
 - (void)searchConfigFiles {
