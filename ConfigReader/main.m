@@ -200,6 +200,26 @@
     if (FanhanGGEngine) {
         [self log:@"✓ 找到 FanhanGGEngine 类"];
         
+        // Hook setValue:forKey:withType: - 最重要的方法！
+        SEL setValueSel = NSSelectorFromString(@"setValue:forKey:withType:");
+        Method setValueMethod = class_getInstanceMethod(FanhanGGEngine, setValueSel);
+        if (setValueMethod) {
+            IMP originalImp = method_getImplementation(setValueMethod);
+            IMP newImp = imp_implementationWithBlock(^(id obj, id value, NSString *key, NSString *type) {
+                [weakSelf log:@"\n========== 捕获参数 =========="];
+                [weakSelf log:[NSString stringWithFormat:@"key: %@", key]];
+                [weakSelf log:[NSString stringWithFormat:@"value: %@", value]];
+                [weakSelf log:[NSString stringWithFormat:@"type: %@", type]];
+                [weakSelf log:@"==============================\n"];
+                
+                // 调用原始方法
+                typedef void (*OriginalFunc)(id, SEL, id, NSString*, NSString*);
+                ((OriginalFunc)originalImp)(obj, setValueSel, value, key, type);
+            });
+            method_setImplementation(setValueMethod, newImp);
+            [self log:@"✓ 已 Hook setValue:forKey:withType:"];
+        }
+        
         // Hook downloadAndReplaceFile
         SEL downloadSel = NSSelectorFromString(@"downloadAndReplaceFile:fileName:type:");
         Method downloadMethod = class_getInstanceMethod(FanhanGGEngine, downloadSel);
@@ -220,7 +240,8 @@
             [self log:@"✓ 已 Hook downloadAndReplaceFile"];
         }
         
-        [self log:@"正在监听网络请求，请稍候...\n"];
+        [self log:@"\n[*] 所有 Hook 已设置"];
+        [self log:@"[*] 请开启游戏功能，参数会显示在这里\n"];
     } else {
         [self log:@"✗ 未找到 FanhanGGEngine 类"];
         [self log:@"GameForFun.dylib 可能未注入\n"];
