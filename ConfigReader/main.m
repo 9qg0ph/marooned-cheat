@@ -136,27 +136,27 @@
     }
     
     // Hook NSData dataWithContentsOfURL
-    Class NSData = NSClassFromString(@"NSData");
-    if (NSData) {
-        Method method = class_getClassMethod(NSData, @selector(dataWithContentsOfURL:));
+    Class NSDataClass = NSClassFromString(@"NSData");
+    if (NSDataClass) {
+        Method method = class_getClassMethod(NSDataClass, @selector(dataWithContentsOfURL:));
         if (method) {
             IMP originalImp = method_getImplementation(method);
-            IMP newImp = imp_implementationWithBlock(^NSData*(NSURL *url) {
+            IMP newImp = imp_implementationWithBlock(^id(NSURL *url) {
                 [weakSelf log:[NSString stringWithFormat:@"\n[NSData 加载]"]];
                 [weakSelf log:[NSString stringWithFormat:@"URL: %@", url.absoluteString]];
                 
-                typedef NSData* (*OriginalFunc)(id, SEL, NSURL*);
-                NSData *data = ((OriginalFunc)originalImp)(NSData, @selector(dataWithContentsOfURL:), url);
+                typedef id (*OriginalFunc)(id, SEL, NSURL*);
+                id result = ((OriginalFunc)originalImp)(NSDataClass, @selector(dataWithContentsOfURL:), url);
                 
-                if (data && data.length < 5000) {
-                    NSString *str = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                if (result && [result length] < 5000) {
+                    NSString *str = [[NSString alloc] initWithData:result encoding:NSUTF8StringEncoding];
                     if (str) {
                         [weakSelf log:[NSString stringWithFormat:@"内容: %@", str]];
                     }
                 }
                 [weakSelf log:@"==================\n"];
                 
-                return data;
+                return result;
             });
             method_setImplementation(method, newImp);
             [self log:@"✓ 已 Hook NSData dataWithContentsOfURL"];
