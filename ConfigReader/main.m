@@ -205,15 +205,21 @@
         Method setValueMethod = class_getInstanceMethod(FanhanGGEngine, setValueSel);
         if (setValueMethod) {
             IMP originalImp = method_getImplementation(setValueMethod);
-            IMP newImp = imp_implementationWithBlock(^(id obj, id value, NSString *key, NSString *type) {
-                [weakSelf log:@"\n========== 捕获参数 =========="];
-                [weakSelf log:[NSString stringWithFormat:@"key: %@", key]];
-                [weakSelf log:[NSString stringWithFormat:@"value: %@", value]];
-                [weakSelf log:[NSString stringWithFormat:@"type: %@", type]];
-                [weakSelf log:@"==============================\n"];
+            IMP newImp = imp_implementationWithBlock(^void(id obj, id value, id key, id type) {
+                @try {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        [weakSelf log:@"\n========== 捕获参数 =========="];
+                        [weakSelf log:[NSString stringWithFormat:@"key: %@", key ?: @"(null)"]];
+                        [weakSelf log:[NSString stringWithFormat:@"value: %@", value ?: @"(null)"]];
+                        [weakSelf log:[NSString stringWithFormat:@"type: %@", type ?: @"(null)"]];
+                        [weakSelf log:@"==============================\n"];
+                    });
+                } @catch (NSException *e) {
+                    NSLog(@"Hook setValue 异常: %@", e);
+                }
                 
                 // 调用原始方法
-                typedef void (*OriginalFunc)(id, SEL, id, NSString*, NSString*);
+                typedef void (*OriginalFunc)(id, SEL, id, id, id);
                 ((OriginalFunc)originalImp)(obj, setValueSel, value, key, type);
             });
             method_setImplementation(setValueMethod, newImp);
