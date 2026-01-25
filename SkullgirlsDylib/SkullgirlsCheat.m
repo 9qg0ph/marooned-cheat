@@ -90,11 +90,20 @@ static void setGameValue(NSString *key, id value, NSString *type) {
         
         NSLog(@"[SGCheat] 调用 setValue - key:%@ value:%@ type:%@", key, value, type);
         
-        // 使用 performSelector 更安全
-        #pragma clang diagnostic push
-        #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-        [engine performSelector:setValueSel withObject:value withObject:key withObject:type];
-        #pragma clang diagnostic pop
+        // 使用 NSInvocation 调用（setValue:forKey:withType: 有3个参数）
+        NSMethodSignature *signature = [engine methodSignatureForSelector:setValueSel];
+        if (!signature) {
+            NSLog(@"[SGCheat] 无法获取方法签名");
+            return;
+        }
+        
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+        [invocation setTarget:engine];
+        [invocation setSelector:setValueSel];
+        [invocation setArgument:&value atIndex:2];
+        [invocation setArgument:&key atIndex:3];
+        [invocation setArgument:&type atIndex:4];
+        [invocation invoke];
         
         NSLog(@"[SGCheat] setValue 调用成功");
     } @catch (NSException *exception) {
