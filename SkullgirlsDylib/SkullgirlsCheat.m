@@ -256,15 +256,22 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     switch (sender.tag) {
         case 1: // 互秒
             @try {
-                NSString *key = @"hook_int";
-                NSNumber *value = isOn ? @999999999 : @0; // 开启时传 999999999，关闭时传 0
-                
-                NSLog(@"[SGCheat] 互秒开关 - %@", isOn ? @"开启" : @"关闭");
-                NSLog(@"[SGCheat] 参数: key=%@ value=%@ type=nil", key, value);
-                
-                setGameValue(key, value, nil);
-                
-                [self showAlert:isOn ? @"⚔️ 互秒已开启！" : @"⚔️ 互秒已关闭！"];
+                if (isOn) {
+                    // 只在开启时调用 setValue（关闭时不调用，因为 Frida 捕获不到关闭的参数）
+                    NSString *key = @"hook_int";
+                    NSNumber *value = @999999999;
+                    
+                    NSLog(@"[SGCheat] 互秒开关 - 开启");
+                    NSLog(@"[SGCheat] 参数: key=%@ value=%@ type=nil", key, value);
+                    
+                    setGameValue(key, value, nil);
+                    
+                    [self showAlert:@"⚔️ 互秒已开启！"];
+                } else {
+                    // 关闭时不调用 setValue，只提示用户
+                    NSLog(@"[SGCheat] 互秒开关 - 关闭（不调用 setValue）");
+                    [self showAlert:@"⚔️ 互秒已关闭！\n请重启游戏以完全禁用"];
+                }
             } @catch (NSException *exception) {
                 sender.on = !isOn; // 恢复开关状态
                 // 恢复保存的状态
