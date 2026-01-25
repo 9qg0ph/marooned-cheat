@@ -19,8 +19,9 @@ jobs:
       run: |
         cd ConfigReader
         
-        # 直接用 clang 编译
-        xcrun -sdk iphoneos clang -arch arm64 \
+        # 编译为可执行文件
+        clang -arch arm64 \
+          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
           -miphoneos-version-min=14.0 \
           -fobjc-arc \
           -framework UIKit \
@@ -32,6 +33,9 @@ jobs:
         mkdir -p build/ConfigReader.app
         cp ConfigReader build/ConfigReader.app/
         cp Info.plist build/ConfigReader.app/
+        
+        # 签名
+        codesign -f -s - build/ConfigReader.app/ConfigReader || true
         
         # 创建 Payload 目录
         mkdir -p Payload
