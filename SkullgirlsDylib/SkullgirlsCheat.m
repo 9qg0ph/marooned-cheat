@@ -3,16 +3,24 @@
 
 #pragma mark - GameForFun 引擎接口
 
-@interface FanhanGGEngine : NSObject
-+ (instancetype)sharedInstance;
-- (void)setValue:(id)value forKey:(NSString *)key withType:(NSString *)type;
-@end
-
-// 辅助函数：调用 GameForFun 设置参数
+// 辅助函数：调用 GameForFun 设置参数（运行时动态调用）
 static void setGameValue(NSString *key, id value, NSString *type) {
-    FanhanGGEngine *engine = [FanhanGGEngine sharedInstance];
-    if (engine) {
-        [engine setValue:value forKey:key withType:type];
+    Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
+    if (FanhanGGEngine) {
+        id engine = [FanhanGGEngine performSelector:@selector(sharedInstance)];
+        if (engine) {
+            SEL setValueSel = NSSelectorFromString(@"setValue:forKey:withType:");
+            if ([engine respondsToSelector:setValueSel]) {
+                NSMethodSignature *signature = [engine methodSignatureForSelector:setValueSel];
+                NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+                [invocation setTarget:engine];
+                [invocation setSelector:setValueSel];
+                [invocation setArgument:&value atIndex:2];
+                [invocation setArgument:&key atIndex:3];
+                [invocation setArgument:&type atIndex:4];
+                [invocation invoke];
+            }
+        }
     }
 }
 
