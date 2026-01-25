@@ -63,22 +63,42 @@ static void showDisclaimerAlert(void) {
 
 // 辅助函数：调用 GameForFun 设置参数（运行时动态调用）
 static void setGameValue(NSString *key, id value, NSString *type) {
-    Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
-    if (FanhanGGEngine) {
-        id engine = [FanhanGGEngine performSelector:@selector(sharedInstance)];
-        if (engine) {
-            SEL setValueSel = NSSelectorFromString(@"setValue:forKey:withType:");
-            if ([engine respondsToSelector:setValueSel]) {
-                NSMethodSignature *signature = [engine methodSignatureForSelector:setValueSel];
-                NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
-                [invocation setTarget:engine];
-                [invocation setSelector:setValueSel];
-                [invocation setArgument:&value atIndex:2];
-                [invocation setArgument:&key atIndex:3];
-                [invocation setArgument:&type atIndex:4];
-                [invocation invoke];
-            }
+    @try {
+        Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
+        if (!FanhanGGEngine) {
+            NSLog(@"[SGCheat] FanhanGGEngine 类不存在");
+            return;
         }
+        
+        SEL sharedInstanceSel = NSSelectorFromString(@"sharedInstance");
+        if (![FanhanGGEngine respondsToSelector:sharedInstanceSel]) {
+            NSLog(@"[SGCheat] FanhanGGEngine 不响应 sharedInstance");
+            return;
+        }
+        
+        id engine = [FanhanGGEngine performSelector:sharedInstanceSel];
+        if (!engine) {
+            NSLog(@"[SGCheat] 无法获取 FanhanGGEngine 实例");
+            return;
+        }
+        
+        SEL setValueSel = NSSelectorFromString(@"setValue:forKey:withType:");
+        if (![engine respondsToSelector:setValueSel]) {
+            NSLog(@"[SGCheat] Engine 不响应 setValue:forKey:withType:");
+            return;
+        }
+        
+        NSLog(@"[SGCheat] 调用 setValue - key:%@ value:%@ type:%@", key, value, type);
+        
+        // 使用 performSelector 更安全
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        [engine performSelector:setValueSel withObject:value withObject:key withObject:type];
+        #pragma clang diagnostic pop
+        
+        NSLog(@"[SGCheat] setValue 调用成功");
+    } @catch (NSException *exception) {
+        NSLog(@"[SGCheat] setGameValue 异常: %@", exception);
     }
 }
 
