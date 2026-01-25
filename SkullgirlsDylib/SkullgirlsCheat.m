@@ -1,6 +1,64 @@
 // 骷髅少女修改器 - SkullgirlsCheat.m
 #import <UIKit/UIKit.h>
 
+#pragma mark - 全局变量
+
+@class SGMenuView;
+static UIButton *g_floatButton = nil;
+static SGMenuView *g_menuView = nil;
+
+#pragma mark - 函数前向声明
+
+static void showMenu(void);
+
+#pragma mark - 版权保护
+
+// 解密版权字符串（防止二进制修改）
+static NSString* getCopyrightText(void) {
+    NSString *part1 = @"©";
+    NSString *part2 = @" 2026";
+    NSString *part3 = @"  ";
+    NSString *part4 = @"𝐈𝐎𝐒𝐃𝐊";
+    NSString *part5 = @" 科技虎";
+    
+    return [NSString stringWithFormat:@"%@%@%@%@%@", part1, part2, part3, part4, part5];
+}
+
+#pragma mark - 免责声明管理
+
+// 检查是否已同意免责声明
+static BOOL hasAgreedToDisclaimer(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    return [defaults boolForKey:@"SGCheat_DisclaimerAgreed"];
+}
+
+// 保存免责声明同意状态
+static void setDisclaimerAgreed(BOOL agreed) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setBool:agreed forKey:@"SGCheat_DisclaimerAgreed"];
+    [defaults synchronize];
+}
+
+// 显示免责声明弹窗
+static void showDisclaimerAlert(void) {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"⚠️ 免责声明" 
+        message:@"本工具仅供技术研究与学习，严禁用于商业用途及非法途径。\n\n使用本工具修改游戏可能违反游戏服务条款，用户需自行承担一切风险和责任。\n\n严禁倒卖、传播或用于牟利，否则后果自负。\n\n继续使用即表示您已阅读并同意本声明。\n\n是否同意并继续使用？" 
+        preferredStyle:UIAlertControllerStyleAlert];
+    
+    [alert addAction:[UIAlertAction actionWithTitle:@"不同意" style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+        exit(0);
+    }]];
+    
+    [alert addAction:[UIAlertAction actionWithTitle:@"同意" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        setDisclaimerAgreed(YES);
+        showMenu();
+    }]];
+    
+    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+    while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
+    [rootVC presentViewController:alert animated:YES completion:nil];
+}
+
 #pragma mark - GameForFun 引擎接口
 
 // 辅助函数：调用 GameForFun 设置参数（运行时动态调用）
@@ -23,12 +81,6 @@ static void setGameValue(NSString *key, id value, NSString *type) {
         }
     }
 }
-
-#pragma mark - 全局变量
-
-@class SGMenuView;
-static UIButton *g_floatButton = nil;
-static SGMenuView *g_menuView = nil;
 
 #pragma mark - 菜单视图
 
@@ -92,15 +144,27 @@ static SGMenuView *g_menuView = nil;
     [self.contentView addSubview:info];
     y += 30;
     
+    // 免责声明
+    UITextView *disclaimer = [[UITextView alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 60)];
+    disclaimer.text = @"免责声明：本工具仅供技术研究与学习，严禁用于商业用途及非法途径。使用本工具修改游戏可能违反游戏服务条款，用户需自行承担一切风险和责任。严禁倒卖、传播或用于牟利，否则后果自负。";
+    disclaimer.font = [UIFont systemFontOfSize:12];
+    disclaimer.textColor = [UIColor lightGrayColor];
+    disclaimer.backgroundColor = [UIColor colorWithWhite:0.97 alpha:1];
+    disclaimer.layer.cornerRadius = 8;
+    disclaimer.editable = NO;
+    disclaimer.scrollEnabled = YES;
+    disclaimer.showsVerticalScrollIndicator = YES;
+    [self.contentView addSubview:disclaimer];
+    y += 70;
+    
     // 提示
-    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 40)];
-    tip.text = @"注意：无敌功能暂未捕获到参数\n仅互秒功能可用";
+    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
+    tip.text = @"注意：无敌功能暂未捕获到参数";
     tip.font = [UIFont systemFontOfSize:12];
-    tip.textColor = [UIColor redColor];
+    tip.textColor = [UIColor colorWithRed:0.8 green:0.2 blue:0.4 alpha:1];
     tip.textAlignment = NSTextAlignmentCenter;
-    tip.numberOfLines = 2;
     [self.contentView addSubview:tip];
-    y += 48;
+    y += 28;
     
     // 按钮
     UIButton *btn1 = [self createButtonWithTitle:@"⚔️ 互秒" tag:1];
@@ -144,8 +208,17 @@ static SGMenuView *g_menuView = nil;
 - (void)buttonTapped:(UIButton *)sender {
     switch (sender.tag) {
         case 1: // 互秒
-            setGameValue(@"hook_int", @999999999, @"Number");
-            [self showAlert:@"⚔️ 互秒已开启！"];
+            @try {
+                // 使用 NSNumber 包装数值
+                NSNumber *value = @999999999;
+                NSString *key = @"hook_int";
+                NSString *type = @"Number";
+                
+                setGameValue(key, value, type);
+                [self showAlert:@"⚔️ 互秒已开启！"];
+            } @catch (NSException *exception) {
+                [self showAlert:[NSString stringWithFormat:@"❌ 开启失败: %@", exception.reason]];
+            }
             break;
         case 2: // 无敌（未实现）
             [self showAlert:@"🛡️ 无敌功能暂未捕获到参数\n请等待后续更新"];
@@ -203,6 +276,15 @@ static void showMenu(void) {
     [keyWindow addSubview:g_menuView];
 }
 
+// 处理悬浮按钮点击（首次检查免责声明）
+static void handleFloatButtonTap(void) {
+    if (!hasAgreedToDisclaimer()) {
+        showDisclaimerAlert();
+    } else {
+        showMenu();
+    }
+}
+
 static void handlePan(UIPanGestureRecognizer *pan) {
     UIWindow *keyWindow = getKeyWindow();
     if (!keyWindow || !g_floatButton) return;
@@ -219,6 +301,43 @@ static void handlePan(UIPanGestureRecognizer *pan) {
     
     g_floatButton.frame = frame;
     [pan setTranslation:CGPointZero inView:keyWindow];
+}
+
+// 解密图片URL（防止二进制修改）
+static NSString* getIconURL(void) {
+    // Base64编码: "https://iosdk.cn/tu/2023/04/17/p9CjtUg1.png"
+    const char *encoded = "aHR0cHM6Ly9pb3Nkay5jbi90dS8yMDIzLzA0LzE3L3A5Q2p0VWcxLnBuZw==";
+    NSData *data = [[NSData alloc] initWithBase64EncodedString:[NSString stringWithUTF8String:encoded] options:0];
+    NSString *decoded = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    
+    // 动态拼接备份（增加混淆）
+    NSString *protocol = @"https://";
+    NSString *domain = @"iosdk.cn";
+    NSString *path1 = @"/tu/2023";
+    NSString *path2 = @"/04/17/";
+    NSString *filename = @"p9CjtUg1.png";
+    
+    // 验证解码是否成功，失败则使用拼接
+    if (decoded && decoded.length > 0) {
+        return decoded;
+    }
+    return [NSString stringWithFormat:@"%@%@%@%@%@", protocol, domain, path1, path2, filename];
+}
+
+static void loadIconImage(void) {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSURL *url = [NSURL URLWithString:getIconURL()];
+        NSData *data = [NSData dataWithContentsOfURL:url];
+        UIImage *image = [UIImage imageWithData:data];
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (image && g_floatButton) {
+                [g_floatButton setTitle:@"" forState:UIControlStateNormal];
+                [g_floatButton setBackgroundImage:image forState:UIControlStateNormal];
+                g_floatButton.clipsToBounds = YES;
+            }
+        });
+    });
 }
 
 static void setupFloatingButton(void) {
@@ -244,11 +363,13 @@ static void setupFloatingButton(void) {
         [g_floatButton addGestureRecognizer:pan];
         
         [keyWindow addSubview:g_floatButton];
+        
+        loadIconImage();
     });
 }
 
 @implementation NSValue (SGCheat)
-+ (void)sg_showMenu { showMenu(); }
++ (void)sg_showMenu { handleFloatButtonTap(); }
 + (void)sg_handlePan:(UIPanGestureRecognizer *)pan { handlePan(pan); }
 @end
 
