@@ -15,6 +15,8 @@ GameForFun.dylib 是一个 iOS 游戏修改插件，功能脚本从云端加载�
 - 有效的 VIP 账号（能正常显示功能菜单）
 - GitHub 账号（用于编译 dylib）
 
+Frida已安装到这个路径"C:\Users\Administrator\AppData\Roaming\Python\Python38\Scripts\frida.exe" 
+
 ### 连接设备
 ```bash
 python -m frida_tools.ps -U

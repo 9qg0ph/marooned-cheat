@@ -1,0 +1,45 @@
+name: Build Test App IPA
+
+on:
+  push:
+    paths:
+      - '元气骑士测试App/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Build Test App
+      run: |
+        cd 元气骑士测试App
+        
+        # 编译应用
+        clang -arch arm64 \
+          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+          -miphoneos-version-min=14.0 \
+          -framework UIKit \
+          -framework Foundation \
+          -fobjc-arc \
+          -o SoulKnightTest \
+          main.m
+        
+        # 创建应用包结构
+        mkdir -p Payload/SoulKnightTest.app
+        
+        # 复制文件
+        cp SoulKnightTest Payload/SoulKnightTest.app/
+        cp Info.plist Payload/SoulKnightTest.app/
+        
+        # 签名（自签名）
+        codesign -f -s - Payload/SoulKnightTest.app/SoulKnightTest || true
+        
+        # 打包成 IPA
+        zip -r SoulKnightTest.ipa Payload
+        
+    - uses: actions/upload-artifact@v4
+      with:
+        name: SoulKnightTest-IPA
+        path: 元气骑士测试App/SoulKnightTest.ipa
