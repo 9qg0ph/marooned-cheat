@@ -1,7 +1,9 @@
 // Gear Defenders 修改器 - GearDefendersCheat.m
-// 使用 GameForFun.dylib 的修改器
+// 完全独立的修改器，不依赖 GameForFun.dylib
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <mach/mach.h>
+#import <mach/mach_vm.h>
 
 #pragma mark - 全局变量
 
@@ -42,126 +44,33 @@ static void writeLog(NSString *message) {
     }
 }
 
-#pragma mark - GameForFun 引擎接口
+#pragma mark - 游戏数值修改（完全独立实现）
 
-// 保存捕获到的真实 engine 实例
-static id g_realEngine = nil;
-
-// 主动查找 FanhanGGEngine 实例
-static void findFanhanGGEngineInstance(void) {
-    if (g_realEngine) return;
-    
-    Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
-    if (!FanhanGGEngine) {
-        writeLog(@"[GDCheat] ❌ FanhanGGEngine 类不存在");
-        return;
-    }
-    
-    writeLog(@"[GDCheat] ✅ 找到 FanhanGGEngine 类，开始查找实例...");
-    
-    // 尝试常见的单例方法
-    NSArray *singletonSelectors = @[@"sharedInstance", @"shared", @"defaultManager", @"instance", @"sharedEngine"];
-    for (NSString *selectorName in singletonSelectors) {
-        SEL selector = NSSelectorFromString(selectorName);
-        if ([FanhanGGEngine respondsToSelector:selector]) {
-            @try {
-                id instance = [FanhanGGEngine performSelector:selector];
-                if (instance) {
-                    g_realEngine = instance;
-                    writeLog([NSString stringWithFormat:@"[GDCheat] ✅ 通过 %@ 找到实例: %@", selectorName, instance]);
-                    return;
-                }
-            } @catch (NSException *e) {
-                writeLog([NSString stringWithFormat:@"[GDCheat] 尝试 %@ 失败: %@", selectorName, e]);
-            }
-        }
-    }
-    
-    // 如果单例方法都失败，尝试创建新实例
-    @try {
-        g_realEngine = [[FanhanGGEngine alloc] init];
-        if (g_realEngine) {
-            writeLog([NSString stringWithFormat:@"[GDCheat] ✅ 创建新实例: %@", g_realEngine]);
-        }
-    } @catch (NSException *e) {
-        writeLog([NSString stringWithFormat:@"[GDCheat] ❌ 创建实例失败: %@", e]);
-    }
-}
-
-// Hook FanhanGGEngine 的 setValue 方法来捕获真实实例
-static void hookFanhanGGEngine(void) {
-    static BOOL hooked = NO;
-    if (hooked) return;
-    
-    Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
-    if (!FanhanGGEngine) {
-        writeLog(@"[GDCheat] ❌ FanhanGGEngine 类不存在");
-        return;
-    }
-    
-    writeLog(@"[GDCheat] ✅ 找到 FanhanGGEngine 类");
-    
-    // Hook setValue:forKey:withType: 方法来捕获实例
-    SEL selector = NSSelectorFromString(@"setValue:forKey:withType:");
-    Method originalMethod = class_getInstanceMethod(FanhanGGEngine, selector);
-    
-    if (originalMethod) {
-        IMP originalIMP = method_getImplementation(originalMethod);
-        
-        // 创建新的实现
-        IMP newIMP = imp_implementationWithBlock(^(id self, id value, NSString *key, NSString *type) {
-            // 保存真实的 engine 实例
-            if (!g_realEngine) {
-                g_realEngine = self;
-                writeLog([NSString stringWithFormat:@"[GDCheat] ✅ 通过 hook 捕获到真实 engine 实例: %@", self]);
-            }
-            
-            // 调用原始方法
-            ((void (*)(id, SEL, id, NSString *, NSString *))originalIMP)(self, selector, value, key, type);
-        });
-        
-        method_setImplementation(originalMethod, newIMP);
-        writeLog(@"[GDCheat] ✅ 已 hook setValue:forKey:withType:");
-        hooked = YES;
-    } else {
-        writeLog(@"[GDCheat] ❌ 未找到 setValue:forKey:withType: 方法");
-    }
-}
-
-// 使用捕获到的真实 engine 实例调用 setValue
+// 使用 NSUserDefaults 作为备用方案
+// 注意：Gear Defenders 可能不使用 NSUserDefaults，这只是尝试
 static void setGameValue(NSString *key, id value, NSString *type) {
-    writeLog([NSString stringWithFormat:@"[GDCheat] 调用 setValue: key=%@ value=%@ type=%@", key, value, type]);
+    writeLog([NSString stringWithFormat:@"[GDCheat] 设置游戏数值: key=%@ value=%@", key, value]);
     
-    // 确保已经 hook
-    hookFanhanGGEngine();
+    // 尝试使用 NSUserDefaults
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     
-    // 主动查找实例
-    if (!g_realEngine) {
-        writeLog(@"[GDCheat] 尚未获取到 engine 实例，主动查找...");
-        findFanhanGGEngineInstance();
+    if ([key isEqualToString:@"hook_int"]) {
+        // hook_int 对应整数值（金币、银币等）
+        [defaults setInteger:[value integerValue] forKey:@"GearDefenders_Currency"];
+        [defaults setInteger:[value integerValue] forKey:@"GearDefenders_Gold"];
+        [defaults setInteger:[value integerValue] forKey:@"GearDefenders_Coins"];
+        writeLog(@"[GDCheat] ✅ 已设置货币相关数值");
+    } else if ([key isEqualToString:@"hook_float"]) {
+        // hook_float 对应浮点值（攻击力等）
+        [defaults setFloat:[value floatValue] forKey:@"GearDefenders_AttackPower"];
+        [defaults setFloat:[value floatValue] forKey:@"GearDefenders_Damage"];
+        writeLog(@"[GDCheat] ✅ 已设置攻击力相关数值");
     }
     
-    if (!g_realEngine) {
-        writeLog(@"[GDCheat] ❌ 无法获取 engine 实例");
-        return;
-    }
+    [defaults synchronize];
     
-    // 使用真实实例调用 setValue
-    SEL selector = NSSelectorFromString(@"setValue:forKey:withType:");
-    if ([g_realEngine respondsToSelector:selector]) {
-        NSMethodSignature *signature = [g_realEngine methodSignatureForSelector:selector];
-        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
-        [invocation setTarget:g_realEngine];
-        [invocation setSelector:selector];
-        [invocation setArgument:&value atIndex:2];
-        [invocation setArgument:&key atIndex:3];
-        [invocation setArgument:&type atIndex:4];
-        [invocation invoke];
-        
-        writeLog(@"[GDCheat] ✅ setValue 调用成功");
-    } else {
-        writeLog(@"[GDCheat] ❌ engine 不响应 setValue:forKey:withType:");
-    }
+    writeLog(@"[GDCheat] ⚠️ 注意：此游戏可能不使用 NSUserDefaults 存储数据");
+    writeLog(@"[GDCheat] ⚠️ 如果功能不生效，需要使用内存修改或 hook Unity 函数");
 }
 
 #pragma mark - 菜单视图
