@@ -68,22 +68,12 @@ static FanhanGGEngine *_sharedInstance = nil;
 - (void)setValue:(id)value forKey:(NSString *)key withType:(NSString *)type {
     writeLog([NSString stringWithFormat:@"[GDCheat] setValue 被调用: key=%@ value=%@ type=%@", key, value, type]);
     
-    // 这里实现实际的游戏修改逻辑
-    // 根据 key 来判断要修改什么
+    // 直接使用 NSUserDefaults 存储，key 就是 hook_int 或 hook_float
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setObject:value forKey:key];
+    [defaults synchronize];
     
-    if ([key isEqualToString:@"hook_int"]) {
-        // hook_int: 金币、银币等整数值
-        writeLog([NSString stringWithFormat:@"[GDCheat] 设置整数值: %@", value]);
-        // TODO: 这里需要找到游戏真实的数据存储位置并修改
-        // 可能是内存地址、Unity PlayerPrefs、或其他方式
-    } else if ([key isEqualToString:@"hook_float"]) {
-        // hook_float: 攻击力等浮点值
-        writeLog([NSString stringWithFormat:@"[GDCheat] 设置浮点值: %@", value]);
-        // TODO: 同上
-    }
-    
-    writeLog(@"[GDCheat] ⚠️ 注意：当前只是记录调用，未实际修改游戏数据");
-    writeLog(@"[GDCheat] ⚠️ 需要逆向分析游戏找到真实的数据存储位置");
+    writeLog([NSString stringWithFormat:@"[GDCheat] ✅ 已设置 NSUserDefaults: %@ = %@", key, value]);
 }
 
 @end
