@@ -97,6 +97,47 @@ static void writeLog(NSString *message) {
 // 保存捕获到的真实 engine 实例
 static id g_realEngine = nil;
 
+// 主动查找 FanhanGGEngine 实例
+static void findFanhanGGEngineInstance(void) {
+    if (g_realEngine) return;
+    
+    Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
+    if (!FanhanGGEngine) {
+        writeLog(@"[SGCheat] ❌ FanhanGGEngine 类不存在");
+        return;
+    }
+    
+    writeLog(@"[SGCheat] ✅ 找到 FanhanGGEngine 类，开始查找实例...");
+    
+    // 尝试常见的单例方法
+    NSArray *singletonSelectors = @[@"sharedInstance", @"shared", @"defaultManager", @"instance", @"sharedEngine"];
+    for (NSString *selectorName in singletonSelectors) {
+        SEL selector = NSSelectorFromString(selectorName);
+        if ([FanhanGGEngine respondsToSelector:selector]) {
+            @try {
+                id instance = [FanhanGGEngine performSelector:selector];
+                if (instance) {
+                    g_realEngine = instance;
+                    writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 通过 %@ 找到实例: %@", selectorName, instance]);
+                    return;
+                }
+            } @catch (NSException *e) {
+                writeLog([NSString stringWithFormat:@"[SGCheat] 尝试 %@ 失败: %@", selectorName, e]);
+            }
+        }
+    }
+    
+    // 如果单例方法都失败，尝试创建新实例
+    @try {
+        g_realEngine = [[FanhanGGEngine alloc] init];
+        if (g_realEngine) {
+            writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 创建新实例: %@", g_realEngine]);
+        }
+    } @catch (NSException *e) {
+        writeLog([NSString stringWithFormat:@"[SGCheat] ❌ 创建实例失败: %@", e]);
+    }
+}
+
 // Hook FanhanGGEngine 的 setValue 方法来捕获真实实例
 static void hookFanhanGGEngine(void) {
     static BOOL hooked = NO;
@@ -122,7 +163,7 @@ static void hookFanhanGGEngine(void) {
             // 保存真实的 engine 实例
             if (!g_realEngine) {
                 g_realEngine = self;
-                writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 捕获到真实 engine 实例: %@", self]);
+                writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 通过 hook 捕获到真实 engine 实例: %@", self]);
             }
             
             // 调用原始方法
@@ -144,19 +185,14 @@ static void setGameValue(NSString *key, id value, NSString *type) {
     // 确保已经 hook
     hookFanhanGGEngine();
     
-    // 如果还没有捕获到实例，等待一下
+    // 主动查找实例
     if (!g_realEngine) {
-        writeLog(@"[SGCheat] ⚠️ 尚未捕获到 engine 实例，尝试触发...");
-        
-        // 尝试通过 NSNotification 触发 GameForFun 的初始化
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"GameForFunInit" object:nil];
-        
-        // 等待一小段时间
-        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+        writeLog(@"[SGCheat] 尚未获取到 engine 实例，主动查找...");
+        findFanhanGGEngineInstance();
     }
     
     if (!g_realEngine) {
-        writeLog(@"[SGCheat] ❌ 无法获取 engine 实例，请先打开 GameForFun 菜单");
+        writeLog(@"[SGCheat] ❌ 无法获取 engine 实例");
         return;
     }
     
