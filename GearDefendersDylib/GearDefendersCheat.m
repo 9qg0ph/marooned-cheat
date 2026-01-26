@@ -90,58 +90,103 @@ static void setGameValue(NSString *key, id value, NSString *type) {
 @implementation GDMenuView
 
 - (instancetype)initWithFrame:(CGRect)frame {
-    if (self = [super initWithFrame:frame]) {
-        self.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.5];
-        
-        // 点击背景关闭
-        UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(hide)];
-        [self addGestureRecognizer:tap];
-        
-        [self setupContentView];
+    self = [super initWithFrame:frame];
+    if (self) {
+        [self setupUI];
     }
     return self;
 }
 
-- (void)setupContentView {
-    self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 300, 400)];
-    self.contentView.backgroundColor = [UIColor whiteColor];
-    self.contentView.layer.cornerRadius = 15;
-    self.contentView.center = self.center;
+- (void)setupUI {
+    self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
+    
+    CGFloat contentHeight = 400;
+    CGFloat contentWidth = 280;
+    CGFloat viewWidth = self.bounds.size.width;
+    CGFloat viewHeight = self.bounds.size.height;
+    
+    self.contentView = [[UIView alloc] initWithFrame:CGRectMake(
+        (viewWidth - contentWidth) / 2,
+        (viewHeight - contentHeight) / 2,
+        contentWidth, contentHeight
+    )];
+    self.contentView.backgroundColor = [UIColor colorWithWhite:1 alpha:0.95];
+    self.contentView.layer.cornerRadius = 16;
+    self.contentView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
     [self addSubview:self.contentView];
     
-    // 标题
-    UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 20, 300, 30)];
-    titleLabel.text = @"⚙️ Gear Defenders 修改器";
-    titleLabel.textAlignment = NSTextAlignmentCenter;
-    titleLabel.font = [UIFont boldSystemFontOfSize:18];
-    [self.contentView addSubview:titleLabel];
-    
-    // 功能开关
-    CGFloat yOffset = 70;
-    [self addSwitchWithTitle:@"💰 无限货币" tag:1 yOffset:yOffset];
-    yOffset += 60;
-    [self addSwitchWithTitle:@"🛡️ 无敌-开局前开启" tag:2 yOffset:yOffset];
-    yOffset += 60;
-    [self addSwitchWithTitle:@"💎 无限银币-开局前开启" tag:3 yOffset:yOffset];
-    yOffset += 60;
-    [self addSwitchWithTitle:@"⚔️ 英雄互秒" tag:4 yOffset:yOffset];
-    
     // 关闭按钮
-    UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    closeButton.frame = CGRectMake(100, 350, 100, 40);
-    [closeButton setTitle:@"关闭" forState:UIControlStateNormal];
+    UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    closeButton.frame = CGRectMake(contentWidth - 40, 0, 40, 40);
+    closeButton.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1];
+    closeButton.layer.cornerRadius = 20;
+    [closeButton setTitle:@"✕" forState:UIControlStateNormal];
+    [closeButton setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
+    closeButton.titleLabel.font = [UIFont boldSystemFontOfSize:18];
     [closeButton addTarget:self action:@selector(hide) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:closeButton];
+    
+    // 标题
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(20, 5, contentWidth - 60, 30)];
+    title.text = @"⚙️ Gear Defenders";
+    title.font = [UIFont boldSystemFontOfSize:20];
+    title.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
+    title.textAlignment = NSTextAlignmentCenter;
+    [self.contentView addSubview:title];
+    
+    CGFloat y = 45;
+    
+    // 学习提示
+    UILabel *info = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
+    info.text = @"🎮 资源仅供学习使用";
+    info.font = [UIFont systemFontOfSize:14];
+    info.textColor = [UIColor grayColor];
+    info.textAlignment = NSTextAlignmentCenter;
+    [self.contentView addSubview:info];
+    y += 30;
+    
+    // 免责声明
+    UITextView *disclaimer = [[UITextView alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 60)];
+    disclaimer.text = @"免责声明：本工具仅供技术研究与学习，严禁用于商业用途。使用本工具修改游戏可能违反游戏服务条款，用户需自行承担一切风险和责任。";
+    disclaimer.font = [UIFont systemFontOfSize:12];
+    disclaimer.textColor = [UIColor lightGrayColor];
+    disclaimer.backgroundColor = [UIColor colorWithWhite:0.97 alpha:1];
+    disclaimer.layer.cornerRadius = 8;
+    disclaimer.editable = NO;
+    disclaimer.scrollEnabled = YES;
+    disclaimer.showsVerticalScrollIndicator = YES;
+    [self.contentView addSubview:disclaimer];
+    y += 70;
+    
+    // 提示
+    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectMake(20, y, contentWidth - 40, 20)];
+    tip.text = @"开启功能后进入游戏测试";
+    tip.font = [UIFont systemFontOfSize:12];
+    tip.textColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
+    tip.textAlignment = NSTextAlignmentCenter;
+    [self.contentView addSubview:tip];
+    y += 28;
+    
+    // 功能开关
+    [self addSwitchWithTitle:@"💰 无限货币" tag:1 yOffset:y];
+    y += 45;
+    [self addSwitchWithTitle:@"🛡️ 无敌-开局前开启" tag:2 yOffset:y];
+    y += 45;
+    [self addSwitchWithTitle:@"💎 无限银币-开局前开启" tag:3 yOffset:y];
+    y += 45;
+    [self addSwitchWithTitle:@"⚔️ 英雄互秒" tag:4 yOffset:y];
 }
 
 - (void)addSwitchWithTitle:(NSString *)title tag:(NSInteger)tag yOffset:(CGFloat)yOffset {
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20, yOffset, 200, 30)];
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(20, yOffset, 180, 30)];
     label.text = title;
-    label.font = [UIFont systemFontOfSize:16];
+    label.font = [UIFont systemFontOfSize:15];
+    label.textColor = [UIColor darkTextColor];
     [self.contentView addSubview:label];
     
-    UISwitch *switchControl = [[UISwitch alloc] initWithFrame:CGRectMake(220, yOffset, 60, 30)];
+    UISwitch *switchControl = [[UISwitch alloc] initWithFrame:CGRectMake(210, yOffset, 60, 30)];
     switchControl.tag = tag;
+    switchControl.onTintColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:1];
     [switchControl addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
     
     // 恢复开关状态
