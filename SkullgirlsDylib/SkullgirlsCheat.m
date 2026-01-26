@@ -1,9 +1,7 @@
 // 骷髅少女修改器 - SkullgirlsCheat.m
-// Unity 游戏修改器
+// 使用 GameForFun.dylib 的修改器
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
-#import <dlfcn.h>
-#import <mach-o/dyld.h>
 
 #pragma mark - 全局变量
 
@@ -94,97 +92,90 @@ static void writeLog(NSString *message) {
     }
 }
 
-#pragma mark - 内存修改
+#pragma mark - GameForFun 引擎接口
 
-#import <mach/mach.h>
-#import <mach/mach_vm.h>
+// 保存捕获到的真实 engine 实例
+static id g_realEngine = nil;
 
-// 内存搜索和修改
-static NSMutableArray *g_foundAddresses = nil;
-
-// 搜索内存中的整数值
-static void searchMemoryValue(int targetValue) {
-    writeLog([NSString stringWithFormat:@"[SGCheat] 开始搜索内存值: %d", targetValue]);
+// Hook FanhanGGEngine 的 setValue 方法来捕获真实实例
+static void hookFanhanGGEngine(void) {
+    static BOOL hooked = NO;
+    if (hooked) return;
     
-    if (!g_foundAddresses) {
-        g_foundAddresses = [NSMutableArray array];
-    }
-    [g_foundAddresses removeAllObjects];
-    
-    mach_port_t task = mach_task_self();
-    mach_vm_address_t address = 0;
-    mach_vm_size_t size = 0;
-    vm_region_basic_info_data_64_t info;
-    mach_msg_type_number_t count = VM_REGION_BASIC_INFO_COUNT_64;
-    mach_port_t object_name;
-    
-    int foundCount = 0;
-    
-    while (mach_vm_region(task, &address, &size, VM_REGION_BASIC_INFO_64,
-                          (vm_region_info_t)&info, &count, &object_name) == KERN_SUCCESS) {
-        
-        // 只搜索可读写的内存区域
-        if ((info.protection & VM_PROT_READ) && (info.protection & VM_PROT_WRITE)) {
-            unsigned char *buffer = malloc(size);
-            if (buffer) {
-                mach_vm_size_t readSize = size;
-                if (mach_vm_read_overwrite(task, address, size, (mach_vm_address_t)buffer, &readSize) == KERN_SUCCESS) {
-                    // 搜索整数值
-                    for (mach_vm_size_t i = 0; i < size - sizeof(int); i += 4) {
-                        int *valuePtr = (int *)(buffer + i);
-                        if (*valuePtr == targetValue) {
-                            NSNumber *addr = @(address + i);
-                            [g_foundAddresses addObject:addr];
-                            foundCount++;
-                            if (foundCount >= 1000) break; // 限制结果数量
-                        }
-                    }
-                }
-                free(buffer);
-            }
-        }
-        
-        if (foundCount >= 1000) break;
-        address += size;
-    }
-    
-    writeLog([NSString stringWithFormat:@"[SGCheat] 找到 %d 个地址", foundCount]);
-}
-
-// 修改内存中的值
-static void modifyMemoryValue(int newValue) {
-    if (!g_foundAddresses || g_foundAddresses.count == 0) {
-        writeLog(@"[SGCheat] ❌ 没有找到地址，请先搜索");
+    Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
+    if (!FanhanGGEngine) {
+        writeLog(@"[SGCheat] ❌ FanhanGGEngine 类不存在");
         return;
     }
     
-    writeLog([NSString stringWithFormat:@"[SGCheat] 修改 %lu 个地址的值为: %d", (unsigned long)g_foundAddresses.count, newValue]);
+    writeLog(@"[SGCheat] ✅ 找到 FanhanGGEngine 类");
     
-    mach_port_t task = mach_task_self();
-    int modifiedCount = 0;
+    // Hook setValue:forKey:withType: 方法来捕获实例
+    SEL selector = NSSelectorFromString(@"setValue:forKey:withType:");
+    Method originalMethod = class_getInstanceMethod(FanhanGGEngine, selector);
     
-    for (NSNumber *addrNum in g_foundAddresses) {
-        mach_vm_address_t address = [addrNum unsignedLongLongValue];
+    if (originalMethod) {
+        IMP originalIMP = method_getImplementation(originalMethod);
         
-        // 修改内存保护
-        mach_vm_protect(task, address, sizeof(int), FALSE, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
+        // 创建新的实现
+        IMP newIMP = imp_implementationWithBlock(^(id self, id value, NSString *key, NSString *type) {
+            // 保存真实的 engine 实例
+            if (!g_realEngine) {
+                g_realEngine = self;
+                writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 捕获到真实 engine 实例: %@", self]);
+            }
+            
+            // 调用原始方法
+            ((void (*)(id, SEL, id, NSString *, NSString *))originalIMP)(self, selector, value, key, type);
+        });
         
-        // 写入新值
-        if (mach_vm_write(task, address, (vm_offset_t)&newValue, sizeof(int)) == KERN_SUCCESS) {
-            modifiedCount++;
-        }
+        method_setImplementation(originalMethod, newIMP);
+        writeLog(@"[SGCheat] ✅ 已 hook setValue:forKey:withType:");
+        hooked = YES;
+    } else {
+        writeLog(@"[SGCheat] ❌ 未找到 setValue:forKey:withType: 方法");
     }
-    
-    writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 成功修改 %d 个地址", modifiedCount]);
 }
 
-// 简化的游戏数值设置（用于UI调用）
+// 使用捕获到的真实 engine 实例调用 setValue
 static void setGameValue(NSString *key, id value, NSString *type) {
-    writeLog([NSString stringWithFormat:@"[SGCheat] 内存修改模式 - key=%@ value=%@", key, value]);
+    writeLog([NSString stringWithFormat:@"[SGCheat] 调用 setValue: key=%@ value=%@ type=%@", key, value, type]);
     
-    // 这个函数现在只是一个占位符
-    // 实际的修改通过 UI 中的内存搜索和修改完成
-    writeLog(@"[SGCheat] ⚠️ 请使用菜单中的内存搜索功能");
+    // 确保已经 hook
+    hookFanhanGGEngine();
+    
+    // 如果还没有捕获到实例，等待一下
+    if (!g_realEngine) {
+        writeLog(@"[SGCheat] ⚠️ 尚未捕获到 engine 实例，尝试触发...");
+        
+        // 尝试通过 NSNotification 触发 GameForFun 的初始化
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"GameForFunInit" object:nil];
+        
+        // 等待一小段时间
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+    }
+    
+    if (!g_realEngine) {
+        writeLog(@"[SGCheat] ❌ 无法获取 engine 实例，请先打开 GameForFun 菜单");
+        return;
+    }
+    
+    // 使用真实实例调用 setValue
+    SEL selector = NSSelectorFromString(@"setValue:forKey:withType:");
+    if ([g_realEngine respondsToSelector:selector]) {
+        NSMethodSignature *signature = [g_realEngine methodSignatureForSelector:selector];
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+        [invocation setTarget:g_realEngine];
+        [invocation setSelector:selector];
+        [invocation setArgument:&value atIndex:2];
+        [invocation setArgument:&key atIndex:3];
+        [invocation setArgument:&type atIndex:4];
+        [invocation invoke];
+        
+        writeLog(@"[SGCheat] ✅ setValue 调用成功");
+    } else {
+        writeLog(@"[SGCheat] ❌ engine 不响应 setValue:forKey:withType:");
+    }
 }
 
 #pragma mark - 菜单视图
@@ -337,17 +328,14 @@ static void setGameValue(NSString *key, id value, NSString *type) {
                 if (isOn) {
                     writeLog(@"[SGCheat] 互秒开关 - 开启");
                     
-                    // 使用内存修改
-                    // 搜索当前攻击力值（假设初始值为 100）
-                    searchMemoryValue(100);
-                    // 修改为超高攻击力
-                    modifyMemoryValue(999999999);
+                    // 使用 Frida 捕获到的参数
+                    setGameValue(@"hook_int", @999999999, nil);
                     
-                    [self showAlert:@"⚔️ 互秒已开启！\n已使用内存修改\n如果不生效，请:\n1. 查看当前攻击力数值\n2. 重新搜索该数值\n3. 攻击一次后再搜索\n日志: Documents/SGCheat_Log.txt"];
+                    [self showAlert:@"⚔️ 互秒已开启！\n使用参数: hook_int=999999999\n日志: Documents/SGCheat_Log.txt\n请进入战斗测试"];
                 } else {
                     writeLog(@"[SGCheat] 互秒开关 - 关闭");
-                    modifyMemoryValue(100);
-                    [self showAlert:@"⚔️ 互秒已关闭！\n请重启游戏以完全恢复"];
+                    setGameValue(@"hook_int", @1, nil);
+                    [self showAlert:@"⚔️ 互秒已关闭！"];
                 }
             } @catch (NSException *exception) {
                 writeLog([NSString stringWithFormat:@"[SGCheat] 互秒开关异常: %@", exception]);
@@ -361,17 +349,13 @@ static void setGameValue(NSString *key, id value, NSString *type) {
             @try {
                 if (isOn) {
                     writeLog(@"[SGCheat] 无敌开关 - 开启");
-                    
-                    // 使用内存修改
-                    // 搜索当前血量值
-                    searchMemoryValue(1000); // 假设初始血量
-                    modifyMemoryValue(999999999);
-                    
-                    [self showAlert:@"🛡️ 无敌已开启！\n已使用内存修改"];
+                    // 无敌功能的参数还未捕获
+                    [self showAlert:@"🛡️ 无敌功能暂未实现\n需要用 Frida 捕获参数"];
+                    sender.on = NO;
+                    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:stateKey];
+                    [[NSUserDefaults standardUserDefaults] synchronize];
                 } else {
                     writeLog(@"[SGCheat] 无敌开关 - 关闭");
-                    modifyMemoryValue(1000);
-                    [self showAlert:@"🛡️ 无敌已关闭！"];
                 }
             } @catch (NSException *exception) {
                 writeLog([NSString stringWithFormat:@"[SGCheat] 无敌开关异常: %@", exception]);
