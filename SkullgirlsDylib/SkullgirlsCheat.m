@@ -1,6 +1,5 @@
 // 骷髅少女修改器 - SkullgirlsCheat.m
-#import <UIKit/UIKit.h>
-#import <Foundation/Foundation.h>
+// 完全独立的 dylib，不依赖 GameForFun
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
@@ -13,6 +12,7 @@ static SGMenuView *g_menuView = nil;
 #pragma mark - 函数前向声明
 
 static void showMenu(void);
+static void writeLog(NSString *message);
 
 #pragma mark - 版权保护
 
@@ -64,19 +64,14 @@ static void showDisclaimerAlert(void) {
 
 #pragma mark - 日志系统
 
-// 日志文件路径
 static NSString* getLogFilePath(void) {
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     NSString *documentsDirectory = [paths firstObject];
     return [documentsDirectory stringByAppendingPathComponent:@"SGCheat_Log.txt"];
 }
 
-// 写入日志到文件和控制台
 static void writeLog(NSString *message) {
-    // 输出到控制台
     NSLog(@"%@", message);
-    
-    // 写入到文件
     @try {
         NSString *logPath = getLogFilePath();
         NSString *timestamp = [NSDateFormatter localizedStringFromDate:[NSDate date]
@@ -84,185 +79,37 @@ static void writeLog(NSString *message) {
                                                              timeStyle:NSDateFormatterMediumStyle];
         NSString *logMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
         
-        // 追加写入
         NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logPath];
         if (fileHandle) {
             [fileHandle seekToEndOfFile];
             [fileHandle writeData:[logMessage dataUsingEncoding:NSUTF8StringEncoding]];
             [fileHandle closeFile];
         } else {
-            // 文件不存在，创建新文件
             [logMessage writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     } @catch (NSException *exception) {
-        NSLog(@"[SGCheat] 写入日志文件失败: %@", exception);
+        NSLog(@"[SGCheat] 写入日志失败: %@", exception);
     }
 }
 
-// 清空日志文件
-static void clearLog(void) {
-    NSString *logPath = getLogFilePath();
-    [@"" writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    writeLog(@"[SGCheat] 日志已清空");
-}
+#pragma mark - 游戏数值修改
 
-#pragma mark - GameForFun 引擎接口
-
-// 辅助函数：调用 GameForFun 设置参数（运行时动态调用）
+// 使用 NSUserDefaults 修改游戏数值（参考饥饿荒野和卡包修仙）
 static void setGameValue(NSString *key, id value, NSString *type) {
-    @try {
-        writeLog(@"[SGCheat] ========== 开始调用 setGameValue ==========");
-        writeLog([NSString stringWithFormat:@"[SGCheat] 参数: key=%@ value=%@ type=%@", key, value, type]);
-        
-        Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
-        if (!FanhanGGEngine) {
-            writeLog(@"[SGCheat] ❌ FanhanGGEngine 类不存在 - GameForFun.dylib 可能未注入！");
-            
-            // 列出所有已加载的类，查找可能的引擎类
-            writeLog(@"[SGCheat] 尝试查找其他可能的引擎类...");
-            unsigned int classCount;
-            Class *classes = objc_copyClassList(&classCount);
-            for (unsigned int i = 0; i < classCount; i++) {
-                NSString *className = [NSString stringWithUTF8String:class_getName(classes[i])];
-                if ([className containsString:@"Engine"] || [className containsString:@"Fanhan"]) {
-                    writeLog([NSString stringWithFormat:@"[SGCheat] 发现可能的类: %@", className]);
-                }
-            }
-            free(classes);
-            return;
-        }
-        
-        writeLog(@"[SGCheat] ✅ 找到 FanhanGGEngine 类");
-        
-        // 尝试多种常见的单例方法名
-        NSArray *singletonSelectors = @[@"sharedInstance", @"shared", @"defaultManager", @"instance", @"sharedEngine", @"defaultEngine"];
-        
-        id engine = nil;
-        SEL foundSelector = nil;
-        
-        for (NSString *selectorName in singletonSelectors) {
-            SEL selector = NSSelectorFromString(selectorName);
-            if ([FanhanGGEngine respondsToSelector:selector]) {
-                writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 找到单例方法: %@", selectorName]);
-                engine = [FanhanGGEngine performSelector:selector];
-                foundSelector = selector;
-                break;
-            }
-        }
-        
-        if (!engine) {
-            writeLog(@"[SGCheat] ❌ 未找到任何单例方法");
-            writeLog(@"[SGCheat] 尝试从内存中查找已存在的 FanhanGGEngine 实例...");
-            
-            // 尝试通过遍历所有窗口和视图来找到可能持有 engine 的对象
-            // GameForFun 通常会在某个视图控制器或视图中持有 engine 实例
-            UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
-            if (keyWindow) {
-                // 尝试从 keyWindow 的属性中查找
-                unsigned int propertyCount;
-                objc_property_t *properties = class_copyPropertyList([keyWindow class], &propertyCount);
-                for (unsigned int i = 0; i < propertyCount; i++) {
-                    const char *propertyName = property_getName(properties[i]);
-                    NSString *key = [NSString stringWithUTF8String:propertyName];
-                    @try {
-                        id value = [keyWindow valueForKey:key];
-                        if ([value isKindOfClass:FanhanGGEngine]) {
-                            engine = value;
-                            writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 从 keyWindow.%@ 找到 engine 实例", key]);
-                            break;
-                        }
-                    } @catch (NSException *e) {}
-                }
-                free(properties);
-            }
-            
-            // 如果还是没找到，尝试查找所有 UIViewController
-            if (!engine) {
-                writeLog(@"[SGCheat] 尝试从 rootViewController 查找...");
-                UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-                while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
-                
-                unsigned int ivarCount;
-                Ivar *ivars = class_copyIvarList([rootVC class], &ivarCount);
-                for (unsigned int i = 0; i < ivarCount; i++) {
-                    const char *ivarName = ivar_getName(ivars[i]);
-                    NSString *key = [NSString stringWithUTF8String:ivarName];
-                    @try {
-                        id value = [rootVC valueForKey:key];
-                        if ([value isKindOfClass:FanhanGGEngine]) {
-                            engine = value;
-                            writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 从 rootVC.%@ 找到 engine 实例", key]);
-                            break;
-                        }
-                    } @catch (NSException *e) {}
-                }
-                free(ivars);
-            }
-            
-            // 最后的尝试：列出所有类方法，看看有没有其他获取方式
-            if (!engine) {
-                writeLog(@"[SGCheat] 列出所有类方法:");
-                unsigned int methodCount;
-                Method *methods = class_copyMethodList(object_getClass(FanhanGGEngine), &methodCount);
-                for (unsigned int i = 0; i < methodCount && i < 30; i++) {
-                    SEL selector = method_getName(methods[i]);
-                    writeLog([NSString stringWithFormat:@"[SGCheat]   类方法: %@", NSStringFromSelector(selector)]);
-                }
-                free(methods);
-                
-                writeLog(@"[SGCheat] ⚠️ 无法找到已存在的实例，创建新实例可能不会生效");
-                engine = [[FanhanGGEngine alloc] init];
-            }
-        }
-        
-        if (!engine) {
-            writeLog(@"[SGCheat] ❌ 无法获取 FanhanGGEngine 实例");
-            return;
-        }
-        
-        writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 获取到 engine 实例: %@", engine]);
-        
-        SEL setValueSel = NSSelectorFromString(@"setValue:forKey:withType:");
-        if (![engine respondsToSelector:setValueSel]) {
-            writeLog(@"[SGCheat] ❌ Engine 不响应 setValue:forKey:withType:");
-            
-            // 列出 engine 的所有方法
-            writeLog(@"[SGCheat] Engine 可用的方法:");
-            unsigned int methodCount;
-            Method *methods = class_copyMethodList([engine class], &methodCount);
-            for (unsigned int i = 0; i < methodCount && i < 20; i++) {
-                SEL selector = method_getName(methods[i]);
-                writeLog([NSString stringWithFormat:@"[SGCheat]   - %@", NSStringFromSelector(selector)]);
-            }
-            free(methods);
-            return;
-        }
-        
-        writeLog(@"[SGCheat] ✅ Engine 响应 setValue:forKey:withType:");
-        
-        // 使用 NSInvocation 调用（setValue:forKey:withType: 有3个参数）
-        NSMethodSignature *signature = [engine methodSignatureForSelector:setValueSel];
-        if (!signature) {
-            writeLog(@"[SGCheat] ❌ 无法获取方法签名");
-            return;
-        }
-        
-        writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 获取到方法签名: %@", signature]);
-        
-        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
-        [invocation setTarget:engine];
-        [invocation setSelector:setValueSel];
-        [invocation setArgument:&value atIndex:2];
-        [invocation setArgument:&key atIndex:3];
-        [invocation setArgument:&type atIndex:4];
-        [invocation invoke];
-        
-        writeLog(@"[SGCheat] ✅ setValue 调用成功！");
-        writeLog(@"[SGCheat] ========== setGameValue 调用完成 ==========");
-    } @catch (NSException *exception) {
-        writeLog([NSString stringWithFormat:@"[SGCheat] ❌ setGameValue 异常: %@", exception]);
-        writeLog([NSString stringWithFormat:@"[SGCheat] 异常堆栈: %@", [exception callStackSymbols]]);
+    writeLog([NSString stringWithFormat:@"[SGCheat] 设置游戏数值: key=%@ value=%@ type=%@", key, value, type]);
+    
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    
+    if ([type isEqualToString:@"Number"]) {
+        [defaults setInteger:[value integerValue] forKey:key];
+    } else if ([type isEqualToString:@"bool"]) {
+        [defaults setBool:[value boolValue] forKey:key];
+    } else {
+        [defaults setObject:value forKey:key];
     }
+    
+    [defaults synchronize];
+    writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 数值已保存到 NSUserDefaults"]);
 }
 
 #pragma mark - 菜单视图
@@ -413,50 +260,50 @@ static void setGameValue(NSString *key, id value, NSString *type) {
         case 1: // 互秒
             @try {
                 if (isOn) {
-                    // 只在开启时调用 setValue（关闭时不调用，因为 Frida 捕获不到关闭的参数）
-                    NSString *key = @"hook_int";
-                    NSNumber *value = @999999999;
-                    
                     writeLog(@"[SGCheat] 互秒开关 - 开启");
-                    writeLog(@"[SGCheat] 尝试多种 type 参数组合...");
                     
-                    // 尝试1: 空字符串（Frida 显示 undefined，可能对应空字符串）
-                    writeLog([NSString stringWithFormat:@"[SGCheat] 尝试1: key=%@ value=%@ type=@\"\"", key, value]);
-                    setGameValue(key, value, @"");
+                    // 尝试修改游戏数值（需要找到正确的 key）
+                    // 这里使用常见的游戏数值 key，你需要根据实际游戏调整
+                    setGameValue(@"player_damage", @999999999, @"Number");
+                    setGameValue(@"player_attack", @999999999, @"Number");
+                    setGameValue(@"damage_multiplier", @999999, @"Number");
                     
-                    // 尝试2: nil
-                    writeLog([NSString stringWithFormat:@"[SGCheat] 尝试2: key=%@ value=%@ type=nil", key, value]);
-                    setGameValue(key, value, nil);
-                    
-                    // 尝试3: "Number" 或 "Int"
-                    writeLog([NSString stringWithFormat:@"[SGCheat] 尝试3: key=%@ value=%@ type=@\"Number\"", key, value]);
-                    setGameValue(key, value, @"Number");
-                    
-                    // 尝试4: 传字符串形式的值
-                    writeLog([NSString stringWithFormat:@"[SGCheat] 尝试4: key=%@ value=@\"999999999\" type=@\"\"", key]);
-                    setGameValue(key, @"999999999", @"");
-                    
-                    [self showAlert:@"⚔️ 互秒已开启！\n已尝试多种参数组合\n日志已保存到 Documents/SGCheat_Log.txt\n请进入战斗测试"];
+                    [self showAlert:@"⚔️ 互秒已开启！\n已修改攻击力数值\n日志已保存到 Documents/SGCheat_Log.txt\n请进入战斗测试"];
                 } else {
-                    // 关闭时不调用 setValue，只提示用户
-                    writeLog(@"[SGCheat] 互秒开关 - 关闭（不调用 setValue）");
-                    [self showAlert:@"⚔️ 互秒已关闭！\n请重启游戏以完全禁用"];
+                    writeLog(@"[SGCheat] 互秒开关 - 关闭");
+                    setGameValue(@"player_damage", @1, @"Number");
+                    setGameValue(@"player_attack", @1, @"Number");
+                    setGameValue(@"damage_multiplier", @1, @"Number");
+                    [self showAlert:@"⚔️ 互秒已关闭！\n请重启游戏以完全恢复"];
                 }
             } @catch (NSException *exception) {
                 writeLog([NSString stringWithFormat:@"[SGCheat] 互秒开关异常: %@", exception]);
-                sender.on = !isOn; // 恢复开关状态
-                // 恢复保存的状态
+                sender.on = !isOn;
                 [[NSUserDefaults standardUserDefaults] setBool:!isOn forKey:stateKey];
                 [[NSUserDefaults standardUserDefaults] synchronize];
                 [self showAlert:[NSString stringWithFormat:@"❌ 操作失败: %@", exception.reason]];
             }
             break;
-        case 2: // 无敌（未实现）
-            writeLog(@"[SGCheat] 无敌功能未实现");
-            sender.on = NO;
-            [[NSUserDefaults standardUserDefaults] setBool:NO forKey:stateKey];
-            [[NSUserDefaults standardUserDefaults] synchronize];
-            [self showAlert:@"🛡️ 无敌功能暂未捕获到参数\n请等待后续更新"];
+        case 2: // 无敌
+            @try {
+                if (isOn) {
+                    writeLog(@"[SGCheat] 无敌开关 - 开启");
+                    setGameValue(@"player_hp", @999999999, @"Number");
+                    setGameValue(@"player_max_hp", @999999999, @"Number");
+                    setGameValue(@"invincible", @YES, @"bool");
+                    [self showAlert:@"🛡️ 无敌已开启！"];
+                } else {
+                    writeLog(@"[SGCheat] 无敌开关 - 关闭");
+                    setGameValue(@"invincible", @NO, @"bool");
+                    [self showAlert:@"🛡️ 无敌已关闭！"];
+                }
+            } @catch (NSException *exception) {
+                writeLog([NSString stringWithFormat:@"[SGCheat] 无敌开关异常: %@", exception]);
+                sender.on = !isOn;
+                [[NSUserDefaults standardUserDefaults] setBool:!isOn forKey:stateKey];
+                [[NSUserDefaults standardUserDefaults] synchronize];
+                [self showAlert:[NSString stringWithFormat:@"❌ 操作失败: %@", exception.reason]];
+            }
             break;
     }
 }
