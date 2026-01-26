@@ -221,8 +221,11 @@ static void setGameValue(NSString *key, id value, NSString *type) {
             @try {
                 if (isOn) {
                     writeLog(@"[GDCheat] 无限货币 - 开启");
+                    // 调用 one:two:three:four:five: 告诉游戏脚本要 hook 哪个方法
+                    [[FanhanGGEngine sharedInstance] one:@"Assembly-CSharp.dll" two:@"" three:@"UserItemData_Utility" four:@"GetItemCount" five:@""];
+                    // 设置数值
                     setGameValue(@"hook_int", @999999999, nil);
-                    [self showAlert:@"💰 无限货币已开启！\n\n⚠️ 重要提示：\n1. 已写入 NSUserDefaults\n2. 进入商店或获得货币时生效\n3. 如不生效请查看日志\n\n日志: Documents/GDCheat_Log.txt"];
+                    [self showAlert:@"💰 无限货币已开启！\n\n⚠️ 提示：\n已设置 Unity hook\n进入商店或获得货币时生效"];
                 } else {
                     writeLog(@"[GDCheat] 无限货币 - 关闭");
                     setGameValue(@"hook_int", @0, nil);
@@ -240,8 +243,11 @@ static void setGameValue(NSString *key, id value, NSString *type) {
             @try {
                 if (isOn) {
                     writeLog(@"[GDCheat] 无敌 - 开启");
+                    // 调用 one:two:three:four:five: 告诉游戏脚本要 hook 哪个方法
+                    [[FanhanGGEngine sharedInstance] one:@"Assembly-CSharp.dll" two:@"" three:@"UserCastleData_Utility" four:@"GetCastleHp" five:@""];
+                    // 设置数值
                     setGameValue(@"hook_int", @999999999, nil);
-                    [self showAlert:@"🛡️ 无敌已开启！\n请在开局前开启"];
+                    [self showAlert:@"🛡️ 无敌已开启！\n\n⚠️ 提示：\n已设置 Unity hook\n请在开局前开启"];
                 } else {
                     writeLog(@"[GDCheat] 无敌 - 关闭");
                     setGameValue(@"hook_int", @0, nil);
