@@ -1,5 +1,8 @@
 // 骷髅少女修改器 - SkullgirlsCheat.m
 #import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
 #pragma mark - 全局变量
 
@@ -64,38 +67,69 @@ static void showDisclaimerAlert(void) {
 // 辅助函数：调用 GameForFun 设置参数（运行时动态调用）
 static void setGameValue(NSString *key, id value, NSString *type) {
     @try {
+        NSLog(@"[SGCheat] ========== 开始调用 setGameValue ==========");
+        NSLog(@"[SGCheat] 参数: key=%@ value=%@ type=%@", key, value, type);
+        
         Class FanhanGGEngine = NSClassFromString(@"FanhanGGEngine");
         if (!FanhanGGEngine) {
-            NSLog(@"[SGCheat] FanhanGGEngine 类不存在");
+            NSLog(@"[SGCheat] ❌ FanhanGGEngine 类不存在 - GameForFun.dylib 可能未注入！");
+            
+            // 列出所有已加载的类，查找可能的引擎类
+            NSLog(@"[SGCheat] 尝试查找其他可能的引擎类...");
+            unsigned int classCount;
+            Class *classes = objc_copyClassList(&classCount);
+            for (unsigned int i = 0; i < classCount; i++) {
+                NSString *className = [NSString stringWithUTF8String:class_getName(classes[i])];
+                if ([className containsString:@"Engine"] || [className containsString:@"Fanhan"]) {
+                    NSLog(@"[SGCheat] 发现可能的类: %@", className);
+                }
+            }
+            free(classes);
             return;
         }
         
+        NSLog(@"[SGCheat] ✅ 找到 FanhanGGEngine 类");
+        
         SEL sharedInstanceSel = NSSelectorFromString(@"sharedInstance");
         if (![FanhanGGEngine respondsToSelector:sharedInstanceSel]) {
-            NSLog(@"[SGCheat] FanhanGGEngine 不响应 sharedInstance");
+            NSLog(@"[SGCheat] ❌ FanhanGGEngine 不响应 sharedInstance");
             return;
         }
         
         id engine = [FanhanGGEngine performSelector:sharedInstanceSel];
         if (!engine) {
-            NSLog(@"[SGCheat] 无法获取 FanhanGGEngine 实例");
+            NSLog(@"[SGCheat] ❌ 无法获取 FanhanGGEngine 实例");
             return;
         }
+        
+        NSLog(@"[SGCheat] ✅ 获取到 engine 实例: %@", engine);
         
         SEL setValueSel = NSSelectorFromString(@"setValue:forKey:withType:");
         if (![engine respondsToSelector:setValueSel]) {
-            NSLog(@"[SGCheat] Engine 不响应 setValue:forKey:withType:");
+            NSLog(@"[SGCheat] ❌ Engine 不响应 setValue:forKey:withType:");
+            
+            // 列出 engine 的所有方法
+            NSLog(@"[SGCheat] Engine 可用的方法:");
+            unsigned int methodCount;
+            Method *methods = class_copyMethodList([engine class], &methodCount);
+            for (unsigned int i = 0; i < methodCount && i < 20; i++) {
+                SEL selector = method_getName(methods[i]);
+                NSLog(@"[SGCheat]   - %@", NSStringFromSelector(selector));
+            }
+            free(methods);
             return;
         }
         
-        NSLog(@"[SGCheat] 调用 setValue - key:%@ value:%@ type:%@", key, value, type);
+        NSLog(@"[SGCheat] ✅ Engine 响应 setValue:forKey:withType:");
         
         // 使用 NSInvocation 调用（setValue:forKey:withType: 有3个参数）
         NSMethodSignature *signature = [engine methodSignatureForSelector:setValueSel];
         if (!signature) {
-            NSLog(@"[SGCheat] 无法获取方法签名");
+            NSLog(@"[SGCheat] ❌ 无法获取方法签名");
             return;
         }
+        
+        NSLog(@"[SGCheat] ✅ 获取到方法签名: %@", signature);
         
         NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
         [invocation setTarget:engine];
@@ -105,9 +139,11 @@ static void setGameValue(NSString *key, id value, NSString *type) {
         [invocation setArgument:&type atIndex:4];
         [invocation invoke];
         
-        NSLog(@"[SGCheat] setValue 调用成功");
+        NSLog(@"[SGCheat] ✅ setValue 调用成功！");
+        NSLog(@"[SGCheat] ========== setGameValue 调用完成 ==========");
     } @catch (NSException *exception) {
-        NSLog(@"[SGCheat] setGameValue 异常: %@", exception);
+        NSLog(@"[SGCheat] ❌ setGameValue 异常: %@", exception);
+        NSLog(@"[SGCheat] 异常堆栈: %@", [exception callStackSymbols]);
     }
 }
 
