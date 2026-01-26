@@ -94,91 +94,97 @@ static void writeLog(NSString *message) {
     }
 }
 
-#pragma mark - Unity PlayerPrefs 修改
+#pragma mark - 内存修改
 
-// Unity PlayerPrefs 函数指针
-typedef void (*PlayerPrefs_SetInt_t)(void* key, int value);
-typedef void (*PlayerPrefs_SetFloat_t)(void* key, float value);
-typedef int (*PlayerPrefs_GetInt_t)(void* key, int defaultValue);
-typedef void (*PlayerPrefs_Save_t)(void);
+#import <mach/mach.h>
+#import <mach/mach_vm.h>
 
-static PlayerPrefs_SetInt_t PlayerPrefs_SetInt = NULL;
-static PlayerPrefs_SetFloat_t PlayerPrefs_SetFloat = NULL;
-static PlayerPrefs_GetInt_t PlayerPrefs_GetInt = NULL;
-static PlayerPrefs_Save_t PlayerPrefs_Save = NULL;
+// 内存搜索和修改
+static NSMutableArray *g_foundAddresses = nil;
 
-// 初始化 Unity PlayerPrefs 函数
-static void initUnityPlayerPrefs(void) {
-    static BOOL initialized = NO;
-    if (initialized) return;
+// 搜索内存中的整数值
+static void searchMemoryValue(int targetValue) {
+    writeLog([NSString stringWithFormat:@"[SGCheat] 开始搜索内存值: %d", targetValue]);
     
-    writeLog(@"[SGCheat] 正在查找 Unity PlayerPrefs 函数...");
+    if (!g_foundAddresses) {
+        g_foundAddresses = [NSMutableArray array];
+    }
+    [g_foundAddresses removeAllObjects];
     
-    // 查找 UnityFramework
-    void *unityHandle = dlopen(NULL, RTLD_NOW);
-    if (!unityHandle) {
-        writeLog(@"[SGCheat] ❌ 无法打开 UnityFramework");
-        return;
+    mach_port_t task = mach_task_self();
+    mach_vm_address_t address = 0;
+    mach_vm_size_t size = 0;
+    vm_region_basic_info_data_64_t info;
+    mach_msg_type_number_t count = VM_REGION_BASIC_INFO_COUNT_64;
+    mach_port_t object_name;
+    
+    int foundCount = 0;
+    
+    while (mach_vm_region(task, &address, &size, VM_REGION_BASIC_INFO_64,
+                          (vm_region_info_t)&info, &count, &object_name) == KERN_SUCCESS) {
+        
+        // 只搜索可读写的内存区域
+        if ((info.protection & VM_PROT_READ) && (info.protection & VM_PROT_WRITE)) {
+            unsigned char *buffer = malloc(size);
+            if (buffer) {
+                mach_vm_size_t readSize = size;
+                if (mach_vm_read_overwrite(task, address, size, (mach_vm_address_t)buffer, &readSize) == KERN_SUCCESS) {
+                    // 搜索整数值
+                    for (mach_vm_size_t i = 0; i < size - sizeof(int); i += 4) {
+                        int *valuePtr = (int *)(buffer + i);
+                        if (*valuePtr == targetValue) {
+                            NSNumber *addr = @(address + i);
+                            [g_foundAddresses addObject:addr];
+                            foundCount++;
+                            if (foundCount >= 1000) break; // 限制结果数量
+                        }
+                    }
+                }
+                free(buffer);
+            }
+        }
+        
+        if (foundCount >= 1000) break;
+        address += size;
     }
     
-    // 尝试查找 PlayerPrefs 函数（IL2CPP 符号）
-    PlayerPrefs_SetInt = (PlayerPrefs_SetInt_t)dlsym(unityHandle, "PlayerPrefs_SetInt");
-    PlayerPrefs_SetFloat = (PlayerPrefs_SetFloat_t)dlsym(unityHandle, "PlayerPrefs_SetFloat");
-    PlayerPrefs_GetInt = (PlayerPrefs_GetInt_t)dlsym(unityHandle, "PlayerPrefs_GetInt");
-    PlayerPrefs_Save = (PlayerPrefs_Save_t)dlsym(unityHandle, "PlayerPrefs_Save");
-    
-    if (PlayerPrefs_SetInt) {
-        writeLog(@"[SGCheat] ✅ 找到 PlayerPrefs_SetInt");
-        initialized = YES;
-    } else {
-        writeLog(@"[SGCheat] ❌ 未找到 PlayerPrefs 函数");
-    }
+    writeLog([NSString stringWithFormat:@"[SGCheat] 找到 %d 个地址", foundCount]);
 }
 
-// 使用 Unity PlayerPrefs 修改游戏数值
-static void setGameValue(NSString *key, id value, NSString *type) {
-    writeLog([NSString stringWithFormat:@"[SGCheat] 设置游戏数值: key=%@ value=%@ type=%@", key, value, type]);
-    
-    initUnityPlayerPrefs();
-    
-    if (!PlayerPrefs_SetInt) {
-        writeLog(@"[SGCheat] ❌ PlayerPrefs 未初始化，使用 NSUserDefaults 作为备用");
-        // 备用方案：使用 NSUserDefaults
-        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-        if ([type isEqualToString:@"Number"]) {
-            [defaults setInteger:[value integerValue] forKey:key];
-        } else {
-            [defaults setObject:value forKey:key];
-        }
-        [defaults synchronize];
+// 修改内存中的值
+static void modifyMemoryValue(int newValue) {
+    if (!g_foundAddresses || g_foundAddresses.count == 0) {
+        writeLog(@"[SGCheat] ❌ 没有找到地址，请先搜索");
         return;
     }
     
-    // 使用 Unity PlayerPrefs
-    if ([type isEqualToString:@"Number"]) {
-        const char *cKey = [key UTF8String];
-        void *keyPtr = (void *)cKey;
-        int intValue = [value intValue];
+    writeLog([NSString stringWithFormat:@"[SGCheat] 修改 %lu 个地址的值为: %d", (unsigned long)g_foundAddresses.count, newValue]);
+    
+    mach_port_t task = mach_task_self();
+    int modifiedCount = 0;
+    
+    for (NSNumber *addrNum in g_foundAddresses) {
+        mach_vm_address_t address = [addrNum unsignedLongLongValue];
         
-        PlayerPrefs_SetInt(keyPtr, intValue);
-        if (PlayerPrefs_Save) {
-            PlayerPrefs_Save();
-        }
+        // 修改内存保护
+        mach_vm_protect(task, address, sizeof(int), FALSE, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
         
-        writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 已设置 Unity PlayerPrefs: %@ = %d", key, intValue]);
-    } else if ([type isEqualToString:@"Float"]) {
-        const char *cKey = [key UTF8String];
-        void *keyPtr = (void *)cKey;
-        float floatValue = [value floatValue];
-        
-        if (PlayerPrefs_SetFloat) {
-            PlayerPrefs_SetFloat(keyPtr, floatValue);
-            if (PlayerPrefs_Save) {
-                PlayerPrefs_Save();
-            }
-            writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 已设置 Unity PlayerPrefs: %@ = %f", key, floatValue]);
+        // 写入新值
+        if (mach_vm_write(task, address, (vm_offset_t)&newValue, sizeof(int)) == KERN_SUCCESS) {
+            modifiedCount++;
         }
     }
+    
+    writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 成功修改 %d 个地址", modifiedCount]);
+}
+
+// 简化的游戏数值设置（用于UI调用）
+static void setGameValue(NSString *key, id value, NSString *type) {
+    writeLog([NSString stringWithFormat:@"[SGCheat] 内存修改模式 - key=%@ value=%@", key, value]);
+    
+    // 这个函数现在只是一个占位符
+    // 实际的修改通过 UI 中的内存搜索和修改完成
+    writeLog(@"[SGCheat] ⚠️ 请使用菜单中的内存搜索功能");
 }
 
 #pragma mark - 菜单视图
@@ -331,20 +337,16 @@ static void setGameValue(NSString *key, id value, NSString *type) {
                 if (isOn) {
                     writeLog(@"[SGCheat] 互秒开关 - 开启");
                     
-                    // Unity 游戏常用的数值 key
-                    // 这些是示例，需要通过 Frida 找到实际的 key
-                    setGameValue(@"PlayerAttack", @999999999, @"Number");
-                    setGameValue(@"PlayerDamage", @999999999, @"Number");
-                    setGameValue(@"AttackPower", @999999999, @"Number");
-                    setGameValue(@"DamageMultiplier", @999999, @"Float");
+                    // 使用内存修改
+                    // 搜索当前攻击力值（假设初始值为 100）
+                    searchMemoryValue(100);
+                    // 修改为超高攻击力
+                    modifyMemoryValue(999999999);
                     
-                    [self showAlert:@"⚔️ 互秒已开启！\n已修改攻击力数值\n日志已保存到 Documents/SGCheat_Log.txt\n如果不生效，需要用 Frida 找到正确的 key"];
+                    [self showAlert:@"⚔️ 互秒已开启！\n已使用内存修改\n如果不生效，请:\n1. 查看当前攻击力数值\n2. 重新搜索该数值\n3. 攻击一次后再搜索\n日志: Documents/SGCheat_Log.txt"];
                 } else {
                     writeLog(@"[SGCheat] 互秒开关 - 关闭");
-                    setGameValue(@"PlayerAttack", @1, @"Number");
-                    setGameValue(@"PlayerDamage", @1, @"Number");
-                    setGameValue(@"AttackPower", @1, @"Number");
-                    setGameValue(@"DamageMultiplier", @1, @"Float");
+                    modifyMemoryValue(100);
                     [self showAlert:@"⚔️ 互秒已关闭！\n请重启游戏以完全恢复"];
                 }
             } @catch (NSException *exception) {
@@ -359,15 +361,16 @@ static void setGameValue(NSString *key, id value, NSString *type) {
             @try {
                 if (isOn) {
                     writeLog(@"[SGCheat] 无敌开关 - 开启");
-                    setGameValue(@"PlayerHP", @999999999, @"Number");
-                    setGameValue(@"PlayerMaxHP", @999999999, @"Number");
-                    setGameValue(@"Health", @999999999, @"Number");
-                    setGameValue(@"MaxHealth", @999999999, @"Number");
-                    [self showAlert:@"🛡️ 无敌已开启！"];
+                    
+                    // 使用内存修改
+                    // 搜索当前血量值
+                    searchMemoryValue(1000); // 假设初始血量
+                    modifyMemoryValue(999999999);
+                    
+                    [self showAlert:@"🛡️ 无敌已开启！\n已使用内存修改"];
                 } else {
                     writeLog(@"[SGCheat] 无敌开关 - 关闭");
-                    setGameValue(@"PlayerHP", @100, @"Number");
-                    setGameValue(@"Health", @100, @"Number");
+                    modifyMemoryValue(1000);
                     [self showAlert:@"🛡️ 无敌已关闭！"];
                 }
             } @catch (NSException *exception) {
