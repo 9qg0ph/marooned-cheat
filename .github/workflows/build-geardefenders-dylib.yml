@@ -1,0 +1,39 @@
+name: Build Gear Defenders Dylib
+
+on:
+  push:
+    paths:
+      - 'GearDefendersDylib/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Build dylib
+      run: |
+        cd GearDefendersDylib
+        clang -arch arm64 \
+          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+          -miphoneos-version-min=14.0 \
+          -dynamiclib \
+          -framework UIKit \
+          -framework Foundation \
+          -framework CoreGraphics \
+          -fobjc-arc \
+          -Wno-deprecated-declarations \
+          -o GearDefendersCheat.dylib \
+          GearDefendersCheat.m
+        
+        # 签名
+        ldid -S GearDefendersCheat.dylib || codesign -f -s - GearDefendersCheat.dylib
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: GearDefendersCheat-dylib
+        path: GearDefendersDylib/GearDefendersCheat.dylib
