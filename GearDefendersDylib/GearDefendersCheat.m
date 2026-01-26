@@ -48,6 +48,7 @@ static void writeLog(NSString *message) {
 @interface FanhanGGEngine : NSObject
 + (instancetype)sharedInstance;
 - (void)setValue:(id)value forKey:(NSString *)key withType:(NSString *)type;
+- (void)one:(NSString *)one two:(NSString *)two three:(NSString *)three four:(NSString *)four five:(NSString *)five;
 @end
 
 @implementation FanhanGGEngine
@@ -72,6 +73,15 @@ static FanhanGGEngine *_sharedInstance = nil;
     [defaults synchronize];
     
     writeLog([NSString stringWithFormat:@"[GDCheat] ✅ 已设置 NSUserDefaults: %@ = %@", key, value]);
+}
+
+- (void)one:(NSString *)one two:(NSString *)two three:(NSString *)three four:(NSString *)four five:(NSString *)five {
+    writeLog([NSString stringWithFormat:@"[GDCheat] one:two:three:four:five: 被调用"]);
+    writeLog([NSString stringWithFormat:@"  one=%@ two=%@ three=%@ four=%@ five=%@", one, two, three, four, five]);
+    
+    // 这个方法用于告诉游戏脚本要 hook 哪个 Unity 方法
+    // 参数示例：Assembly-CSharp.dll, , UserItemData_Utility, GetItemCount, 
+    // 我们只需要实现这个方法，游戏脚本会自动处理
 }
 
 @end
