@@ -2,8 +2,6 @@
 // 完全独立的修改器，不依赖 GameForFun.dylib
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
-#import <mach/mach.h>
-#import <mach/mach_vm.h>
 
 #pragma mark - 全局变量
 
@@ -361,9 +359,6 @@ __attribute__((constructor)) static void initialize(void) {
     writeLog(@"[GDCheat] ========================================");
     writeLog(@"[GDCheat] Gear Defenders 修改器已加载");
     writeLog(@"[GDCheat] ========================================");
-    
-    // Hook FanhanGGEngine
-    hookFanhanGGEngine();
     
     // 延迟创建悬浮按钮
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
