@@ -212,7 +212,7 @@ static void setGameValue(NSString *key, id value, NSString *type) {
                 if (isOn) {
                     writeLog(@"[GDCheat] 无限货币 - 开启");
                     setGameValue(@"hook_int", @999999999, nil);
-                    [self showAlert:@"💰 无限货币已开启！\n日志: Documents/GDCheat_Log.txt"];
+                    [self showAlert:@"💰 无限货币已开启！\n\n⚠️ 重要提示：\n1. 已写入 NSUserDefaults\n2. 进入商店或获得货币时生效\n3. 如不生效请查看日志\n\n日志: Documents/GDCheat_Log.txt"];
                 } else {
                     writeLog(@"[GDCheat] 无限货币 - 关闭");
                     setGameValue(@"hook_int", @0, nil);

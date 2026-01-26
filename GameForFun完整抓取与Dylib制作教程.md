@@ -368,6 +368,15 @@ setGameValue(@"hook_float", @9000000000, nil);
 
 ### UI 代码（悬浮按钮 + 菜单）
 
+**推荐参考**：天选打工人 Dylib 的 UI 样式
+
+**关键要点**：
+1. 使用 `autoresizingMask` 自动适配横竖屏
+2. 菜单居中显示，半透明背景
+3. 右上角圆形关闭按钮
+4. 统一的主题色和圆角样式
+5. 免责声明使用可滚动的 TextView
+
 ```objective-c
 #pragma mark - 菜单视图
 
@@ -378,8 +387,15 @@ setGameValue(@"hook_float", @9000000000, nil);
 @implementation GameMenuView
 
 - (instancetype)initWithFrame:(CGRect)frame {
-    if (self = [super initWithFrame:frame]) {
-        self.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.5];
+    self = [super initWithFrame:frame];
+    if (self) {
+        [self setupUI];
+    }
+    return self;
+}
+
+- (void)setupUI {
+    self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.5];
         
         // 点击背景关闭
         UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(hide)];
@@ -651,11 +667,143 @@ setTimeout(waitForObjC, 1000);
 1. key 不正确
 2. 数据存储方式不是 NSUserDefaults
 3. 游戏读取数据的时机不对
+4. 游戏需要触发特定事件才读取数值
 
 **排查步骤**：
-1. 添加日志输出
-2. 使用 Frida 验证 NSUserDefaults 的值
-3. 检查游戏是否真的读取了 NSUserDefaults
+
+#### 步骤 1：验证 NSUserDefaults 是否写入成功
+
+使用 Frida 验证：
+
+```javascript
+var NSUserDefaults = ObjC.classes.NSUserDefaults;
+var defaults = NSUserDefaults.standardUserDefaults();
+
+// 读取我们写入的值
+var hook_int = defaults.objectForKey_("hook_int");
+var hook_float = defaults.objectForKey_("hook_float");
+
+console.log("hook_int = " + hook_int);
+console.log("hook_float = " + hook_float);
+```
+
+#### 步骤 2：监控游戏何时读取 NSUserDefaults
+
+```javascript
+var NSUserDefaults = ObjC.classes.NSUserDefaults;
+
+Interceptor.attach(NSUserDefaults['- objectForKey:'].implementation, {
+    onEnter: function(args) {
+        var key = ObjC.Object(args[2]);
+        if (key.toString().indexOf("hook") !== -1) {
+            console.log("[NSUserDefaults READ] " + key);
+            console.log("调用栈:");
+            console.log(Thread.backtrace(this.context, Backtracer.ACCURATE)
+                .map(DebugSymbol.fromAddress).join('\n'));
+        }
+    }
+});
+```
+
+#### 步骤 3：检查游戏读取时机
+
+**关键发现**：
+
+GameForFun 开启后**立即生效**，说明游戏会**实时读取** NSUserDefaults。
+
+但我们的 dylib 可能需要：
+1. **触发特定事件**：进入商店、获得货币、开始战斗等
+2. **重启游戏**：某些游戏只在启动时读取一次
+3. **切换场景**：进入/退出某个界面
+
+**解决方案**：
+
+在提示中告知用户需要触发事件：
+
+```objective-c
+[self showAlert:@"💰 无限货币已开启！\n\n⚠️ 重要提示：\n1. 已写入 NSUserDefaults\n2. 进入商店或获得货币时生效\n3. 如不生效请查看日志\n\n日志: Documents/GameCheat_Log.txt"];
+```
+
+#### 步骤 4：对比 GameForFun 的实现
+
+如果我们的 dylib 不生效，但 GameForFun 生效，说明：
+
+1. **写入方式相同**：都是 `[defaults setObject:value forKey:@"hook_int"]`
+2. **读取时机不同**：GameForFun 可能有额外的触发机制
+
+**深度分析**：
+
+使用 Frida hook GameForFun 的所有方法调用，找到它是如何触发游戏读取数值的：
+
+```javascript
+var FanhanGGEngine = ObjC.classes.FanhanGGEngine;
+var methods = FanhanGGEngine.$ownMethods;
+
+methods.forEach(function(methodName) {
+    try {
+        var method = FanhanGGEngine[methodName];
+        if (method && method.implementation) {
+            Interceptor.attach(method.implementation, {
+                onEnter: function(args) {
+                    console.log("[FanhanGGEngine] " + methodName + " 被调用");
+                }
+            });
+        }
+    } catch(e) {}
+});
+```
+
+#### 步骤 5：添加详细日志
+
+在 dylib 中添加日志功能，记录每一步操作：
+
+```objective-c
+static void writeLog(NSString *message) {
+    NSString *docPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *logPath = [docPath stringByAppendingPathComponent:@"GameCheat_Log.txt"];
+    
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    [formatter setDateFormat:@"yyyy/MM/dd HH:mm:ss"];
+    NSString *timestamp = [formatter stringFromDate:[NSDate date]];
+    
+    NSString *logMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
+    
+    if ([[NSFileManager defaultManager] fileExistsAtPath:logPath]) {
+        NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logPath];
+        [fileHandle seekToEndOfFile];
+        [fileHandle writeData:[logMessage dataUsingEncoding:NSUTF8StringEncoding]];
+        [fileHandle closeFile];
+    } else {
+        [logMessage writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    }
+    
+    NSLog(@"%@", message);
+}
+```
+
+然后在每个关键步骤添加日志：
+
+```objective-c
+- (void)setValue:(id)value forKey:(NSString *)key withType:(NSString *)type {
+    writeLog([NSString stringWithFormat:@"setValue 被调用: key=%@ value=%@ type=%@", key, value, type]);
+    
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setObject:value forKey:key];
+    [defaults synchronize];
+    
+    writeLog([NSString stringWithFormat:@"✅ 已写入 NSUserDefaults: %@ = %@", key, value]);
+    
+    // 验证写入
+    id readValue = [defaults objectForKey:key];
+    writeLog([NSString stringWithFormat:@"验证读取: %@ = %@", key, readValue]);
+}
+```
+
+通过日志可以确认：
+- dylib 是否被加载
+- setValue 是否被调用
+- NSUserDefaults 是否写入成功
+- 写入的值是否正确
 
 ---
 
