@@ -1,7 +1,9 @@
 // 骷髅少女修改器 - SkullgirlsCheat.m
-// 完全独立的 dylib，不依赖 GameForFun
+// Unity 游戏修改器
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <dlfcn.h>
+#import <mach-o/dyld.h>
 
 #pragma mark - 全局变量
 
@@ -92,24 +94,91 @@ static void writeLog(NSString *message) {
     }
 }
 
-#pragma mark - 游戏数值修改
+#pragma mark - Unity PlayerPrefs 修改
 
-// 使用 NSUserDefaults 修改游戏数值（参考饥饿荒野和卡包修仙）
+// Unity PlayerPrefs 函数指针
+typedef void (*PlayerPrefs_SetInt_t)(void* key, int value);
+typedef void (*PlayerPrefs_SetFloat_t)(void* key, float value);
+typedef int (*PlayerPrefs_GetInt_t)(void* key, int defaultValue);
+typedef void (*PlayerPrefs_Save_t)(void);
+
+static PlayerPrefs_SetInt_t PlayerPrefs_SetInt = NULL;
+static PlayerPrefs_SetFloat_t PlayerPrefs_SetFloat = NULL;
+static PlayerPrefs_GetInt_t PlayerPrefs_GetInt = NULL;
+static PlayerPrefs_Save_t PlayerPrefs_Save = NULL;
+
+// 初始化 Unity PlayerPrefs 函数
+static void initUnityPlayerPrefs(void) {
+    static BOOL initialized = NO;
+    if (initialized) return;
+    
+    writeLog(@"[SGCheat] 正在查找 Unity PlayerPrefs 函数...");
+    
+    // 查找 UnityFramework
+    void *unityHandle = dlopen(NULL, RTLD_NOW);
+    if (!unityHandle) {
+        writeLog(@"[SGCheat] ❌ 无法打开 UnityFramework");
+        return;
+    }
+    
+    // 尝试查找 PlayerPrefs 函数（IL2CPP 符号）
+    PlayerPrefs_SetInt = (PlayerPrefs_SetInt_t)dlsym(unityHandle, "PlayerPrefs_SetInt");
+    PlayerPrefs_SetFloat = (PlayerPrefs_SetFloat_t)dlsym(unityHandle, "PlayerPrefs_SetFloat");
+    PlayerPrefs_GetInt = (PlayerPrefs_GetInt_t)dlsym(unityHandle, "PlayerPrefs_GetInt");
+    PlayerPrefs_Save = (PlayerPrefs_Save_t)dlsym(unityHandle, "PlayerPrefs_Save");
+    
+    if (PlayerPrefs_SetInt) {
+        writeLog(@"[SGCheat] ✅ 找到 PlayerPrefs_SetInt");
+        initialized = YES;
+    } else {
+        writeLog(@"[SGCheat] ❌ 未找到 PlayerPrefs 函数");
+    }
+}
+
+// 使用 Unity PlayerPrefs 修改游戏数值
 static void setGameValue(NSString *key, id value, NSString *type) {
     writeLog([NSString stringWithFormat:@"[SGCheat] 设置游戏数值: key=%@ value=%@ type=%@", key, value, type]);
     
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    initUnityPlayerPrefs();
     
-    if ([type isEqualToString:@"Number"]) {
-        [defaults setInteger:[value integerValue] forKey:key];
-    } else if ([type isEqualToString:@"bool"]) {
-        [defaults setBool:[value boolValue] forKey:key];
-    } else {
-        [defaults setObject:value forKey:key];
+    if (!PlayerPrefs_SetInt) {
+        writeLog(@"[SGCheat] ❌ PlayerPrefs 未初始化，使用 NSUserDefaults 作为备用");
+        // 备用方案：使用 NSUserDefaults
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        if ([type isEqualToString:@"Number"]) {
+            [defaults setInteger:[value integerValue] forKey:key];
+        } else {
+            [defaults setObject:value forKey:key];
+        }
+        [defaults synchronize];
+        return;
     }
     
-    [defaults synchronize];
-    writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 数值已保存到 NSUserDefaults"]);
+    // 使用 Unity PlayerPrefs
+    if ([type isEqualToString:@"Number"]) {
+        const char *cKey = [key UTF8String];
+        void *keyPtr = (void *)cKey;
+        int intValue = [value intValue];
+        
+        PlayerPrefs_SetInt(keyPtr, intValue);
+        if (PlayerPrefs_Save) {
+            PlayerPrefs_Save();
+        }
+        
+        writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 已设置 Unity PlayerPrefs: %@ = %d", key, intValue]);
+    } else if ([type isEqualToString:@"Float"]) {
+        const char *cKey = [key UTF8String];
+        void *keyPtr = (void *)cKey;
+        float floatValue = [value floatValue];
+        
+        if (PlayerPrefs_SetFloat) {
+            PlayerPrefs_SetFloat(keyPtr, floatValue);
+            if (PlayerPrefs_Save) {
+                PlayerPrefs_Save();
+            }
+            writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 已设置 Unity PlayerPrefs: %@ = %f", key, floatValue]);
+        }
+    }
 }
 
 #pragma mark - 菜单视图
@@ -262,18 +331,20 @@ static void setGameValue(NSString *key, id value, NSString *type) {
                 if (isOn) {
                     writeLog(@"[SGCheat] 互秒开关 - 开启");
                     
-                    // 尝试修改游戏数值（需要找到正确的 key）
-                    // 这里使用常见的游戏数值 key，你需要根据实际游戏调整
-                    setGameValue(@"player_damage", @999999999, @"Number");
-                    setGameValue(@"player_attack", @999999999, @"Number");
-                    setGameValue(@"damage_multiplier", @999999, @"Number");
+                    // Unity 游戏常用的数值 key
+                    // 这些是示例，需要通过 Frida 找到实际的 key
+                    setGameValue(@"PlayerAttack", @999999999, @"Number");
+                    setGameValue(@"PlayerDamage", @999999999, @"Number");
+                    setGameValue(@"AttackPower", @999999999, @"Number");
+                    setGameValue(@"DamageMultiplier", @999999, @"Float");
                     
-                    [self showAlert:@"⚔️ 互秒已开启！\n已修改攻击力数值\n日志已保存到 Documents/SGCheat_Log.txt\n请进入战斗测试"];
+                    [self showAlert:@"⚔️ 互秒已开启！\n已修改攻击力数值\n日志已保存到 Documents/SGCheat_Log.txt\n如果不生效，需要用 Frida 找到正确的 key"];
                 } else {
                     writeLog(@"[SGCheat] 互秒开关 - 关闭");
-                    setGameValue(@"player_damage", @1, @"Number");
-                    setGameValue(@"player_attack", @1, @"Number");
-                    setGameValue(@"damage_multiplier", @1, @"Number");
+                    setGameValue(@"PlayerAttack", @1, @"Number");
+                    setGameValue(@"PlayerDamage", @1, @"Number");
+                    setGameValue(@"AttackPower", @1, @"Number");
+                    setGameValue(@"DamageMultiplier", @1, @"Float");
                     [self showAlert:@"⚔️ 互秒已关闭！\n请重启游戏以完全恢复"];
                 }
             } @catch (NSException *exception) {
@@ -288,13 +359,15 @@ static void setGameValue(NSString *key, id value, NSString *type) {
             @try {
                 if (isOn) {
                     writeLog(@"[SGCheat] 无敌开关 - 开启");
-                    setGameValue(@"player_hp", @999999999, @"Number");
-                    setGameValue(@"player_max_hp", @999999999, @"Number");
-                    setGameValue(@"invincible", @YES, @"bool");
+                    setGameValue(@"PlayerHP", @999999999, @"Number");
+                    setGameValue(@"PlayerMaxHP", @999999999, @"Number");
+                    setGameValue(@"Health", @999999999, @"Number");
+                    setGameValue(@"MaxHealth", @999999999, @"Number");
                     [self showAlert:@"🛡️ 无敌已开启！"];
                 } else {
                     writeLog(@"[SGCheat] 无敌开关 - 关闭");
-                    setGameValue(@"invincible", @NO, @"bool");
+                    setGameValue(@"PlayerHP", @100, @"Number");
+                    setGameValue(@"Health", @100, @"Number");
                     [self showAlert:@"🛡️ 无敌已关闭！"];
                 }
             } @catch (NSException *exception) {
