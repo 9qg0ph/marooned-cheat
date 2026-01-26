@@ -370,11 +370,25 @@ static void setGameValue(NSString *key, id value, NSString *type) {
                     NSNumber *value = @999999999;
                     
                     writeLog(@"[SGCheat] 互秒开关 - 开启");
-                    writeLog([NSString stringWithFormat:@"[SGCheat] 准备调用参数: key=%@ value=%@ type=nil", key, value]);
+                    writeLog(@"[SGCheat] 尝试多种 type 参数组合...");
                     
+                    // 尝试1: 空字符串（Frida 显示 undefined，可能对应空字符串）
+                    writeLog([NSString stringWithFormat:@"[SGCheat] 尝试1: key=%@ value=%@ type=@\"\"", key, value]);
+                    setGameValue(key, value, @"");
+                    
+                    // 尝试2: nil
+                    writeLog([NSString stringWithFormat:@"[SGCheat] 尝试2: key=%@ value=%@ type=nil", key, value]);
                     setGameValue(key, value, nil);
                     
-                    [self showAlert:@"⚔️ 互秒已开启！\n日志已保存到 Documents/SGCheat_Log.txt"];
+                    // 尝试3: "Number" 或 "Int"
+                    writeLog([NSString stringWithFormat:@"[SGCheat] 尝试3: key=%@ value=%@ type=@\"Number\"", key, value]);
+                    setGameValue(key, value, @"Number");
+                    
+                    // 尝试4: 传字符串形式的值
+                    writeLog([NSString stringWithFormat:@"[SGCheat] 尝试4: key=%@ value=@\"999999999\" type=@\"\"", key]);
+                    setGameValue(key, @"999999999", @"");
+                    
+                    [self showAlert:@"⚔️ 互秒已开启！\n已尝试多种参数组合\n日志已保存到 Documents/SGCheat_Log.txt\n请进入战斗测试"];
                 } else {
                     // 关闭时不调用 setValue，只提示用户
                     writeLog(@"[SGCheat] 互秒开关 - 关闭（不调用 setValue）");
