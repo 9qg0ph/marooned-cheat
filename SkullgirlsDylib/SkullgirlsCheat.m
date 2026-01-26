@@ -151,20 +151,68 @@ static void setGameValue(NSString *key, id value, NSString *type) {
         }
         
         if (!engine) {
-            writeLog(@"[SGCheat] ❌ 未找到任何单例方法，尝试列出所有类方法:");
+            writeLog(@"[SGCheat] ❌ 未找到任何单例方法");
+            writeLog(@"[SGCheat] 尝试从内存中查找已存在的 FanhanGGEngine 实例...");
             
-            // 列出所有类方法
-            unsigned int methodCount;
-            Method *methods = class_copyMethodList(object_getClass(FanhanGGEngine), &methodCount);
-            for (unsigned int i = 0; i < methodCount && i < 30; i++) {
-                SEL selector = method_getName(methods[i]);
-                writeLog([NSString stringWithFormat:@"[SGCheat]   类方法: %@", NSStringFromSelector(selector)]);
+            // 尝试通过遍历所有窗口和视图来找到可能持有 engine 的对象
+            // GameForFun 通常会在某个视图控制器或视图中持有 engine 实例
+            UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+            if (keyWindow) {
+                // 尝试从 keyWindow 的属性中查找
+                unsigned int propertyCount;
+                objc_property_t *properties = class_copyPropertyList([keyWindow class], &propertyCount);
+                for (unsigned int i = 0; i < propertyCount; i++) {
+                    const char *propertyName = property_getName(properties[i]);
+                    NSString *key = [NSString stringWithUTF8String:propertyName];
+                    @try {
+                        id value = [keyWindow valueForKey:key];
+                        if ([value isKindOfClass:FanhanGGEngine]) {
+                            engine = value;
+                            writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 从 keyWindow.%@ 找到 engine 实例", key]);
+                            break;
+                        }
+                    } @catch (NSException *e) {}
+                }
+                free(properties);
             }
-            free(methods);
             
-            // 尝试直接创建实例
-            writeLog(@"[SGCheat] 尝试直接创建实例...");
-            engine = [[FanhanGGEngine alloc] init];
+            // 如果还是没找到，尝试查找所有 UIViewController
+            if (!engine) {
+                writeLog(@"[SGCheat] 尝试从 rootViewController 查找...");
+                UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+                while (rootVC.presentedViewController) rootVC = rootVC.presentedViewController;
+                
+                unsigned int ivarCount;
+                Ivar *ivars = class_copyIvarList([rootVC class], &ivarCount);
+                for (unsigned int i = 0; i < ivarCount; i++) {
+                    const char *ivarName = ivar_getName(ivars[i]);
+                    NSString *key = [NSString stringWithUTF8String:ivarName];
+                    @try {
+                        id value = [rootVC valueForKey:key];
+                        if ([value isKindOfClass:FanhanGGEngine]) {
+                            engine = value;
+                            writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 从 rootVC.%@ 找到 engine 实例", key]);
+                            break;
+                        }
+                    } @catch (NSException *e) {}
+                }
+                free(ivars);
+            }
+            
+            // 最后的尝试：列出所有类方法，看看有没有其他获取方式
+            if (!engine) {
+                writeLog(@"[SGCheat] 列出所有类方法:");
+                unsigned int methodCount;
+                Method *methods = class_copyMethodList(object_getClass(FanhanGGEngine), &methodCount);
+                for (unsigned int i = 0; i < methodCount && i < 30; i++) {
+                    SEL selector = method_getName(methods[i]);
+                    writeLog([NSString stringWithFormat:@"[SGCheat]   类方法: %@", NSStringFromSelector(selector)]);
+                }
+                free(methods);
+                
+                writeLog(@"[SGCheat] ⚠️ 无法找到已存在的实例，创建新实例可能不会生效");
+                engine = [[FanhanGGEngine alloc] init];
+            }
         }
         
         if (!engine) {
