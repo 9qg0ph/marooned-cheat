@@ -134,13 +134,39 @@ static void setGameValue(NSString *key, id value, NSString *type) {
         
         writeLog(@"[SGCheat] ✅ 找到 FanhanGGEngine 类");
         
-        SEL sharedInstanceSel = NSSelectorFromString(@"sharedInstance");
-        if (![FanhanGGEngine respondsToSelector:sharedInstanceSel]) {
-            writeLog(@"[SGCheat] ❌ FanhanGGEngine 不响应 sharedInstance");
-            return;
+        // 尝试多种常见的单例方法名
+        NSArray *singletonSelectors = @[@"sharedInstance", @"shared", @"defaultManager", @"instance", @"sharedEngine", @"defaultEngine"];
+        
+        id engine = nil;
+        SEL foundSelector = nil;
+        
+        for (NSString *selectorName in singletonSelectors) {
+            SEL selector = NSSelectorFromString(selectorName);
+            if ([FanhanGGEngine respondsToSelector:selector]) {
+                writeLog([NSString stringWithFormat:@"[SGCheat] ✅ 找到单例方法: %@", selectorName]);
+                engine = [FanhanGGEngine performSelector:selector];
+                foundSelector = selector;
+                break;
+            }
         }
         
-        id engine = [FanhanGGEngine performSelector:sharedInstanceSel];
+        if (!engine) {
+            writeLog(@"[SGCheat] ❌ 未找到任何单例方法，尝试列出所有类方法:");
+            
+            // 列出所有类方法
+            unsigned int methodCount;
+            Method *methods = class_copyMethodList(object_getClass(FanhanGGEngine), &methodCount);
+            for (unsigned int i = 0; i < methodCount && i < 30; i++) {
+                SEL selector = method_getName(methods[i]);
+                writeLog([NSString stringWithFormat:@"[SGCheat]   类方法: %@", NSStringFromSelector(selector)]);
+            }
+            free(methods);
+            
+            // 尝试直接创建实例
+            writeLog(@"[SGCheat] 尝试直接创建实例...");
+            engine = [[FanhanGGEngine alloc] init];
+        }
+        
         if (!engine) {
             writeLog(@"[SGCheat] ❌ 无法获取 FanhanGGEngine 实例");
             return;
