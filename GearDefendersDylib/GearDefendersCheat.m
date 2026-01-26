@@ -44,33 +44,53 @@ static void writeLog(NSString *message) {
     }
 }
 
-#pragma mark - 游戏数值修改（完全独立实现）
+#pragma mark - 实现 FanhanGGEngine（替代 GameForFun.dylib）
 
-// 使用 NSUserDefaults 作为备用方案
-// 注意：Gear Defenders 可能不使用 NSUserDefaults，这只是尝试
-static void setGameValue(NSString *key, id value, NSString *type) {
-    writeLog([NSString stringWithFormat:@"[GDCheat] 设置游戏数值: key=%@ value=%@", key, value]);
+// 创建我们自己的 FanhanGGEngine 类，完全替代 GameForFun
+@interface FanhanGGEngine : NSObject
++ (instancetype)sharedInstance;
+- (void)setValue:(id)value forKey:(NSString *)key withType:(NSString *)type;
+@end
+
+@implementation FanhanGGEngine
+
+static FanhanGGEngine *_sharedInstance = nil;
+
++ (instancetype)sharedInstance {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        _sharedInstance = [[self alloc] init];
+        writeLog(@"[GDCheat] ✅ FanhanGGEngine 单例已创建");
+    });
+    return _sharedInstance;
+}
+
+- (void)setValue:(id)value forKey:(NSString *)key withType:(NSString *)type {
+    writeLog([NSString stringWithFormat:@"[GDCheat] setValue 被调用: key=%@ value=%@ type=%@", key, value, type]);
     
-    // 尝试使用 NSUserDefaults
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    // 这里实现实际的游戏修改逻辑
+    // 根据 key 来判断要修改什么
     
     if ([key isEqualToString:@"hook_int"]) {
-        // hook_int 对应整数值（金币、银币等）
-        [defaults setInteger:[value integerValue] forKey:@"GearDefenders_Currency"];
-        [defaults setInteger:[value integerValue] forKey:@"GearDefenders_Gold"];
-        [defaults setInteger:[value integerValue] forKey:@"GearDefenders_Coins"];
-        writeLog(@"[GDCheat] ✅ 已设置货币相关数值");
+        // hook_int: 金币、银币等整数值
+        writeLog([NSString stringWithFormat:@"[GDCheat] 设置整数值: %@", value]);
+        // TODO: 这里需要找到游戏真实的数据存储位置并修改
+        // 可能是内存地址、Unity PlayerPrefs、或其他方式
     } else if ([key isEqualToString:@"hook_float"]) {
-        // hook_float 对应浮点值（攻击力等）
-        [defaults setFloat:[value floatValue] forKey:@"GearDefenders_AttackPower"];
-        [defaults setFloat:[value floatValue] forKey:@"GearDefenders_Damage"];
-        writeLog(@"[GDCheat] ✅ 已设置攻击力相关数值");
+        // hook_float: 攻击力等浮点值
+        writeLog([NSString stringWithFormat:@"[GDCheat] 设置浮点值: %@", value]);
+        // TODO: 同上
     }
     
-    [defaults synchronize];
-    
-    writeLog(@"[GDCheat] ⚠️ 注意：此游戏可能不使用 NSUserDefaults 存储数据");
-    writeLog(@"[GDCheat] ⚠️ 如果功能不生效，需要使用内存修改或 hook Unity 函数");
+    writeLog(@"[GDCheat] ⚠️ 注意：当前只是记录调用，未实际修改游戏数据");
+    writeLog(@"[GDCheat] ⚠️ 需要逆向分析游戏找到真实的数据存储位置");
+}
+
+@end
+
+// 简化的接口函数
+static void setGameValue(NSString *key, id value, NSString *type) {
+    [[FanhanGGEngine sharedInstance] setValue:value forKey:key withType:type];
 }
 
 #pragma mark - 菜单视图
