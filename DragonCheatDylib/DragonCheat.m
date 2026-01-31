@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <sqlite3.h>
 
 // 日志文件路径
 #define LOG_FILE @"Documents/DragonCheat_Log.txt"
@@ -20,13 +21,62 @@ static void writeLog(NSString *message) {
     }
 }
 
-// 修改游戏数据
-static void modifyGameData(NSString *key, id value) {
+// 修改游戏数据 - 操作 SQLite 数据库
+static void modifyGameData(NSDictionary *propMap) {
     @try {
-        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-        [defaults setObject:value forKey:key];
-        [defaults synchronize];
-        writeLog([NSString stringWithFormat:@"修改成功 - Key: %@, Value: %@", key, value]);
+        // 获取数据库路径
+        NSString *dbPath = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/jsb.sqlite"];
+        
+        // 打开数据库
+        sqlite3 *db;
+        if (sqlite3_open([dbPath UTF8String], &db) != SQLITE_OK) {
+            writeLog(@"无法打开数据库");
+            return;
+        }
+        
+        // 读取当前的 playerData
+        const char *selectSQL = "SELECT value FROM data WHERE key='playerData-release-global'";
+        sqlite3_stmt *stmt;
+        NSMutableDictionary *playerData = nil;
+        
+        if (sqlite3_prepare_v2(db, selectSQL, -1, &stmt, NULL) == SQLITE_OK) {
+            if (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char *jsonStr = (const char *)sqlite3_column_text(stmt, 0);
+                NSData *jsonData = [[NSString stringWithUTF8String:jsonStr] dataUsingEncoding:NSUTF8StringEncoding];
+                playerData = [[NSJSONSerialization JSONObjectWithData:jsonData options:NSJSONReadingMutableContainers error:nil] mutableCopy];
+            }
+        }
+        sqlite3_finalize(stmt);
+        
+        if (!playerData) {
+            writeLog(@"无法读取玩家数据");
+            sqlite3_close(db);
+            return;
+        }
+        
+        // 修改 propMap
+        NSMutableDictionary *currentPropMap = [playerData[@"propMap"] mutableCopy];
+        [currentPropMap addEntriesFromDictionary:propMap];
+        playerData[@"propMap"] = currentPropMap;
+        
+        // 转换为 JSON
+        NSData *newJsonData = [NSJSONSerialization dataWithJSONObject:playerData options:0 error:nil];
+        NSString *newJsonStr = [[NSString alloc] initWithData:newJsonData encoding:NSUTF8StringEncoding];
+        
+        // 更新数据库
+        const char *updateSQL = "UPDATE data SET value=? WHERE key='playerData-release-global'";
+        if (sqlite3_prepare_v2(db, updateSQL, -1, &stmt, NULL) == SQLITE_OK) {
+            sqlite3_bind_text(stmt, 1, [newJsonStr UTF8String], -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(stmt) == SQLITE_DONE) {
+                writeLog(@"数据库修改成功");
+            } else {
+                writeLog(@"数据库修改失败");
+            }
+        }
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        
+        writeLog([NSString stringWithFormat:@"修改成功 - propMap: %@", propMap]);
     } @catch (NSException *exception) {
         writeLog([NSString stringWithFormat:@"修改失败 - %@", exception]);
     }
@@ -181,48 +231,36 @@ static void modifyGameData(NSString *key, id value) {
 }
 
 - (void)unlockAllLevels {
-    // 修改 rcrr 键，解锁所有关卡
-    NSMutableDictionary *rcrr = [NSMutableDictionary dictionary];
-    for (int i = 1; i <= 100; i++) {
-        rcrr[@(i).stringValue] = @{
-            @"5": @999,
-            @"trtc": @999,
-            @"rrd": [NSDate date]
-        };
-    }
-    modifyGameData(@"rcrr", rcrr);
-    writeLog(@"[DragonCheat] 已解锁所有关卡");
+    // 修改所有货币为最大值
+    NSDictionary *propMap = @{
+        @"1001": @999999999,  // 金币
+        @"1002": @999999999,  // 星星
+        @"1003": @999999999,  // 金券
+        @"1004": @999999999,  // 其他货币
+        @"1006": @999999999   // 体力
+    };
+    modifyGameData(propMap);
+    writeLog(@"[DragonCheat] 已设置无限货币");
 }
 
 - (void)setUnlimitedScore {
-    // 设置高分数
-    NSMutableDictionary *rcrr = [[NSUserDefaults standardUserDefaults] objectForKey:@"rcrr"];
-    if (!rcrr) rcrr = [NSMutableDictionary dictionary];
-    
-    for (NSString *key in rcrr.allKeys) {
-        NSMutableDictionary *level = [rcrr[key] mutableCopy];
-        level[@"5"] = @999999;
-        level[@"trtc"] = @999999;
-        rcrr[key] = level;
-    }
-    
-    modifyGameData(@"rcrr", rcrr);
-    writeLog(@"[DragonCheat] 已设置无限分数");
+    // 设置金币和星星
+    NSDictionary *propMap = @{
+        @"1001": @999999999,  // 金币
+        @"1002": @999999999   // 星星
+    };
+    modifyGameData(propMap);
+    writeLog(@"[DragonCheat] 已设置无限金币和星星");
 }
 
 - (void)setThreeStars {
-    // 设置三星通关
-    NSMutableDictionary *rcrr = [[NSUserDefaults standardUserDefaults] objectForKey:@"rcrr"];
-    if (!rcrr) rcrr = [NSMutableDictionary dictionary];
-    
-    for (NSString *key in rcrr.allKeys) {
-        NSMutableDictionary *level = [rcrr[key] mutableCopy];
-        level[@"5"] = @3;  // 假设5代表星星数
-        rcrr[key] = level;
-    }
-    
-    modifyGameData(@"rcrr", rcrr);
-    writeLog(@"[DragonCheat] 已设置三星通关");
+    // 设置体力和金券
+    NSDictionary *propMap = @{
+        @"1003": @999999999,  // 金券
+        @"1006": @999999999   // 体力
+    };
+    modifyGameData(propMap);
+    writeLog(@"[DragonCheat] 已设置无限体力和金券");
 }
 
 - (void)showAlert:(NSString *)message {
