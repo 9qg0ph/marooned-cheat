@@ -1,0 +1,39 @@
+name: Build Dragon Cheat Dylib
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'DragonCheatDylib/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      
+    - name: Setup Theos
+      uses: actions/checkout@v3
+      with:
+        repository: theos/theos
+        path: theos
+        submodules: recursive
+      
+    - name: Setup Environment
+      run: |
+        echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
+        
+    - name: Build Dylib
+      run: |
+        cd DragonCheatDylib
+        make clean
+        make package
+        
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: DragonCheat.dylib
+        path: DragonCheatDylib/.theos/obj/debug/DragonCheat.dylib

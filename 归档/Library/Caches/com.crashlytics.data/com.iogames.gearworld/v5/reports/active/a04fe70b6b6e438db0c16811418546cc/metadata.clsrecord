@@ -1,0 +1,4 @@
+{"identity":{"generator":"Crashlytics iOS SDK/11.14.0","display_version":"11.14.0","build_version":"11.14.0","started_at":1769417552,"session_id":"a04fe70b6b6e438db0c16811418546cc","app_quality_session_id":"368ef7352312452895a7b3c8f4efc857","install_id":"","beta_token":"","absolute_log_timestamps":true}}
+{"host":{"model":"iPhone15,3","machine":"D74AP","os_build_version":"20C65","os_display_version":"16.2.0","platform":"ios","firebase_platform":"ios","locale":"zh_CN"}}
+{"application":{"bundle_id":"com.iogames.gearworld","custom_bundle_id":null,"build_version":"3","display_version":"1.2.1","extension_id":null}}
+{"executable":{"architecture":"arm64","uuid":"73ccb0f68b8c3304ad7543eda2bbdddb","base":4301897728,"size":32768,"encrypted":false,"minimum_sdk_version":"0.0.0","built_sdk_version":"0.0.0"}}

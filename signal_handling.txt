@@ -1,0 +1,84 @@
+device	iPhone15,3
+os	16.2.0
+bn	3.0.0
+js	afma-sdk-i-v12.11.0
+api	1.2.1
+dev-build	0
+proc	UnityFramework
+appid	com.iogames.gearworld	device	iPhone15,3
+os	16.2.0
+bn	3.0.0
+js	afma-sdk-i-v12.11.0
+api	1.2.1
+dev-build	0
+proc	UnityFramework
+appid	com.iogames.gearworld
+eids	
+gws	
+excn	signal
+excr	SIGSEGV
+ccc	1
+stack-start	
+	0x0000000000000000		0x000000013f776e10
+<redacted>	0x0000000000000038	/usr/lib/system/libsystem_platform.dylib	0x000000020a2a0a90
+	0x0000000000000000		0x000000013f8a004c
+	0x0000000000000000		0x000000013f89c04c
+	0x0000000000000000		0x000000013f793ba0
+	0x0000000000000000		0x000000013f793748
+	0x0000000000000000		0x000000013f7936a4
+	0x0000000000000000		0x000000013f9443e4
+	0x0000000000000000		0x000000013f946c58
+	0x0000000000000000		0x000000013f946c58
+	0x0000000000000000		0x000000013f9441d8
+	0x0000000000000000		0x000000013f78fab4
+	0x0000000000000000		0x000000013f78fb4c
+	0x0000000000000000		0x000000013f7a4c54
+	0x0000000000000000		0x000000013f75f8cc
+	0x0000000000000000		0x000000010a6580b4
+<redacted>	0x0000000000000094	/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation	0x00000001bc3186c4
+<redacted>	0x00000000000001ac	/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation	0x00000001bc2c4b2c
+<redacted>	0x00000000000001bc	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfdc5bb0
+<redacted>	0x00000000000000bc	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfdc5674
+<redacted>	0x0000000000000130	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfdc3c34
+<redacted>	0x0000000000026280	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd5d000
+<redacted>	0x0000000000022be0	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd59960
+<redacted>	0x0000000000000000	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd308a8
+<redacted>	0x0000000000000220	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001d050c108
+<redacted>	0x000000000000021c	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001d086e024
+<redacted>	0x0000000000026170	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd5cef0
+<redacted>	0x0000000000022be0	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd59960
+<redacted>	0x00000000000240b8	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd5ae38
+<redacted>	0x00000000000240b8	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd5ae38
+<redacted>	0x0000000000022be0	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd59960
+<redacted>	0x0000000000022be0	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd59960
+<redacted>	0x0000000000000000	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd308a8
+<redacted>	0x0000000000000220	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001d050c108
+<redacted>	0x000000000000021c	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001d086e024
+<redacted>	0x0000000000026170	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd5cef0
+<redacted>	0x00000000000240b8	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd5ae38
+<redacted>	0x0000000000000000	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001cfd308a8
+<redacted>	0x0000000000000220	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001d050c108
+_ZN3JSC12profiledCallEPNS_14JSGlobalObjectENS_15ProfilingReasonENS_7JSValueERKNS_8CallDataES3_RKNS_7ArgListERN3WTF8NakedPtrINS_9ExceptionEEE	0x0000000000000070	/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore	0x00000001d07b05e0
+<redacted>	0x00000000000003ac	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cd4ad61c
+<redacted>	0x00000000000001c8	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cd841c48
+<redacted>	0x000000000000016c	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cd84179c
+<redacted>	0x00000000000000e4	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cd834328
+<redacted>	0x00000000000002f8	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cd8333a4
+<redacted>	0x0000000000000284	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cd812f80
+<redacted>	0x0000000000000094	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cdf3f574
+_ZN7WebCore12EventHandler23handleMouseReleaseEventERKNS_18PlatformMouseEventE	0x0000000000000644	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cdf4313c
+_ZN7WebCore12EventHandler7mouseUpEP8WebEvent	0x00000000000000a4	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001ccd39a28
+<redacted>	0x0000000000000070	/System/Library/PrivateFrameworks/WebKitLegacy.framework/WebKitLegacy	0x0000000203e0e638
+<redacted>	0x0000000000000078	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cc5b1624
+<redacted>	0x0000000000000028	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cc5b158c
+<redacted>	0x00000000000000e0	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cc5b1498
+<redacted>	0x00000000000001ec	/System/Library/PrivateFrameworks/UIKitCore.framework/UIKitCore	0x00000001bf50ba00
+<redacted>	0x0000000000000294	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001ce228c34
+<redacted>	0x000000000000001c	/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation	0x00000001bc379f34
+<redacted>	0x00000000000000b0	/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation	0x00000001bc38630c
+<redacted>	0x00000000000000f4	/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation	0x00000001bc30a1d0
+<redacted>	0x0000000000000344	/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation	0x00000001bc31fb8c
+CFRunLoopRunSpecific	0x0000000000000264	/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation	0x00000001bc324ec0
+<redacted>	0x00000000000002f4	/System/Library/PrivateFrameworks/WebCore.framework/WebCore	0x00000001cd16ad3c
+_pthread_start	0x0000000000000094	/usr/lib/system/libsystem_pthread.dylib	0x000000020a3366cc
+thread_start	0x0000000000000008	/usr/lib/system/libsystem_pthread.dylib	0x000000020a335ba4
