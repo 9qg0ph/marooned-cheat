@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'DragonCheatDylib/**'
+      - '.github/workflows/build-dragon-dylib.yml'
   workflow_dispatch:
 
 jobs:
