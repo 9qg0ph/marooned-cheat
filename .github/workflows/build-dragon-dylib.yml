@@ -33,10 +33,18 @@ jobs:
         make FINALPACKAGE=1 || true
         # 即使签名失败也继续，因为 dylib 已经生成
         
+    - name: List Build Output
+      run: |
+        echo "=== Listing .theos/obj/debug directory ==="
+        ls -la DragonCheatDylib/.theos/obj/debug/ || true
+        echo "=== Finding all .dylib files ==="
+        find DragonCheatDylib/.theos -name "*.dylib" || true
+        
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: DragonCheat.dylib
         path: |
-          DragonCheatDylib/.theos/obj/debug/DragonCheat.dylib
-          DragonCheatDylib/.theos/obj/debug/*.dylib
+          DragonCheatDylib/.theos/obj/debug/*.dylib*
+          DragonCheatDylib/.theos/obj/debug/arm64/*.dylib
+          DragonCheatDylib/.theos/obj/debug/arm64e/*.dylib
