@@ -33,7 +33,7 @@ jobs:
         make package
         
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: DragonCheat.dylib
         path: DragonCheatDylib/.theos/obj/debug/DragonCheat.dylib
