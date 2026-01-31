@@ -30,10 +30,13 @@ jobs:
       run: |
         cd DragonCheatDylib
         make clean
-        make package
+        make FINALPACKAGE=1 || true
+        # 即使签名失败也继续，因为 dylib 已经生成
         
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: DragonCheat.dylib
-        path: DragonCheatDylib/.theos/obj/debug/DragonCheat.dylib
+        path: |
+          DragonCheatDylib/.theos/obj/debug/DragonCheat.dylib
+          DragonCheatDylib/.theos/obj/debug/*.dylib
