@@ -37,15 +37,19 @@ jobs:
     - name: List Build Output
       run: |
         echo "=== Listing .theos/obj/debug directory ==="
-        ls -la DragonCheatDylib/.theos/obj/debug/ || true
+        ls -laR DragonCheatDylib/.theos/obj/ || true
         echo "=== Finding all .dylib files ==="
-        find DragonCheatDylib/.theos -name "*.dylib" || true
+        find DragonCheatDylib/.theos -name "*.dylib*" -o -name "*.unsigned" || true
+        
+    - name: Copy Dylib
+      run: |
+        mkdir -p output
+        find DragonCheatDylib/.theos/obj -name "*.dylib*" -exec cp {} output/ \; || true
+        find DragonCheatDylib/.theos/obj -name "*.unsigned" -exec cp {} output/DragonCheat.dylib \; || true
+        ls -la output/ || true
         
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: DragonCheat.dylib
-        path: |
-          DragonCheatDylib/.theos/obj/debug/*.dylib*
-          DragonCheatDylib/.theos/obj/debug/arm64/*.dylib
-          DragonCheatDylib/.theos/obj/debug/arm64e/*.dylib
+        path: output/
