@@ -1,5 +1,7 @@
 TARGET := iphone:clang:latest:14.0
 INSTALL_TARGET_PROCESSES = 不服来通关
+THEOS_DEVICE_IP = 127.0.0.1
+THEOS_DEVICE_PORT = 2222
 
 include $(THEOS)/makefiles/common.mk
 
@@ -9,5 +11,6 @@ DragonCheat_FILES = DragonCheat.m
 DragonCheat_CFLAGS = -fobjc-arc
 DragonCheat_FRAMEWORKS = UIKit Foundation
 DragonCheat_LIBRARIES = sqlite3
+DragonCheat_CODESIGN_FLAGS = -
 
 include $(THEOS_MAKE_PATH)/tweak.mk
