@@ -267,7 +267,14 @@ static void modifyGameData(NSDictionary *propMap) {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"不服来通关" message:message preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
     
-    UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+    UIWindow *window = nil;
+    for (UIWindow *w in [UIApplication sharedApplication].windows) {
+        if (w.isKeyWindow) {
+            window = w;
+            break;
+        }
+    }
+    UIViewController *rootVC = window.rootViewController;
     [rootVC presentViewController:alert animated:YES completion:nil];
 }
 
@@ -309,9 +316,17 @@ static void modifyGameData(NSDictionary *propMap) {
 - (void)buttonTapped {
     writeLog(@"[DragonCheat] 悬浮按钮点击");
     
-    UIWindow *window = [UIApplication sharedApplication].keyWindow;
-    DragonCheatView *menuView = [[DragonCheatView alloc] initWithFrame:window.bounds];
-    [window addSubview:menuView];
+    UIWindow *window = nil;
+    for (UIWindow *w in [UIApplication sharedApplication].windows) {
+        if (w.isKeyWindow) {
+            window = w;
+            break;
+        }
+    }
+    if (window) {
+        DragonCheatView *menuView = [[DragonCheatView alloc] initWithFrame:window.bounds];
+        [window addSubview:menuView];
+    }
 }
 
 - (void)handlePan:(UIPanGestureRecognizer *)gesture {
@@ -336,7 +351,13 @@ __attribute__((constructor)) static void initialize() {
     writeLog(@"[DragonCheat] Dylib 加载成功");
     
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        UIWindow *window = [UIApplication sharedApplication].keyWindow;
+        UIWindow *window = nil;
+        for (UIWindow *w in [UIApplication sharedApplication].windows) {
+            if (w.isKeyWindow) {
+                window = w;
+                break;
+            }
+        }
         if (window) {
             DragonFloatingButton *floatingButton = [[DragonFloatingButton alloc] initWithFrame:CGRectMake(window.bounds.size.width - 80, 200, 60, 60)];
             [window addSubview:floatingButton];
