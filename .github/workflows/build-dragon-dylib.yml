@@ -32,7 +32,6 @@ jobs:
         cd DragonCheatDylib
         make clean
         make FINALPACKAGE=1 || true
-        # 即使签名失败也继续，因为 dylib 已经生成
         
     - name: List Build Output
       run: |
@@ -44,9 +43,14 @@ jobs:
     - name: Copy Dylib
       run: |
         mkdir -p output
-        find DragonCheatDylib/.theos/obj -name "*.dylib*" -exec cp {} output/ \; || true
-        find DragonCheatDylib/.theos/obj -name "*.unsigned" -exec cp {} output/DragonCheat.dylib \; || true
-        ls -la output/ || true
+        DYLIB_PATH=$(find DragonCheatDylib/.theos/obj -type f -name "DragonCheat.dylib" ! -path "*/.dSYM/*" | head -n 1)
+        if [ -z "${DYLIB_PATH}" ]; then
+          DYLIB_PATH=$(find DragonCheatDylib/.theos/obj -type f \( -name "DragonCheat.dylib.unsigned" -o -name "*.unsigned" \) ! -path "*/.dSYM/*" | head -n 1)
+        fi
+        echo "Using dylib: ${DYLIB_PATH}"
+        test -n "${DYLIB_PATH}"
+        cp "${DYLIB_PATH}" output/DragonCheat.dylib
+        ls -la output/
         
     - name: Upload Artifact
       uses: actions/upload-artifact@v4

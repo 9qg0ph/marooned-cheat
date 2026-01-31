@@ -2,13 +2,21 @@
 #import <UIKit/UIKit.h>
 #import <sqlite3.h>
 
+ @class DragonCheatView;
+ static UIButton *g_floatButton = nil;
+ static DragonCheatView *g_menuView = nil;
+ 
+ static UIWindow* getKeyWindow(void);
+ static void showMenu(void);
+ static void handlePan(UIPanGestureRecognizer *pan);
+
 // 日志文件路径
 #define LOG_FILE @"Documents/DragonCheat_Log.txt"
 
 // 写入日志
 static void writeLog(NSString *message) {
     NSString *logPath = [NSHomeDirectory() stringByAppendingPathComponent:LOG_FILE];
-    NSString *timestamp = [[NSDateFormatter new] stringFromDate:[NSDate date]];
+    NSString *timestamp = [NSDateFormatter localizedStringFromDate:[NSDate date] dateStyle:NSDateFormatterShortStyle timeStyle:NSDateFormatterMediumStyle];
     NSString *logMessage = [NSString stringWithFormat:@"[%@] %@\n", timestamp, message];
     
     NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logPath];
@@ -281,87 +289,98 @@ static void modifyGameData(NSDictionary *propMap) {
 - (void)closeMenu {
     writeLog(@"[DragonCheat] 关闭菜单");
     [self removeFromSuperview];
+    g_menuView = nil;
 }
 
 @end
 
 // 悬浮按钮
-@interface DragonFloatingButton : UIButton
-@end
-
-@implementation DragonFloatingButton
-
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (self) {
-        [self setTitle:@"🐉" forState:UIControlStateNormal];
-        self.titleLabel.font = [UIFont systemFontOfSize:30];
-        self.backgroundColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:0.8];
-        self.layer.cornerRadius = 30;
-        self.layer.shadowColor = [UIColor blackColor].CGColor;
-        self.layer.shadowOffset = CGSizeMake(0, 2);
-        self.layer.shadowOpacity = 0.3;
-        self.layer.shadowRadius = 4;
-        
-        [self addTarget:self action:@selector(buttonTapped) forControlEvents:UIControlEventTouchUpInside];
-        
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
-        [self addGestureRecognizer:pan];
-        
-        writeLog(@"[DragonCheat] 悬浮按钮初始化成功");
-    }
-    return self;
-}
-
-- (void)buttonTapped {
-    writeLog(@"[DragonCheat] 悬浮按钮点击");
-    
-    UIWindow *window = nil;
-    for (UIWindow *w in [UIApplication sharedApplication].windows) {
-        if (w.isKeyWindow) {
-            window = w;
+static UIWindow* getKeyWindow(void) {
+    UIWindow *keyWindow = nil;
+    for (UIWindow *window in [UIApplication sharedApplication].windows) {
+        if (window.isKeyWindow) {
+            keyWindow = window;
             break;
         }
     }
-    if (window) {
-        DragonCheatView *menuView = [[DragonCheatView alloc] initWithFrame:window.bounds];
-        [window addSubview:menuView];
+    if (!keyWindow) {
+        keyWindow = [UIApplication sharedApplication].windows.firstObject;
     }
+    return keyWindow;
 }
 
-- (void)handlePan:(UIPanGestureRecognizer *)gesture {
-    CGPoint translation = [gesture translationInView:self.superview];
-    self.center = CGPointMake(self.center.x + translation.x, self.center.y + translation.y);
-    [gesture setTranslation:CGPointZero inView:self.superview];
-    
-    if (gesture.state == UIGestureRecognizerStateEnded) {
-        CGRect bounds = self.superview.bounds;
-        CGFloat x = self.center.x < bounds.size.width / 2 ? 40 : bounds.size.width - 40;
-        
-        [UIView animateWithDuration:0.3 animations:^{
-            self.center = CGPointMake(x, self.center.y);
-        }];
+static void showMenu(void) {
+    if (g_menuView) {
+        [g_menuView removeFromSuperview];
+        g_menuView = nil;
+        return;
     }
+
+    UIWindow *keyWindow = getKeyWindow();
+    if (!keyWindow) return;
+
+    CGRect windowBounds = keyWindow.bounds;
+    g_menuView = [[DragonCheatView alloc] initWithFrame:windowBounds];
+    g_menuView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [keyWindow addSubview:g_menuView];
 }
 
+static void handlePan(UIPanGestureRecognizer *pan) {
+    UIWindow *keyWindow = getKeyWindow();
+    if (!keyWindow || !g_floatButton) return;
+
+    CGPoint translation = [pan translationInView:keyWindow];
+    CGRect frame = g_floatButton.frame;
+    frame.origin.x += translation.x;
+    frame.origin.y += translation.y;
+
+    CGFloat sw = keyWindow.bounds.size.width;
+    CGFloat sh = keyWindow.bounds.size.height;
+    frame.origin.x = MAX(0, MIN(frame.origin.x, sw - 60));
+    frame.origin.y = MAX(50, MIN(frame.origin.y, sh - 120));
+
+    g_floatButton.frame = frame;
+    [pan setTranslation:CGPointZero inView:keyWindow];
+}
+
+static void setupFloatingButton(void) {
+    if (g_floatButton) return;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIWindow *keyWindow = getKeyWindow();
+        if (!keyWindow) return;
+
+        g_floatButton = [UIButton buttonWithType:UIButtonTypeCustom];
+        g_floatButton.frame = CGRectMake(keyWindow.bounds.size.width - 80, 200, 60, 60);
+        g_floatButton.backgroundColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:0.8];
+        g_floatButton.layer.cornerRadius = 30;
+        g_floatButton.clipsToBounds = YES;
+        g_floatButton.layer.zPosition = 9999;
+
+        [g_floatButton setTitle:@"🐉" forState:UIControlStateNormal];
+        [g_floatButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        g_floatButton.titleLabel.font = [UIFont systemFontOfSize:30];
+
+        [g_floatButton addTarget:[NSValue class] action:@selector(dc_showMenu) forControlEvents:UIControlEventTouchUpInside];
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:[NSValue class] action:@selector(dc_handlePan:)];
+        [g_floatButton addGestureRecognizer:pan];
+
+        [keyWindow addSubview:g_floatButton];
+        writeLog(@"[DragonCheat] 悬浮按钮已添加");
+    });
+}
+
+@implementation NSValue (DragonCheat)
++ (void)dc_showMenu { showMenu(); }
++ (void)dc_handlePan:(UIPanGestureRecognizer *)pan { handlePan(pan); }
 @end
 
 // 入口函数
 __attribute__((constructor)) static void initialize() {
-    writeLog(@"[DragonCheat] Dylib 加载成功");
-    
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        UIWindow *window = nil;
-        for (UIWindow *w in [UIApplication sharedApplication].windows) {
-            if (w.isKeyWindow) {
-                window = w;
-                break;
-            }
-        }
-        if (window) {
-            DragonFloatingButton *floatingButton = [[DragonFloatingButton alloc] initWithFrame:CGRectMake(window.bounds.size.width - 80, 200, 60, 60)];
-            [window addSubview:floatingButton];
-            writeLog(@"[DragonCheat] 悬浮按钮已添加");
-        }
-    });
+    @autoreleasepool {
+        writeLog(@"[DragonCheat] Dylib 加载成功");
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            setupFloatingButton();
+        });
+    }
 }
