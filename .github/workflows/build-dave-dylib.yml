@@ -1,0 +1,46 @@
+name: Build Dave the Diver Cheat Dylib
+
+on:
+  push:
+    paths:
+      - '潜水员戴夫Dylib/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+    
+    - name: Build dylib
+      run: |
+        cd 潜水员戴夫Dylib
+        
+        clang -arch arm64 \
+          -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+          -miphoneos-version-min=14.0 \
+          -dynamiclib \
+          -framework UIKit \
+          -framework Foundation \
+          -framework CoreGraphics \
+          -fobjc-arc \
+          -Wno-deprecated-declarations \
+          -o DaveCheat.dylib \
+          DaveCheat.m
+        
+        ldid -S DaveCheat.dylib || codesign -f -s - DaveCheat.dylib
+        
+        echo "Build completed!"
+        ls -la *.dylib
+    
+    - name: Upload dylib
+      uses: actions/upload-artifact@v4
+      with:
+        name: DaveCheat-dylib
+        path: 潜水员戴夫Dylib/DaveCheat.dylib
