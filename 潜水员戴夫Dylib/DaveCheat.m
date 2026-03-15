@@ -1,9 +1,12 @@
-// 潜水员戴夫修改器 - DaveCheat.m
+// 潜水员戴夫修改器 - DaveCheat.m v2
 // 无授权验证，直接通过IL2CPP API hook游戏方法
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <dlfcn.h>
 #import <mach/mach.h>
+#import <mach-o/dyld.h>
+
+#define LOG(fmt, ...) NSLog(@"[DaveCheat] " fmt, ##__VA_ARGS__)
 
 #pragma mark - IL2CPP Types & API
 
@@ -20,23 +23,52 @@ static const char*            (*il2cpp_image_get_name)(Il2CppImage*);
 static Il2CppClass*           (*il2cpp_class_from_name)(Il2CppImage*, const char*, const char*);
 static Il2CppMethodInfo*      (*il2cpp_class_get_method_from_name)(Il2CppClass*, const char*, int);
 
+static BOOL g_apiLoaded = NO;
+
 static BOOL loadIL2CPPAPI(void) {
-    void *handle = dlopen("Frameworks/UnityFramework.framework/UnityFramework", RTLD_LAZY);
-    if (!handle) {
-        handle = dlopen(NULL, RTLD_LAZY);
+    if (g_apiLoaded) return YES;
+
+    // Try multiple approaches to find IL2CPP symbols
+    // 1. RTLD_DEFAULT searches all loaded images
+    il2cpp_domain_get = dlsym(RTLD_DEFAULT, "il2cpp_domain_get");
+    if (il2cpp_domain_get) {
+        LOG(@"Found il2cpp via RTLD_DEFAULT");
+    } else {
+        // 2. Try opening UnityFramework explicitly
+        void *handle = dlopen("Frameworks/UnityFramework.framework/UnityFramework", RTLD_LAZY | RTLD_NOLOAD);
+        if (!handle) handle = dlopen("Frameworks/UnityFramework.framework/UnityFramework", RTLD_LAZY);
+        if (!handle) handle = dlopen(NULL, RTLD_LAZY);
+        if (!handle) {
+            LOG(@"ERROR: Cannot find UnityFramework handle");
+            return NO;
+        }
+        il2cpp_domain_get = dlsym(handle, "il2cpp_domain_get");
     }
-    if (!handle) return NO;
 
-    il2cpp_domain_get                  = dlsym(handle, "il2cpp_domain_get");
-    il2cpp_domain_get_assemblies       = dlsym(handle, "il2cpp_domain_get_assemblies");
-    il2cpp_assembly_get_image          = dlsym(handle, "il2cpp_assembly_get_image");
-    il2cpp_image_get_name              = dlsym(handle, "il2cpp_image_get_name");
-    il2cpp_class_from_name             = dlsym(handle, "il2cpp_class_from_name");
-    il2cpp_class_get_method_from_name  = dlsym(handle, "il2cpp_class_get_method_from_name");
+    if (!il2cpp_domain_get) {
+        LOG(@"ERROR: il2cpp_domain_get not found");
+        return NO;
+    }
 
-    return (il2cpp_domain_get && il2cpp_domain_get_assemblies &&
-            il2cpp_assembly_get_image && il2cpp_image_get_name &&
-            il2cpp_class_from_name && il2cpp_class_get_method_from_name);
+    il2cpp_domain_get_assemblies       = dlsym(RTLD_DEFAULT, "il2cpp_domain_get_assemblies");
+    il2cpp_assembly_get_image          = dlsym(RTLD_DEFAULT, "il2cpp_assembly_get_image");
+    il2cpp_image_get_name              = dlsym(RTLD_DEFAULT, "il2cpp_image_get_name");
+    il2cpp_class_from_name             = dlsym(RTLD_DEFAULT, "il2cpp_class_from_name");
+    il2cpp_class_get_method_from_name  = dlsym(RTLD_DEFAULT, "il2cpp_class_get_method_from_name");
+
+    LOG(@"API ptrs: domain_get=%p assemblies=%p get_image=%p get_name=%p class_from_name=%p get_method=%p",
+        il2cpp_domain_get, il2cpp_domain_get_assemblies,
+        il2cpp_assembly_get_image, il2cpp_image_get_name,
+        il2cpp_class_from_name, il2cpp_class_get_method_from_name);
+
+    g_apiLoaded = (il2cpp_domain_get && il2cpp_domain_get_assemblies &&
+                   il2cpp_assembly_get_image && il2cpp_image_get_name &&
+                   il2cpp_class_from_name && il2cpp_class_get_method_from_name);
+
+    if (!g_apiLoaded) {
+        LOG(@"ERROR: Some IL2CPP APIs not found");
+    }
+    return g_apiLoaded;
 }
 
 #pragma mark - Memory Patching
@@ -63,41 +95,70 @@ static BOOL patchMemory(void *addr, const void *patchBytes, size_t size) {
 
 #pragma mark - IL2CPP Method Resolution
 
+static Il2CppImage* g_csharpImage = NULL;
+
 static Il2CppImage* findImage(const char *imageName) {
+    if (g_csharpImage) return g_csharpImage;
     if (!il2cpp_domain_get) return NULL;
-    Il2CppDomain *domain = il2cpp_domain_get();
-    if (!domain) return NULL;
 
-    size_t count = 0;
-    Il2CppAssembly **assemblies = il2cpp_domain_get_assemblies(domain, &count);
-    if (!assemblies) return NULL;
+    @try {
+        Il2CppDomain *domain = il2cpp_domain_get();
+        if (!domain) { LOG(@"domain_get returned NULL"); return NULL; }
+        LOG(@"Got domain: %p", domain);
 
-    for (size_t i = 0; i < count; i++) {
-        Il2CppImage *img = il2cpp_assembly_get_image(assemblies[i]);
-        if (img) {
-            const char *name = il2cpp_image_get_name(img);
-            if (name && strcmp(name, imageName) == 0) {
-                return img;
+        size_t count = 0;
+        Il2CppAssembly **assemblies = il2cpp_domain_get_assemblies(domain, &count);
+        if (!assemblies) { LOG(@"get_assemblies returned NULL"); return NULL; }
+        // Sanity check: count should be reasonable (< 1000)
+        if (count > 500) {
+            LOG(@"WARNING: assembly count=%zu looks wrong, capping at 500", count);
+            count = 500;
+        }
+        LOG(@"Got %zu assemblies", count);
+
+        for (size_t i = 0; i < count; i++) {
+            if (!assemblies[i]) continue;
+            Il2CppImage *img = il2cpp_assembly_get_image(assemblies[i]);
+            if (img) {
+                const char *name = il2cpp_image_get_name(img);
+                if (name && strcmp(name, imageName) == 0) {
+                    LOG(@"Found image: %s", name);
+                    g_csharpImage = img;
+                    return img;
+                }
             }
         }
+        LOG(@"Image '%s' not found", imageName);
+    } @catch (NSException *e) {
+        LOG(@"EXCEPTION in findImage: %@", e);
     }
     return NULL;
 }
 
 static void* resolveMethod(const char *imageName, const char *namespaceName,
                            const char *className, const char *methodName, int paramCount) {
-    Il2CppImage *image = findImage(imageName);
-    if (!image) return NULL;
+    @try {
+        Il2CppImage *image = findImage(imageName);
+        if (!image) { LOG(@"Image not found for %s.%s", className, methodName); return NULL; }
 
-    Il2CppClass *klass = il2cpp_class_from_name(image, namespaceName, className);
-    if (!klass) return NULL;
+        Il2CppClass *klass = il2cpp_class_from_name(image, namespaceName, className);
+        if (!klass) { LOG(@"Class not found: ns='%s' class='%s'", namespaceName, className); return NULL; }
 
-    Il2CppMethodInfo *method = il2cpp_class_get_method_from_name(klass, methodName, paramCount);
-    if (!method) return NULL;
+        Il2CppMethodInfo *method = il2cpp_class_get_method_from_name(klass, methodName, paramCount);
+        if (!method) { LOG(@"Method not found: %s.%s(%d)", className, methodName, paramCount); return NULL; }
 
-    // MethodInfo->methodPointer is at offset 0
-    void *funcPtr = *(void **)method;
-    return funcPtr;
+        // MethodInfo->methodPointer is at offset 0
+        void *funcPtr = *(void **)method;
+        if (!funcPtr || (uintptr_t)funcPtr < 0x1000) {
+            LOG(@"Invalid funcPtr %p for %s.%s", funcPtr, className, methodName);
+            return NULL;
+        }
+        LOG(@"Resolved %s.%s -> %p", className, methodName, funcPtr);
+        return funcPtr;
+    } @catch (NSException *e) {
+        LOG(@"EXCEPTION resolving %s.%s: %@", className, methodName, e);
+        return NULL;
+    }
 }
 
 #pragma mark - Feature Definitions
@@ -173,15 +234,25 @@ static BOOL g_resolved = NO;
 
 static void resolveAllMethods(void) {
     if (g_resolved) return;
-    for (int i = 0; i < MAX_PATCHES; i++) {
-        CheatPatch *p = &g_patches[i];
-        p->funcAddr = resolveMethod("Assembly-CSharp.dll", p->namespaceName,
-                                     p->className, p->methodName, p->paramCount);
-        if (p->funcAddr) {
-            memcpy(p->origBytes, p->funcAddr, p->patchSize);
+    if (!loadIL2CPPAPI()) {
+        LOG(@"Cannot resolve - IL2CPP API not available");
+        return;
+    }
+    LOG(@"Resolving all methods...");
+    @try {
+        for (int i = 0; i < MAX_PATCHES; i++) {
+            CheatPatch *p = &g_patches[i];
+            p->funcAddr = resolveMethod("Assembly-CSharp.dll", p->namespaceName,
+                                         p->className, p->methodName, p->paramCount);
+            if (p->funcAddr) {
+                memcpy(p->origBytes, p->funcAddr, p->patchSize);
+            }
         }
+    } @catch (NSException *e) {
+        LOG(@"EXCEPTION in resolveAllMethods: %@", e);
     }
     g_resolved = YES;
+    LOG(@"Resolution complete");
 }
 
 static void toggleFeature(int featureIdx, BOOL enable) {
@@ -398,11 +469,21 @@ static void handlePan(UIPanGestureRecognizer *pan) {
     [pan setTranslation:CGPointZero inView:kw];
 }
 
+static int g_retryCount = 0;
+
 static void setupFloatingButton(void) {
     if (g_floatButton) return;
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *kw = getKeyWindow();
-        if (!kw) return;
+        if (!kw) {
+            if (g_retryCount < 10) {
+                g_retryCount++;
+                LOG(@"No key window yet, retry %d/10...", g_retryCount);
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{ setupFloatingButton(); });
+            }
+            return;
+        }
 
         g_floatButton = [UIButton buttonWithType:UIButtonTypeCustom];
         g_floatButton.frame = CGRectMake(20, 120, 50, 50);
@@ -438,13 +519,12 @@ static void setupFloatingButton(void) {
 __attribute__((constructor))
 static void DaveCheatInit(void) {
     @autoreleasepool {
-        // Wait for IL2CPP runtime to initialize
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
+        LOG(@"DaveCheat v2 loaded!");
+        // Only setup UI - DO NOT touch IL2CPP here
+        // IL2CPP methods will be resolved lazily when user toggles a feature
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            BOOL ok = loadIL2CPPAPI();
-            if (ok) {
-                resolveAllMethods();
-            }
+            LOG(@"Setting up floating button...");
             setupFloatingButton();
         });
     }
