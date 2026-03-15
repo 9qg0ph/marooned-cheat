@@ -18,7 +18,7 @@ jobs:
       with:
         xcode-version: latest-stable
     
-    - name: Build dylib
+    - name: Build DaveCheat dylib
       run: |
         cd 潜水员戴夫Dylib
         
@@ -36,11 +36,39 @@ jobs:
         
         ldid -S DaveCheat.dylib || codesign -f -s - DaveCheat.dylib
         
-        echo "Build completed!"
-        ls -la *.dylib
+        echo "DaveCheat build completed!"
+        ls -la DaveCheat.dylib
     
-    - name: Upload dylib
+    - name: Build DaveTest dylib (minimal)
+      run: |
+        cd 潜水员戴夫Dylib
+        
+        if [ -f DaveTest.m ]; then
+          clang -arch arm64 \
+            -isysroot $(xcrun --sdk iphoneos --show-sdk-path) \
+            -miphoneos-version-min=14.0 \
+            -dynamiclib \
+            -framework Foundation \
+            -fobjc-arc \
+            -o DaveTest.dylib \
+            DaveTest.m
+          
+          ldid -S DaveTest.dylib || codesign -f -s - DaveTest.dylib
+          echo "DaveTest build completed!"
+          ls -la DaveTest.dylib
+        else
+          echo "DaveTest.m not found, skipping"
+        fi
+    
+    - name: Upload DaveCheat dylib
       uses: actions/upload-artifact@v4
       with:
         name: DaveCheat-dylib
         path: 潜水员戴夫Dylib/DaveCheat.dylib
+    
+    - name: Upload DaveTest dylib
+      if: hashFiles('潜水员戴夫Dylib/DaveTest.dylib') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: DaveTest-dylib
+        path: 潜水员戴夫Dylib/DaveTest.dylib
